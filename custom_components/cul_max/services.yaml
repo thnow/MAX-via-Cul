@@ -1,0 +1,1106 @@
+start_pairing:
+  name: Pairing starten
+  description: >
+    Aktiviert den Pairing-Modus fuer eine frei waehbare Dauer.
+    Drücke danach den Pairing-Knopf am MAX!-Gerät um es anzumelden.
+  fields:
+    duration:
+      name: Dauer
+      description: Pairing-Fenster in Sekunden, Standard 60
+      selector:
+        number:
+          min: 1
+          max: 3600
+          step: 1
+          mode: box
+
+set_device_name:
+  name: Gerätename setzen
+  description: Ändert den Anzeigenamen eines bekannten MAX!-Geräts.
+  fields:
+    address:
+      name: Adresse
+      description: 6-stellige Hex-Adresse des Geräts (z.B. 1A2B3C)
+      required: true
+      selector:
+        text:
+    entity_id:
+      name: Thermostat
+      description: Alternativ ein MAX!-Climate-Entity direkt auswählen
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+            domain: climate
+    device_name:
+      name: Geraetename
+      description: Alternativ den gespeicherten MAX!-Geraetenamen angeben
+      selector:
+        text:
+    name:
+      name: Name
+      description: Neuer Anzeigename
+
+wake_thermostats:
+  name: Thermostate wecken
+  description: >
+    Sendet WakeUp-Befehle manuell an alle bekannten Thermostate, um sofortige
+    State-Updates oder Konfigurationsschritte zu triggern. Nicht fuer den
+    Dauerbetrieb gedacht, da haeufiges Wecken Batterielaufzeit und Funklast
+    erhoeht.
+
+sync_time:
+  name: Uhrzeit synchronisieren
+  description: >
+    Sendet die aktuelle lokale Uhrzeit an ausgewaehlte oder alle bekannten
+    MAX!-Thermostate und Wandthermostate. Das ist besonders hilfreich, wenn
+    Wochenprogramme nicht zum aktuellen Wochentag oder zur Uhrzeit zu passen
+    scheinen.
+  fields:
+    address:
+      name: Adresse
+      description: 6-stellige Hex-Adresse des Geräts (z.B. 1A2B3C)
+      selector:
+        text:
+    addresses:
+      name: Adressen
+      description: Mehrere 6-stellige Hex-Adressen
+      selector:
+        object:
+    entity_id:
+      name: Thermostat
+      description: Alternativ ein MAX!-Climate-Entity direkt auswählen
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+            domain: climate
+    entity_ids:
+      name: Thermostate
+      description: Alternativ mehrere MAX!-Climate-Entities auswählen
+      selector:
+        entity:
+          multiple: true
+          filter:
+            integration: cul_max
+            domain: climate
+    device_name:
+      name: Geraetename
+      description: Alternativ den gespeicherten MAX!-Geraetenamen angeben
+      selector:
+        text:
+    device_names:
+      name: Geraetenamen
+      description: Alternativ mehrere gespeicherte MAX!-Geraetenamen angeben
+      selector:
+        object:
+
+set_week_profile:
+  name: Wochenprofil setzen
+  description: >
+    Setzt ein Wochenprofil fuer ein Thermostat oder Wandthermostat.
+    Format pro Zeile: "Mon 21,06:00,17,22:00,16"
+  fields:
+    address:
+      name: Adresse
+      description: 6-stellige Hex-Adresse des Geräts (z.B. 1A2B3C)
+      selector:
+        text:
+    entity_id:
+      name: Thermostat
+      description: Alternativ ein MAX!-Climate-Entity direkt auswählen
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+            domain: climate
+    device_name:
+      name: Geraetename
+      description: Alternativ den gespeicherten MAX!-Geraetenamen angeben
+      selector:
+        text:
+    profile:
+      name: Wochenprofil
+      description: >
+        Eine oder mehrere Zeilen im Format "Mon 21,06:00,17,22:00,16".
+        Nicht angegebene Tage bleiben unverändert.
+      required: true
+      selector:
+        text:
+          multiline: true
+
+set_week_profile_days:
+  name: Wochenprofil tageweise setzen
+  description: >
+    Setzt das Wochenprofil ueber getrennte Felder pro Wochentag.
+    Pro Feld nur den Tagesinhalt eingeben, zum Beispiel "21,08:00,26,22:00,13".
+    Leer gelassene Tage bleiben unveraendert.
+  fields:
+    address:
+      name: Adresse
+      description: 6-stellige Hex-Adresse des Geräts (z.B. 1A2B3C)
+      selector:
+        text:
+    entity_id:
+      name: Thermostat
+      description: Alternativ ein MAX!-Climate-Entity direkt auswählen
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+            domain: climate
+    device_name:
+      name: Geraetename
+      description: Alternativ den gespeicherten MAX!-Geraetenamen angeben
+      selector:
+        text:
+    monday:
+      name: Montag
+      description: Format z.B. "21,08:00,26,22:00,13"
+      selector:
+        text:
+    tuesday:
+      name: Dienstag
+      description: Format z.B. "21,08:00,26,22:00,13"
+      selector:
+        text:
+    wednesday:
+      name: Mittwoch
+      description: Format z.B. "21,08:00,26,22:00,13"
+      selector:
+        text:
+    thursday:
+      name: Donnerstag
+      description: Format z.B. "21,08:00,26,22:00,13"
+      selector:
+        text:
+    friday:
+      name: Freitag
+      description: Format z.B. "21,08:00,26,22:00,13"
+      selector:
+        text:
+    saturday:
+      name: Samstag
+      description: Format z.B. "21,08:00,26,22:00,13"
+      selector:
+        text:
+    sunday:
+      name: Sonntag
+      description: Format z.B. "21,08:00,26,22:00,13"
+      selector:
+        text:
+
+set_group_id:
+  name: Gruppen-ID setzen
+  description: >
+    Schreibt eine MAX!-Gruppen-ID direkt in ein Geraet. Geraete im selben Raum
+    sollten dieselbe Gruppen-ID erhalten.
+  fields:
+    address:
+      name: Adresse
+      description: 6-stellige Hex-Adresse des Geräts (z.B. 1A2B3C)
+      selector:
+        text:
+    entity_id:
+      name: Geraet
+      description: Alternativ ein MAX!-Entity direkt auswählen
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+    device_name:
+      name: Geraetename
+      description: Alternativ den gespeicherten MAX!-Geraetenamen angeben
+      selector:
+        text:
+    group_id:
+      name: Gruppen-ID
+      description: Ganzzahl zwischen 1 und 255
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 255
+          step: 1
+          mode: box
+
+set_temperature_config:
+  name: Temperatur-Konfiguration setzen
+  description: >
+    Schreibt die gespeicherten Komfort-, Eco- und Fenster-offen-Werte eines
+    Thermostats oder Wandthermostats. Nicht angegebene Felder bleiben unveraendert.
+  fields:
+    address:
+      name: Adresse
+      description: 6-stellige Hex-Adresse des Geräts (z.B. 1A2B3C)
+      selector:
+        text:
+    entity_id:
+      name: Thermostat
+      description: Alternativ ein MAX!-Climate-Entity direkt auswählen
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+            domain: climate
+    device_name:
+      name: Geraetename
+      description: Alternativ den gespeicherten MAX!-Geraetenamen angeben
+      selector:
+        text:
+    comfort_temperature:
+      name: Komforttemperatur
+      description: Tag-/Komforttemperatur in Grad Celsius
+      selector:
+        number:
+          min: 4.5
+          max: 30.5
+          step: 0.5
+          mode: box
+          unit_of_measurement: "°C"
+    eco_temperature:
+      name: Ecotemperatur
+      description: Nacht-/Absenktemperatur in Grad Celsius
+      selector:
+        number:
+          min: 4.5
+          max: 30.5
+          step: 0.5
+          mode: box
+          unit_of_measurement: "°C"
+    window_open_temperature:
+      name: Fenster-offen-Temperatur
+      description: Zieltemperatur bei offenem Fenster in Grad Celsius
+      selector:
+        number:
+          min: 4.5
+          max: 30.5
+          step: 0.5
+          mode: box
+          unit_of_measurement: "°C"
+    window_open_duration:
+      name: Fenster-offen-Dauer
+      description: Dauer in Minuten, typischerweise in 5-Minuten-Schritten
+      selector:
+        number:
+          min: 0
+          max: 60
+          step: 5
+          mode: box
+          unit_of_measurement: min
+    measurement_offset:
+      name: Temperatur-Offset
+      description: Offset des internen Temperatursensors in Grad Celsius
+      selector:
+        number:
+          min: -3.5
+          max: 3.5
+          step: 0.5
+          mode: box
+          unit_of_measurement: "°C"
+
+set_desired_temperature:
+  name: Solltemperatur bewusst setzen
+  description: >
+    Setzt eine MAX!-Solltemperatur mit expliziter Modus-Semantik naeher an FHEM:
+    `auto`, `manual`, `boost` oder temporaer bis zu einem `until`-Zeitpunkt.
+    Ohne expliziten Modus kann mit `keep_auto` das aktuelle Wochenprogramm
+    respektiert werden.
+  fields:
+    address:
+      name: Adresse
+      description: 6-stellige Hex-Adresse des Geräts (z.B. 1A2B3C)
+      selector:
+        text:
+    entity_id:
+      name: Thermostat
+      description: Alternativ ein MAX!-Climate-Entity direkt auswählen
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+            domain: climate
+    device_name:
+      name: Geraetename
+      description: Alternativ den gespeicherten MAX!-Geraetenamen angeben
+      selector:
+        text:
+    temperature:
+      name: Solltemperatur
+      description: Temperatur in Grad Celsius
+      selector:
+        number:
+          min: 4.5
+          max: 30.5
+          step: 0.5
+          mode: box
+          unit_of_measurement: "°C"
+    mode:
+      name: Modus
+      description: >
+        `auto` fuer Wochenprogramm, `manual` fuer dauerhaft manuell,
+        `boost` fuer Boost. Mit `until` wird intern ein temporaerer MAX!-Modus genutzt.
+      selector:
+        select:
+          options:
+            - auto
+            - manual
+            - boost
+    keep_auto:
+      name: Auto beibehalten
+      description: >
+        Wenn kein Modus angegeben ist und das Geraet bereits in `auto` laeuft,
+        bleibt bei einer Temperaturaenderung der Auto-Kontext erhalten.
+      selector:
+        boolean:
+    until:
+      name: Gueltig bis
+      description: >
+        Optionaler Zeitpunkt fuer einen temporaeren Sollwert. Format z. B.
+        `2026-04-06 22:30` oder `06.04.2026 22:30`. MAX! erlaubt nur `:00` oder `:30`.
+      selector:
+        text:
+
+remove_group_id:
+  name: Gruppen-ID entfernen
+  description: Entfernt die direkte MAX!-Gruppen-ID aus einem Gerät.
+  fields:
+    address:
+      name: Adresse
+      description: 6-stellige Hex-Adresse des Geräts (z.B. 1A2B3C)
+      selector:
+        text:
+    entity_id:
+      name: Geraet
+      description: Alternativ ein MAX!-Entity direkt auswählen
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+    device_name:
+      name: Geraetename
+      description: Alternativ den gespeicherten MAX!-Geraetenamen angeben
+      selector:
+        text:
+
+add_link_partner:
+  name: Link-Partner hinzufügen
+  description: >
+    Legt eine direkte MAX!-Assoziation zwischen zwei Geräten an.
+    Für eine saubere Raumkopplung ist meist auch die Gegenrichtung sinnvoll.
+  fields:
+    address:
+      name: Quelle Adresse
+      description: 6-stellige Hex-Adresse des Quellgeräts
+      selector:
+        text:
+    entity_id:
+      name: Quelle Geraet
+      description: Alternativ ein MAX!-Entity direkt auswählen
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+    device_name:
+      name: Quelle Geraetename
+      description: Alternativ den gespeicherten Namen des Quellgeräts angeben
+      selector:
+        text:
+    partner_address:
+      name: Partner Adresse
+      description: 6-stellige Hex-Adresse des Partnergeräts
+      selector:
+        text:
+    partner_entity_id:
+      name: Partner Geraet
+      description: Alternativ ein MAX!-Entity direkt auswählen
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+    partner_name:
+      name: Partner Geraetename
+      description: Alternativ den gespeicherten Namen des Partnergeräts angeben
+      selector:
+        text:
+
+remove_link_partner:
+  name: Link-Partner entfernen
+  description: Entfernt eine direkte MAX!-Assoziation zwischen zwei Geräten.
+  fields:
+    address:
+      name: Quelle Adresse
+      description: 6-stellige Hex-Adresse des Quellgeräts
+      selector:
+        text:
+    entity_id:
+      name: Quelle Geraet
+      description: Alternativ ein MAX!-Entity direkt auswählen
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+    device_name:
+      name: Quelle Geraetename
+      description: Alternativ den gespeicherten Namen des Quellgeräts angeben
+      selector:
+        text:
+    partner_address:
+      name: Partner Adresse
+      description: 6-stellige Hex-Adresse des Partnergeräts
+      selector:
+        text:
+    partner_entity_id:
+      name: Partner Geraet
+      description: Alternativ ein MAX!-Entity direkt auswählen
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+    partner_name:
+      name: Partner Geraetename
+      description: Alternativ den gespeicherten Namen des Partnergeräts angeben
+      selector:
+        text:
+
+associate_devices:
+  name: Geräte assoziieren
+  description: >
+    Setzt eine gemeinsame Gruppen-ID und legt Link-Partner zwischen allen
+    angegebenen Geräten an. Das bildet eine echte MAX!-Raumkopplung auf
+    Geräteebene ab.
+  fields:
+    address:
+      name: Adresse
+      description: Einzelne 6-stellige Hex-Adresse
+      selector:
+        text:
+    addresses:
+      name: Adressen
+      description: Liste der 6-stelligen Hex-Adressen
+      selector:
+        object:
+    entity_id:
+      name: Geraet
+      description: Alternativ ein einzelnes MAX!-Entity
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+    entity_ids:
+      name: Geraete
+      description: Alternativ eine Liste von MAX!-Entities
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - integration: cul_max
+              domain: climate
+            - integration: cul_max
+              domain: binary_sensor
+              device_class: window
+    device_name:
+      name: Geraetename
+      description: Optional ein einzelner gespeicherter MAX!-Geraetename
+      selector:
+        text:
+    device_names:
+      name: Geraetenamen
+      description: Alternativ eine Liste gespeicherter MAX!-Geraetenamen
+      selector:
+        object:
+    group_id:
+      name: Gruppen-ID
+      description: Gemeinsame Gruppen-ID zwischen 1 und 255
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 255
+          step: 1
+          mode: box
+    bidirectional:
+      name: Bidirektional
+      description: Legt die Assoziation in beide Richtungen an
+      selector:
+        boolean:
+
+deassociate_devices:
+  name: Geräte deassoziieren
+  description: >
+    Entfernt Link-Partner zwischen allen angegebenen Geräten.
+    Optional können die Gruppen-IDs zusätzlich gelöscht werden.
+  fields:
+    address:
+      name: Adresse
+      description: Einzelne 6-stellige Hex-Adresse
+      selector:
+        text:
+    addresses:
+      name: Adressen
+      description: Liste der 6-stelligen Hex-Adressen
+      selector:
+        object:
+    entity_id:
+      name: Geraet
+      description: Alternativ ein einzelnes MAX!-Entity
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+    entity_ids:
+      name: Geraete
+      description: Alternativ eine Liste von MAX!-Entities
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - integration: cul_max
+              domain: climate
+            - integration: cul_max
+              domain: binary_sensor
+              device_class: window
+    device_name:
+      name: Geraetename
+      description: Optional ein einzelner gespeicherter MAX!-Geraetename
+      selector:
+        text:
+    device_names:
+      name: Geraetenamen
+      description: Alternativ eine Liste gespeicherter MAX!-Geraetenamen
+      selector:
+        object:
+    clear_group_id:
+      name: Gruppen-ID entfernen
+      description: Löscht nach dem De-Linken auch die Gruppen-ID der Geräte
+      selector:
+        boolean:
+    bidirectional:
+      name: Bidirektional
+      description: Entfernt die Assoziation in beide Richtungen
+      selector:
+        boolean:
+
+create_virtual_shutter_contact:
+  name: Virtuellen Fensterkontakt anlegen
+  description: >
+    Legt einen virtuellen MAX!-Fensterkontakt mit frei waehlbarer Adresse an.
+    Dieser kann anschliessend per Gruppen-ID und Assoziation mit Thermostaten
+    verbunden und von externen Sensoren angesteuert werden.
+  fields:
+    address:
+      name: Adresse
+      description: Frei waehlbare 6-stellige Hex-Adresse, z.B. A1B2C3
+      required: true
+      selector:
+        text:
+    name:
+      name: Name
+      description: Anzeigename des virtuellen Kontakts
+      required: true
+      selector:
+        text:
+    group_id:
+      name: Gruppen-ID
+      description: Optionale MAX!-Gruppen-ID zwischen 0 und 255
+      selector:
+        number:
+          min: 0
+          max: 255
+          step: 1
+          mode: box
+
+delete_virtual_device:
+  name: Virtuelles Gerät löschen
+  description: Löscht ein zuvor angelegtes virtuelles MAX!-Gerät.
+  fields:
+    address:
+      name: Adresse
+      description: 6-stellige Hex-Adresse des virtuellen Geräts
+      selector:
+        text:
+    entity_id:
+      name: Geraet
+      description: Alternativ das virtuelle MAX!-Entity auswählen
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+            domain: binary_sensor
+            device_class: window
+    device_name:
+      name: Geraetename
+      description: Alternativ den gespeicherten Namen des virtuellen Geraets angeben
+      selector:
+        text:
+
+send_virtual_shutter_contact_state:
+  name: Virtuellen Fensterkontakt senden
+  description: >
+    Sendet den Status eines virtuellen MAX!-Fensterkontakts.
+    Bei gesetzter Gruppen-ID wirkt das Telegramm auf die zugeordneten Geräte
+    derselben Gruppe und kann z.B. aus IKEA-Zigbee-Automationen aufgerufen werden.
+  fields:
+    address:
+      name: Adresse
+      description: 6-stellige Hex-Adresse des virtuellen Fensterkontakts
+      selector:
+        text:
+    entity_id:
+      name: Virtueller Fensterkontakt
+      description: Alternativ das virtuelle MAX!-Entity auswählen
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+            domain: binary_sensor
+    device_name:
+      name: Geraetename
+      description: Alternativ den gespeicherten Namen des virtuellen Kontakts angeben
+      selector:
+        text:
+    is_open:
+      name: Fenster offen
+      description: true fuer offen, false fuer geschlossen
+      required: true
+      selector:
+        boolean:
+
+create_room_association:
+  name: Raum-Assoziation anlegen
+  description: >
+    Legt einen kompletten MAX!-Raum an: gemeinsame Gruppen-ID, Link-Partner
+    zwischen den angegebenen Geräten und optional direkt einen virtuellen
+    Fensterkontakt für externe Sensoren.
+  fields:
+    room_name:
+      name: Raumname
+      description: Anzeigename fuer Logging und optionale virtuelle Kontakte
+      required: true
+      selector:
+        text:
+    group_id:
+      name: Gruppen-ID
+      description: Optional. Wenn leer, wird die nächste freie Gruppen-ID verwendet
+      selector:
+        number:
+          min: 1
+          max: 255
+          step: 1
+          mode: box
+    climate_address:
+      name: Klima-Adresse
+      description: Einzelne Heizkoerper- oder Wandthermostat-Adresse
+      selector:
+        text:
+    climate_addresses:
+      name: Klima-Adressen
+      description: Liste der beteiligten Heizkoerper- und Wandthermostat-Adressen
+      selector:
+        object:
+    climate_entity_id:
+      name: Klima-Geraet
+      description: Alternativ ein einzelnes Climate-Entity
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+            domain: climate
+    climate_entity_ids:
+      name: Klima-Geraete
+      description: Alternativ eine Liste beteiligter Climate-Entities
+      selector:
+        entity:
+          multiple: true
+          filter:
+            integration: cul_max
+            domain: climate
+    climate_device_name:
+      name: Klima-Geraetename
+      description: Alternativ ein einzelner gespeicherter MAX!-Geraetename
+      selector:
+        text:
+    climate_device_names:
+      name: Klima-Geraetenamen
+      description: Alternativ eine Liste gespeicherter MAX!-Geraetenamen
+      selector:
+        object:
+    window_address:
+      name: Fensterkontakt-Adresse
+      description: Einzelne vorhandene MAX!-Fensterkontakt-Adresse
+      selector:
+        text:
+    window_addresses:
+      name: Fensterkontakt-Adressen
+      description: Optionale Liste vorhandener MAX!-Fensterkontakte
+      selector:
+        object:
+    window_entity_id:
+      name: Fensterkontakt
+      description: Alternativ ein einzelnes Fensterkontakt-Entity
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+            domain: binary_sensor
+            device_class: window
+    window_entity_ids:
+      name: Fensterkontakte
+      description: Alternativ eine Liste vorhandener Fensterkontakt-Entities
+      selector:
+        entity:
+          multiple: true
+          filter:
+            integration: cul_max
+            domain: binary_sensor
+            device_class: window
+    window_device_name:
+      name: Fensterkontakt-Name
+      description: Alternativ ein einzelner gespeicherter Fensterkontakt-Name
+      selector:
+        text:
+    window_device_names:
+      name: Fensterkontakt-Namen
+      description: Alternativ eine Liste gespeicherter Fensterkontakt-Namen
+      selector:
+        object:
+    create_virtual_shutter_contact:
+      name: Virtuellen Kontakt anlegen
+      description: Legt direkt einen virtuellen MAX!-Fensterkontakt an
+      selector:
+        boolean:
+    virtual_shutter_contact_address:
+      name: Virtuelle Adresse
+      description: Optional. Wenn leer, wird automatisch eine freie Adresse erzeugt
+      selector:
+        text:
+    virtual_shutter_contact_name:
+      name: Virtueller Name
+      description: Optionaler Anzeigename fuer den virtuellen Fensterkontakt
+      selector:
+        text:
+    bidirectional:
+      name: Bidirektional
+      description: Legt die Link-Partner in beide Richtungen an
+      selector:
+        boolean:
+
+delete_room_association:
+  name: Raum-Assoziation loeschen
+  description: >
+    Baut einen kompletten MAX!-Raum wieder ab: Link-Partner entfernen,
+    optional Gruppen-ID loeschen und virtuelle Fensterkontakte gleich mit
+    entfernen.
+  fields:
+    room_name:
+      name: Raumname
+      description: Nur fuer Logging und Nachvollziehbarkeit
+      required: true
+      selector:
+        text:
+    climate_address:
+      name: Klima-Adresse
+      description: Einzelne Heizkoerper- oder Wandthermostat-Adresse
+      selector:
+        text:
+    climate_addresses:
+      name: Klima-Adressen
+      description: Liste der beteiligten Heizkoerper- und Wandthermostat-Adressen
+      selector:
+        object:
+    climate_entity_id:
+      name: Klima-Geraet
+      description: Alternativ ein einzelnes Climate-Entity
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+            domain: climate
+    climate_entity_ids:
+      name: Klima-Geraete
+      description: Alternativ eine Liste beteiligter Climate-Entities
+      selector:
+        entity:
+          multiple: true
+          filter:
+            integration: cul_max
+            domain: climate
+    climate_device_name:
+      name: Klima-Geraetename
+      description: Alternativ ein einzelner gespeicherter MAX!-Geraetename
+      selector:
+        text:
+    climate_device_names:
+      name: Klima-Geraetenamen
+      description: Alternativ eine Liste gespeicherter MAX!-Geraetenamen
+      selector:
+        object:
+    window_address:
+      name: Fensterkontakt-Adresse
+      description: Einzelne vorhandene MAX!-Fensterkontakt-Adresse
+      selector:
+        text:
+    window_addresses:
+      name: Fensterkontakt-Adressen
+      description: Optionale Liste vorhandener MAX!-Fensterkontakte
+      selector:
+        object:
+    window_entity_id:
+      name: Fensterkontakt
+      description: Alternativ ein einzelnes Fensterkontakt-Entity
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+            domain: binary_sensor
+            device_class: window
+    window_entity_ids:
+      name: Fensterkontakte
+      description: Alternativ eine Liste vorhandener Fensterkontakt-Entities
+      selector:
+        entity:
+          multiple: true
+          filter:
+            integration: cul_max
+            domain: binary_sensor
+            device_class: window
+    window_device_name:
+      name: Fensterkontakt-Name
+      description: Alternativ ein einzelner gespeicherter Fensterkontakt-Name
+      selector:
+        text:
+    window_device_names:
+      name: Fensterkontakt-Namen
+      description: Alternativ eine Liste gespeicherter Fensterkontakt-Namen
+      selector:
+        object:
+    clear_group_id:
+      name: Gruppen-ID loeschen
+      description: Entfernt nach dem De-Linken auch die Gruppen-ID
+      selector:
+        boolean:
+    delete_virtual_shutter_contacts:
+      name: Virtuelle Kontakte loeschen
+      description: Loescht enthaltene virtuelle Fensterkontakte direkt mit
+      selector:
+        boolean:
+    bidirectional:
+      name: Bidirektional
+      description: Entfernt Link-Partner in beide Richtungen
+      selector:
+        boolean:
+
+rebuild_room_association:
+  name: Raum-Assoziation neu aufbauen
+  description: >
+    Baut einen kompletten MAX!-Raum erst ab und danach mit denselben oder
+    neuen Parametern erneut auf. Praktisch bei Reparaturen oder wenn man
+    Gruppenbeziehungen sauber neu schreiben will.
+  fields:
+    room_name:
+      name: Raumname
+      description: Anzeigename fuer Logging und optionale virtuelle Kontakte
+      required: true
+      selector:
+        text:
+    group_id:
+      name: Gruppen-ID
+      description: Optional. Wenn leer, wird beim Neuaufbau die nächste freie Gruppen-ID verwendet
+      selector:
+        number:
+          min: 1
+          max: 255
+          step: 1
+          mode: box
+    climate_address:
+      name: Klima-Adresse
+      description: Einzelne Heizkoerper- oder Wandthermostat-Adresse
+      selector:
+        text:
+    climate_addresses:
+      name: Klima-Adressen
+      description: Liste der beteiligten Heizkoerper- und Wandthermostat-Adressen
+      selector:
+        object:
+    climate_entity_id:
+      name: Klima-Geraet
+      description: Alternativ ein einzelnes Climate-Entity
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+            domain: climate
+    climate_entity_ids:
+      name: Klima-Geraete
+      description: Alternativ eine Liste beteiligter Climate-Entities
+      selector:
+        entity:
+          multiple: true
+          filter:
+            integration: cul_max
+            domain: climate
+    climate_device_name:
+      name: Klima-Geraetename
+      description: Alternativ ein einzelner gespeicherter MAX!-Geraetename
+      selector:
+        text:
+    climate_device_names:
+      name: Klima-Geraetenamen
+      description: Alternativ eine Liste gespeicherter MAX!-Geraetenamen
+      selector:
+        object:
+    window_address:
+      name: Fensterkontakt-Adresse
+      description: Einzelne vorhandene MAX!-Fensterkontakt-Adresse
+      selector:
+        text:
+    window_addresses:
+      name: Fensterkontakt-Adressen
+      description: Optionale Liste vorhandener MAX!-Fensterkontakte
+      selector:
+        object:
+    window_entity_id:
+      name: Fensterkontakt
+      description: Alternativ ein einzelnes Fensterkontakt-Entity
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+            domain: binary_sensor
+            device_class: window
+    window_entity_ids:
+      name: Fensterkontakte
+      description: Alternativ eine Liste vorhandener Fensterkontakt-Entities
+      selector:
+        entity:
+          multiple: true
+          filter:
+            integration: cul_max
+            domain: binary_sensor
+            device_class: window
+    window_device_name:
+      name: Fensterkontakt-Name
+      description: Alternativ ein einzelner gespeicherter Fensterkontakt-Name
+      selector:
+        text:
+    window_device_names:
+      name: Fensterkontakt-Namen
+      description: Alternativ eine Liste gespeicherter Fensterkontakt-Namen
+      selector:
+        object:
+    create_virtual_shutter_contact:
+      name: Virtuellen Kontakt anlegen
+      description: Legt beim Neuaufbau direkt einen virtuellen MAX!-Fensterkontakt an
+      selector:
+        boolean:
+    virtual_shutter_contact_address:
+      name: Virtuelle Adresse
+      description: Optional. Wenn leer, wird automatisch eine freie Adresse erzeugt
+      selector:
+        text:
+    virtual_shutter_contact_name:
+      name: Virtueller Name
+      description: Optionaler Anzeigename fuer den virtuellen Fensterkontakt
+      selector:
+        text:
+    clear_group_id:
+      name: Gruppen-ID vorab loeschen
+      description: Loescht beim Abbau zuerst die vorhandenen Gruppen-IDs
+      selector:
+        boolean:
+    delete_virtual_shutter_contacts:
+      name: Virtuelle Kontakte vorab loeschen
+      description: Loescht beim Abbau enthaltene virtuelle Fensterkontakte
+      selector:
+        boolean:
+    bidirectional:
+      name: Bidirektional
+      description: Nutzt Link-Partner in beide Richtungen
+      selector:
+        boolean:
+
+export_topology:
+  name: MAX!-Topologie exportieren
+  description: >
+    Exportiert die bekannte MAX!-Topologie als JSON-Datei. Enthalten sind alle
+    bekannten Geräte, Gruppen-IDs, Link-Partner, Wochenprofile und virtuelle
+    Kontakte.
+  fields:
+    path:
+      name: Dateipfad
+      description: >
+        Optionaler JSON-Zielpfad. Relative Pfade werden unterhalb des
+        Home-Assistant-Konfigurationsverzeichnisses gespeichert.
+      selector:
+        text:
+
+import_topology:
+  name: MAX!-Topologie importieren
+  description: >
+    Importiert eine zuvor exportierte MAX!-Topologie aus einer JSON-Datei oder
+    direkt aus einem JSON-String. Die erste Version arbeitet bewusst schonend:
+    vorhandene Geräte werden aktualisiert, fehlende virtuelle Kontakte können
+    angelegt werden, unbekannte physische Geräte werden jedoch nicht erzeugt.
+  fields:
+    path:
+      name: Dateipfad
+      description: >
+        Optionaler JSON-Quellpfad. Relative Pfade werden relativ zum
+        Home-Assistant-Konfigurationsverzeichnis aufgeloest.
+      selector:
+        text:
+    topology_json:
+      name: Topologie-JSON
+      description: Alternativ das komplette Export-JSON direkt einfuegen
+      selector:
+        text:
+          multiline: true
+    create_virtual_devices:
+      name: Virtuelle Kontakte anlegen
+      description: Erstellt fehlende virtuelle MAX!-Fensterkontakte aus dem Backup
+      selector:
+        boolean:
+    update_names:
+      name: Namen uebernehmen
+      description: Uebernimmt gespeicherte Geraetenamen sowie Serien- und Firmwaredaten
+      selector:
+        boolean:
+    apply_group_ids:
+      name: Gruppen-IDs anwenden
+      description: Spielt gespeicherte MAX!-Gruppen-IDs wieder ein
+      selector:
+        boolean:
+    apply_links:
+      name: Link-Partner anwenden
+      description: Spielt gespeicherte On-Device-Assoziationen wieder ein
+      selector:
+        boolean:
+    apply_week_profiles:
+      name: Wochenprofile anwenden
+      description: Spielt gespeicherte Wochenprofile fuer Klima-Geraete wieder ein
+      selector:
+        boolean:
+
+cleanup_superseded_devices:
+  name: Ersetzte Geraete aufraeumen
+  description: >
+    Entfernt zuvor als ersetzt markierte Altgeraete aus dem internen cul_max-Bestand.
+    Optional koennen auch die zugehoerigen Entity- und Device-Registry-Eintraege
+    aus Home Assistant mit entfernt werden. Standardmaessig laeuft der Service
+    zuerst als Dry-Run und loggt nur, was aufgeraeumt wuerde.
+  fields:
+    dry_run:
+      name: Nur pruefen
+      description: Wenn aktiv, werden nur die Kandidaten geloggt und nichts geloescht
+      selector:
+        boolean:
+    remove_registry_entries:
+      name: Registry-Eintraege entfernen
+      description: Entfernt zugehoerige Entity- und Device-Registry-Eintraege aus HA
+      selector:
+        boolean:
+    remove_discovered_devices:
+      name: Entdeckte Geraete entfernen
+      description: Entfernt auch als entdeckt markierte, nicht gekoppelte Altgeraete
+      selector:
+        boolean:

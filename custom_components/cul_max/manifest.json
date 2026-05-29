@@ -1,0 +1,17 @@
+{
+  "domain": "cul_max",
+  "name": "MAX! via CUL",
+  "version": "0.1.0",
+  "documentation": "https://github.com/thnow/MAX-via-Cul/blob/main/README.md",
+  "issue_tracker": "https://github.com/thnow/MAX-via-Cul/issues",
+  "requirements": [],
+  "dependencies": [
+    "frontend",
+    "http"
+  ],
+  "codeowners": [
+    "@thnow"
+  ],
+  "config_flow": true,
+  "iot_class": "local_push"
+}
