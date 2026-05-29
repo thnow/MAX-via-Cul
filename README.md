@@ -191,11 +191,17 @@ diagnostics to make this visible.
 Use `cul_max.sync_time` for thermostats and wall thermostats. Then verify the
 profile again.
 
-## Known Notes
+## Known Limitations
 
 - This is a local custom integration, not an official Home Assistant core integration.
 - It is designed for direct CUL/CUNO TCP access.
 - It intentionally avoids aggressive wake-up polling to reduce radio traffic and battery drain.
+- MAX! radio is not perfectly reliable. Some radio messages can be missed or
+  acknowledged late, and larger setup operations can take a while when many
+  protocol messages have to be sent. This is a limitation of the MAX!/CUL radio
+  design rather than a plugin bug. It normally has little impact on daily
+  operation, but it can make initial setup, pairing and bulk configuration feel
+  slow or occasionally flaky.
 - If you already have a working MAX! Cube setup, plan migration carefully because paired devices remember their controller.
 
 ## More Documentation
