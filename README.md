@@ -3,19 +3,19 @@
 Home Assistant custom integration for eQ-3 MAX! devices connected through a
 CUL or CUNO running CULFW.
 
-The integration talks directly to the CUL/CUNO over TCP and implements the
-MAX!/MORITZ protocol locally. It is built for long-lived MAX! installations
-where reliable local control, useful diagnostics and real on-device
-associations matter more than cloud features.
+This integration is for people who still have useful MAX! heating hardware and
+want to run it locally in Home Assistant without a MAX! Cube cloud dependency.
+It talks directly to the CUL/CUNO over TCP and implements the MAX!/MORITZ
+protocol locally.
 
 [![Open your Home Assistant instance and add this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=thnow&repository=MAX-via-Cul&category=integration)
 
-## Features
+## What You Get
 
-- Config flow setup for CUL/CUNO host, TCP port and local MAX! address
+- UI setup through Home Assistant config flow
 - Pairing for MAX! heating thermostats, wall thermostats and shutter contacts
-- Climate entities for target temperature and HVAC mode
-- Week profile editing with draft/save/discard workflow
+- `climate` entities for heating and wall thermostats
+- Week profile editing with draft, save and discard workflow
 - Comfort, eco, window-open and measurement-offset configuration entities
 - Real MAX! group IDs and link partners written to the devices
 - Virtual MAX! shutter contacts for external sensors such as Zigbee, Matter or IKEA
@@ -36,38 +36,107 @@ associations matter more than cloud features.
 - Home Assistant 2024.1 or newer
 - A CUL or CUNO flashed with CULFW
 - TCP access to the CUL/CUNO, commonly port `2323`
-- MAX!/MORITZ mode available on the CULFW device
+- CULFW support for MAX!/MORITZ mode
+
+Before installing the integration, make sure Home Assistant can reach the
+CUL/CUNO host and port from inside your Home Assistant environment.
 
 ## Installation
 
 ### HACS
 
 1. Open HACS.
-2. Add this repository as a custom repository with category `Integration`.
-3. Install `MAX! via CUL`.
-4. Restart Home Assistant.
-5. Add the integration from **Settings > Devices & services**.
+2. Open the three-dot menu and choose **Custom repositories**.
+3. Add this repository URL:
+
+   ```text
+   https://github.com/thnow/MAX-via-Cul
+   ```
+
+4. Select category **Integration**.
+5. Install **MAX! via CUL**.
+6. Restart Home Assistant.
+7. Add the integration from **Settings > Devices & services > Add integration**.
+
+The My Home Assistant badge above opens the HACS custom repository dialog
+directly when your Home Assistant instance supports it.
 
 ### Manual
 
-Copy `custom_components/cul_max` into your Home Assistant configuration under
-`custom_components/cul_max`, then restart Home Assistant.
+1. Copy `custom_components/cul_max` into your Home Assistant configuration
+   directory so the final path is `custom_components/cul_max`.
+2. Restart Home Assistant.
+3. Add **MAX! via CUL** from **Settings > Devices & services > Add integration**.
 
-## Configuration
+## First Setup
 
-The integration is configured through the Home Assistant UI. The config flow
-asks for:
+The config flow asks for three values:
 
-- CUL/CUNO host name or IP address
-- TCP port, default `2323`
-- Own MAX! address of the integration, default `123456`
+- **Host**: IP address or host name of the CUL/CUNO
+- **Port**: TCP port of the CUL/CUNO, usually `2323`
+- **Own MAX! address**: 6-digit hex address used by this integration, default `123456`
 
-When replacing an existing MAX! Cube setup, reuse the old radio identity where
-possible or pair the devices again cleanly.
+If you are replacing an existing MAX! Cube setup, reuse the old radio identity
+where possible or pair the devices again cleanly. MAX! devices remember their
+paired controller, so moving between controllers can require a device reset.
+
+## Pairing Your First Device
+
+1. Add the integration and confirm it connects to the CUL/CUNO.
+2. In Home Assistant, call the service `cul_max.start_pairing`.
+3. Put the MAX! device into pairing mode.
+4. Wait for the device to appear in Home Assistant.
+5. Rename the device or assign groups/rooms as needed.
+
+Common pairing actions:
+
+- Heating thermostat: hold the Boost button for about 3 seconds.
+- Shutter contact: hold the button until the LED starts blinking.
+- Wall thermostat: reset or enter pairing mode from the device menu, depending on firmware.
+
+The detailed device reset notes live in
+[`custom_components/cul_max/README.md`](custom_components/cul_max/README.md).
+
+## Common Workflows
+
+### Create a MAX! room
+
+Use `cul_max.create_room_association` to assign a shared MAX! group ID and
+write direct link partners between thermostats and shutter contacts. This lets
+the devices keep cooperating even when Home Assistant is temporarily down.
+
+### Use a Zigbee or Matter contact as MAX! window contact
+
+1. Create a virtual MAX! shutter contact with
+   `cul_max.create_virtual_shutter_contact`.
+2. Associate it with the room using `cul_max.create_room_association` or
+   `cul_max.associate_devices`.
+3. Call `cul_max.send_virtual_shutter_contact_state` from an automation when
+   the external sensor opens or closes.
+
+### Back up the MAX! topology
+
+Use `cul_max.export_topology` after pairing and room setup. Keep the JSON file
+somewhere safe. It contains known devices, groups, link partners, week profiles
+and virtual contacts.
+
+Use `cul_max.import_topology` to restore that structure later.
+
+## Lovelace Card
+
+The integration registers `cul-max-week-profile-card` as a frontend resource.
+It can display and edit MAX! week profiles in a compact card.
+
+Example:
+
+```yaml
+type: custom:cul-max-week-profile-card
+entity: climate.living_room_radiator
+```
 
 ## Services
 
-The integration exposes services for everyday operation and repair workflows:
+The integration exposes these Home Assistant services:
 
 - `cul_max.start_pairing`
 - `cul_max.set_device_name`
@@ -93,18 +162,46 @@ The integration exposes services for everyday operation and repair workflows:
 - `cul_max.import_topology`
 - `cul_max.cleanup_superseded_devices`
 
-The Home Assistant service UI includes field descriptions and selectors for
-these services.
+The Home Assistant service UI includes selectors and descriptions for all
+service fields.
 
-## Lovelace Card
+## Troubleshooting
 
-The integration registers `cul-max-week-profile-card` as a frontend resource.
-It can be used to display and edit MAX! week profiles in a compact card.
+### Integration cannot connect
 
-## Documentation
+- Verify the CUL/CUNO IP address and TCP port.
+- Check that the port is reachable from the Home Assistant host/container.
+- Make sure no other application exclusively owns the CUL connection.
 
-Detailed notes for device reset, pairing, entities, topology management and
-week-profile handling are available in
+### Pairing does not finish
+
+- Start `cul_max.start_pairing` before putting the device into pairing mode.
+- Move the device closer to the CUL/CUNO for the first pairing attempt.
+- Reset the MAX! device if it was previously paired with another controller.
+- Check Home Assistant logs for `cul_max` messages.
+
+### Device state looks old
+
+MAX! devices are battery powered and do not all report continuously. The
+integration exposes `last_seen`, `stale`, `last_ack`, retry and pending-config
+diagnostics to make this visible.
+
+### Week profile seems shifted
+
+Use `cul_max.sync_time` for thermostats and wall thermostats. Then verify the
+profile again.
+
+## Known Notes
+
+- This is a local custom integration, not an official Home Assistant core integration.
+- It is designed for direct CUL/CUNO TCP access.
+- It intentionally avoids aggressive wake-up polling to reduce radio traffic and battery drain.
+- If you already have a working MAX! Cube setup, plan migration carefully because paired devices remember their controller.
+
+## More Documentation
+
+The extended notes for reset procedures, entities, topology handling and
+diagnostics are in
 [`custom_components/cul_max/README.md`](custom_components/cul_max/README.md).
 
 ## Development
@@ -115,7 +212,7 @@ Run the protocol regression tests from the repository root:
 python3 -m unittest discover -s custom_components/cul_max/tests
 ```
 
-The repository follows the HACS custom integration layout:
+Repository layout:
 
 - `hacs.json` in the repository root
 - `custom_components/cul_max/manifest.json` with `config_flow: true`
