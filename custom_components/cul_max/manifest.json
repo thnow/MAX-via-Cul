@@ -1,7 +1,7 @@
 {
   "domain": "cul_max",
   "name": "MAX! via CUL",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "documentation": "https://github.com/thnow/MAX-via-Cul/blob/main/README.md",
   "issue_tracker": "https://github.com/thnow/MAX-via-Cul/issues",
   "requirements": [],
