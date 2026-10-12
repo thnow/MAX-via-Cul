@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import pathlib
 import sys
+import time
 import types
 import unittest
 from datetime import datetime
 from enum import StrEnum
 from zoneinfo import ZoneInfo
+from unittest.mock import patch
 
 
 def _load_module(module_name: str, path: pathlib.Path):
@@ -76,6 +79,55 @@ class WeekProfileEncodingTests(unittest.TestCase):
     def test_parse_week_profile_time_rejects_non_5_minute_steps(self) -> None:
         with self.assertRaises(ValueError):
             parse_week_profile_time("07:03")
+
+    def test_encode_rejects_invalid_day_schedules(self) -> None:
+        schedules = [
+            [],
+            [(18.0, 60)],
+            [(18.0, 0), (20.0, 1440)],
+            [(18.0, 60), (20.0, 60), (18.0, 1440)],
+            [(18.0, 120), (20.0, 60), (18.0, 1440)],
+            [(18.0, 1440), (20.0, 1440)],
+            [(18.0, 63), (20.0, 1440)],
+            [(18.0, end) for end in range(5, 70, 5)] + [(20.0, 1440)],
+        ]
+        for schedule in schedules:
+            with self.subTest(schedule=schedule), self.assertRaises(ValueError):
+                encode_week_profile_day(schedule)
+
+    def test_encode_and_split_reject_invalid_days(self) -> None:
+        profile = encode_week_profile({2: [(18.0, 1440)]})
+        for day in (-1, 7):
+            with self.subTest(day=day):
+                with self.assertRaises(ValueError):
+                    encode_week_profile({day: [(18.0, 1440)]})
+                with self.assertRaises(ValueError):
+                    split_week_profile_for_send(profile, day)
+
+    @unittest.skipUnless(hasattr(time, "tzset"), "Requires timezone switching")
+    def test_expected_temperature_preserves_supplied_timezone_and_weekday(self) -> None:
+        profile = encode_week_profile({
+            2: [(17.0, 1440)],
+            3: [(18.0, 360), (23.0, 1440)],
+        })
+        try:
+            with patch.dict(os.environ, {"TZ": "UTC"}):
+                time.tzset()
+                # Tokyo is already on Tuesday while the UTC host is on Monday.
+                when = datetime(2026, 4, 7, 0, 30, tzinfo=ZoneInfo("Asia/Tokyo"))
+                self.assertEqual(get_expected_week_profile_temperature(profile, when), 18.0)
+                # A UTC conversion would also choose the wrong time slot here.
+                when = datetime(2026, 4, 7, 1, 30, tzinfo=ZoneInfo("America/New_York"))
+                self.assertEqual(get_expected_week_profile_temperature(profile, when), 18.0)
+        finally:
+            time.tzset()
+
+    def test_expected_temperature_switches_at_exact_boundary(self) -> None:
+        profile = encode_week_profile({3: [(18.0, 360), (23.0, 1440)]})
+        self.assertEqual(
+            get_expected_week_profile_temperature(profile, datetime(2026, 4, 7, 6, 0)),
+            23.0,
+        )
 
     def test_encode_week_profile_day_matches_fhem_for_weekday(self) -> None:
         schedule = [(18.0, 7 * 60 + 5), (23.0, 15 * 60 + 30), (18.0, 24 * 60)]
@@ -234,6 +286,26 @@ class WeekProfileParserTests(unittest.TestCase):
     def test_parse_week_profile_text_requires_final_temperature(self) -> None:
         with self.assertRaises(ValueError):
             parse_week_profile_text("Sat 18,07:05,18,15:30")
+
+    def test_parse_rejects_empty_fields(self) -> None:
+        for text in ("Mon 18,,07:05,23", "Mon ,18", "Mon 18,"):
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                parse_week_profile_text(text)
+
+    def test_parse_rejects_duplicate_day_aliases(self) -> None:
+        with self.assertRaises(ValueError):
+            parse_week_profile_text("Mon 18\nMontag 23")
+
+    def test_parse_rejects_unreachable_final_temperature(self) -> None:
+        with self.assertRaises(ValueError):
+            parse_week_profile_text("Mon 18,24:00,23")
+
+    def test_all_days_round_trip_through_text(self) -> None:
+        updates = {day: [(18.0, 425), (23.0, 930), (17.0, 1440)] for day in range(7)}
+        profile = encode_week_profile(updates)
+        parsed = parse_week_profile_text("\n".join(format_week_profile_lines(profile)))
+        self.assertEqual(parsed, updates)
+        self.assertEqual(encode_week_profile(parsed), profile)
 
 
 if __name__ == "__main__":

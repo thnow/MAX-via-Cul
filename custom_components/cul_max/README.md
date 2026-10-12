@@ -1,5 +1,7 @@
 # MAX! via CUL
 
+[English](README.en.md) | [Deutsch](README.md)
+
 Home-Assistant-Custom-Integration fuer eQ-3 MAX!-Komponenten an einem mit
 CULFW geflashten CUL oder CUNO.
 

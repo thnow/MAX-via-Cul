@@ -190,8 +190,11 @@ def parse_week_profile_text(profile_text: str) -> dict[int, list[tuple[float, in
             raise ValueError(f"Unbekannter Tag '{parts[0]}'.")
         day = WEEK_PROFILE_DAY_MAP[day_key]
 
-        tokens = [token.strip() for token in parts[1].split(",") if token.strip()]
-        if len(tokens) < 1 or len(tokens) % 2 == 0:
+        if day in updates:
+            raise ValueError(f"Tag '{parts[0]}' wurde mehrfach angegeben.")
+
+        tokens = [token.strip() for token in parts[1].split(",")]
+        if any(not token for token in tokens) or len(tokens) % 2 == 0:
             raise ValueError(
                 f"Ungueltiges Profil fuer {parts[0]}. Format: temp,HH:MM,temp,HH:MM,temp"
             )
@@ -207,9 +210,9 @@ def parse_week_profile_text(profile_text: str) -> dict[int, list[tuple[float, in
 
         last_end = 0
         for idx, end_minute in enumerate(end_times):
-            if end_minute <= last_end:
+            if end_minute <= last_end or end_minute >= 24 * 60:
                 raise ValueError(
-                    f"Schaltzeiten fuer {parts[0]} muessen streng aufsteigend sein."
+                    f"Schaltzeiten fuer {parts[0]} muessen streng aufsteigend und vor 24:00 liegen."
                 )
             schedule[idx] = (schedule[idx][0], end_minute)
             last_end = end_minute
@@ -309,23 +312,30 @@ def encode_week_profile(updates: dict[int, list[tuple[float, int]]], base_hex: s
     profile_hex = normalize_week_profile_hex(base_hex)
     days = [profile_hex[idx * 52:(idx + 1) * 52] for idx in range(7)]
     for day, schedule in updates.items():
+        if day not in WEEK_PROFILE_DAY_NAMES:
+            raise ValueError("Wochentag muss zwischen 0 (Samstag) und 6 (Freitag) liegen.")
         days[day] = encode_week_profile_day(schedule)
     return "".join(days)
 
 
 def encode_week_profile_day(schedule: list[tuple[float, int]]) -> str:
     """Encode one day of a MAX! week profile to 52 hex chars."""
+    if not 1 <= len(schedule) <= 13:
+        raise ValueError("Ein Tagesprofil muss zwischen 1 und 13 Schaltpunkten enthalten.")
+    if schedule[-1][1] != 24 * 60:
+        raise ValueError("Ein Tagesprofil muss um 24:00 enden.")
     encoded_points: list[str] = []
+    last_end = 0
     for temp, end_minute in schedule:
+        if end_minute <= last_end:
+            raise ValueError("Schaltzeiten muessen streng aufsteigend sein.")
         encoded_points.append(encode_week_profile_point(temp, end_minute))
+        last_end = end_minute
 
     while len(encoded_points) < 13:
         # FHEM fills all unused trailing control points with the neutral default
         # value 0x4520 instead of repeating the final real day temperature.
         encoded_points.append("4520")
-
-    if len(encoded_points) != 13:
-        raise ValueError("Ein Tagesprofil muss zwischen 1 und 13 Schaltpunkten enthalten.")
 
     return "".join(encoded_points)
 
@@ -344,6 +354,8 @@ def encode_week_profile_point(temp: float, end_minute: int) -> str:
 
 def split_week_profile_for_send(profile_hex: str, day: int) -> list[tuple[int, str]]:
     """Split one day profile into the two ConfigWeekProfile payload chunks."""
+    if day not in WEEK_PROFILE_DAY_NAMES:
+        raise ValueError("Wochentag muss zwischen 0 (Samstag) und 6 (Freitag) liegen.")
     day_hex = normalize_week_profile_hex(profile_hex)[day * 52:(day + 1) * 52]
     chunks: list[tuple[int, str]] = [(0, day_hex[:28])]
     second_chunk = day_hex[28:]
@@ -400,7 +412,9 @@ def get_expected_week_profile_temperature(
     """Return the temperature from the stored week profile that should be active now."""
     if not profile_hex:
         return None
-    local_when = (when or datetime.now().astimezone()).astimezone()
+    # Callers supply Home Assistant's configured local time, which can differ
+    # from the host/container timezone. Preserve its wall clock and weekday.
+    local_when = when if when is not None else datetime.now().astimezone()
     day = local_datetime_to_max_day(local_when)
     day_hex = normalize_week_profile_hex(profile_hex)[day * 52:(day + 1) * 52]
     day_minutes = (local_when.hour * 60) + local_when.minute
