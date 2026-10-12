@@ -95,7 +95,8 @@ Common pairing actions:
 - Wall thermostat: reset or enter pairing mode from the device menu, depending on firmware.
 
 The detailed device reset notes live in
-[`custom_components/cul_max/README.md`](custom_components/cul_max/README.md).
+[the extended English guide](custom_components/cul_max/README.en.md)
+or [the German guide](custom_components/cul_max/README.md).
 
 ## Common Workflows
 
@@ -207,8 +208,9 @@ profile again.
 ## More Documentation
 
 The extended notes for reset procedures, entities, topology handling and
-diagnostics are in
-[`custom_components/cul_max/README.md`](custom_components/cul_max/README.md).
+diagnostics are available in
+[English](custom_components/cul_max/README.en.md) and
+[German](custom_components/cul_max/README.md).
 
 ## Development
 
