@@ -134,9 +134,6 @@
       },
       "discard_draft": {
         "name": "Discard draft"
-      },
-      "start_pairing": {
-        "name": "Start pairing"
       }
     },
     "image": {
@@ -147,6 +144,9 @@
     "switch": {
       "vacation": {
         "name": "Vacation mode"
+      },
+      "pairing": {
+        "name": "Pairing"
       }
     },
     "date": {

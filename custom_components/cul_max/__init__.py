@@ -16,6 +16,7 @@ from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -36,6 +37,8 @@ from .const import (
     MODE_MANUAL,
     MODE_VACATION,
     PLATFORMS,
+    STORAGE_KEY,
+    STORAGE_VERSION,
 )
 from .coordinator import CulMaxCoordinator
 from .frontend import async_register_frontend
@@ -340,6 +343,56 @@ def _addresses_in_areas(hass: HomeAssistant, area_ids: list[str]) -> list[str]:
     return addresses
 
 
+def _storage_key_for_entry(entry: ConfigEntry) -> str:
+    """Device store of one gateway."""
+    return f"{STORAGE_KEY}_{entry.entry_id}"
+
+
+async def _async_migrate_shared_store(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Move the old shared device store to the first gateway.
+
+    Up to 0.6.0 all gateways used one store, so with several gateways their
+    device lists overwrote each other. The old file goes to the oldest entry
+    (with one gateway – the usual case – nothing changes); further gateways
+    start empty and get their devices by pairing. The old file is kept as a
+    backup.
+    """
+    store = Store(hass, STORAGE_VERSION, _storage_key_for_entry(entry))
+    if await store.async_load() is not None:
+        return
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if not entries or entries[0].entry_id != entry.entry_id:
+        return
+    legacy = await Store(hass, STORAGE_VERSION, STORAGE_KEY).async_load()
+    if not legacy:
+        return
+    await store.async_save(legacy)
+    _LOGGER.info(
+        "Moved the shared MAX! device store to gateway %s%s",
+        entry.title,
+        "" if len(entries) == 1 else
+        " (several gateways: devices of the others may be listed here until removed)",
+    )
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, entry: ConfigEntry, device_entry: dr.DeviceEntry
+) -> bool:
+    """Allow 'Delete device' on a MAX! device page (not on the CUL itself)."""
+    coordinator: CulMaxCoordinator | None = getattr(entry, "runtime_data", None)
+    if coordinator is None:
+        return False
+    addresses = [
+        identifier.upper()
+        for domain, identifier in device_entry.identifiers
+        if domain == DOMAIN and _HEX_ADDRESS.match(identifier)
+    ]
+    if not addresses:
+        return False  # the CUL device: remove the integration entry instead
+    await coordinator.async_remove_known_devices(addresses)
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: CulMaxConfigEntry) -> bool:
     """Set up MAX! via CUL from a config entry."""
     serial = entry.data.get(CONF_CONNECTION) == CONNECTION_SERIAL
@@ -363,7 +416,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: CulMaxConfigEntry) -> bo
         own_address=own_address,
         config_entry_id=entry.entry_id,
         serial=serial,
+        storage_key=_storage_key_for_entry(entry),
     )
+    await _async_migrate_shared_store(hass, entry)
 
     if not await coordinator.async_setup():
         raise ConfigEntryNotReady(f"Cannot connect to CULFW at {host}:{port}")
@@ -373,6 +428,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: CulMaxConfigEntry) -> bo
     _hide_legacy_week_profile_editors(hass, entry)
     _remove_orphaned_time_sync_sensors(hass, entry, coordinator)
     _remove_replaced_vacation_entities(hass, entry)
+    _remove_entity_by_unique_id_prefix(hass, entry, "button", f"{DOMAIN}_start_pairing_")
 
     # Controller device first, so every MAX! device can reference it
     # ("connected via") and the controller page lists all devices.
@@ -393,6 +449,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: CulMaxConfigEntry) -> bo
 
 
 LEGACY_EDITORS_HIDDEN = "legacy_editors_hidden_v2"
+
+
+def _remove_entity_by_unique_id_prefix(
+    hass: HomeAssistant, entry: ConfigEntry, domain: str, prefix: str
+) -> None:
+    """Drop an entity that was replaced by another one (e.g. button → switch)."""
+    registry = er.async_get(hass)
+    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if reg_entry.domain == domain and reg_entry.unique_id.startswith(prefix):
+            registry.async_remove(reg_entry.entity_id)
 
 
 def _remove_replaced_vacation_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
