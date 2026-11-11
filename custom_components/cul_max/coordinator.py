@@ -18,6 +18,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -141,6 +142,9 @@ AUTO_MODE_TIME_SYNC_FOLLOWUP_DELAY = 12.0
 VIRTUAL_CONTACT_REFRESH_INTERVAL = 50 * 60.0
 VIRTUAL_CONTACT_RETRY_DELAY = 60.0
 VIRTUAL_CONTACT_STARTUP_DELAY = 120.0
+# Telegram types a device sends to its central (not to link partners).
+FOREIGN_CENTRAL_MSG_TYPES = {0x00, 0x02, 0x03, 0x30, 0x50, 0x60, 0x70}
+FOREIGN_CENTRAL_GRACE = timedelta(days=2)
 TIME_INFORMATION_ACK_TIMEOUT = 3.0
 TIME_INFORMATION_ACK_RETRIES = 2
 
@@ -206,6 +210,11 @@ class KnownDevice:
     window_open_temperature: float = 12.0
     window_open_duration: int = 15
     last_state: dict[str, Any] = field(default_factory=dict)
+    # Set when the device reports to an unknown address instead of this
+    # central, i.e. it is still paired with another controller (old Cube).
+    foreign_central: str = ""
+    foreign_central_seen_at: str = ""
+    last_central_contact_at: str = ""
 
 
 @dataclass
@@ -690,6 +699,8 @@ class CulMaxCoordinator:
             return "unknown"
         if device.is_virtual:
             return "virtual"
+        if device.foreign_central:
+            return "paired_elsewhere"
         return "paired" if device.paired else "discovered"
 
     def _require_paired_for_write(self, address: str) -> None:
@@ -1020,6 +1031,9 @@ class CulMaxCoordinator:
         if self._pending_queue_task is None or self._pending_queue_task.done():
             self._pending_queue_task = self.hass.loop.create_task(self._pending_queue_maintenance_loop())
         await self._load_devices()
+        for device in self._devices.values():
+            if device.foreign_central:
+                self._sync_foreign_central_issue(device)
         await self._ensure_time_slots_assigned()
         if await self._connect():
             self._virtual_contact_refresh_after = (
@@ -1436,6 +1450,8 @@ class CulMaxCoordinator:
             return
         await self._touch_device(msg.src_hex)
         source_device = self.get_device(msg.src_hex)
+        if source_device is not None:
+            self._check_foreign_central(msg, source_device)
 
         decoded: ThermostatState | ShutterContactState | None = None
         is_climate_source = (
@@ -1564,6 +1580,80 @@ class CulMaxCoordinator:
                 offset_seconds,
             )
             self._reply_time_information(msg.src_hex)
+
+    def _check_foreign_central(self, msg: MaxMessage, device: KnownDevice) -> None:
+        """Detect devices that still report to another controller (e.g. old Cube).
+
+        Such a device ignores configuration from this central and repeats its
+        telegrams because nobody answers. It must be factory reset and paired
+        again. A device that also talks to this central is only linked to an
+        unknown device and is not flagged.
+        """
+        if device.is_virtual:
+            return
+        now_iso = datetime.now(UTC).isoformat()
+        if msg.dst == self.own_address:
+            device.last_central_contact_at = now_iso
+            if device.foreign_central:
+                _LOGGER.info(
+                    "%s now reports to this central; clearing 'paired elsewhere' (%s)",
+                    self._format_device_identity(device.address),
+                    device.foreign_central,
+                )
+                device.foreign_central = ""
+                device.foreign_central_seen_at = ""
+                self._sync_foreign_central_issue(device)
+                self.hass.async_create_task(self._sync_device_registry_entry(device.address))
+                self._notify_diagnostics_updated(device.address)
+            return
+        if msg.dst == 0 or msg.msg_type not in FOREIGN_CENTRAL_MSG_TYPES:
+            return
+        if self.get_device(msg.dst_hex) is not None:
+            return  # talks to a device we know (link partner)
+        if device.last_central_contact_at:
+            try:
+                last = datetime.fromisoformat(device.last_central_contact_at)
+            except ValueError:
+                last = None
+            if last is not None and datetime.now(UTC) - last < FOREIGN_CENTRAL_GRACE:
+                return
+        newly = device.foreign_central != msg.dst_hex
+        device.foreign_central = msg.dst_hex
+        device.foreign_central_seen_at = now_iso
+        if newly:
+            _LOGGER.warning(
+                "%s reports to unknown address %s instead of this central (%06X): "
+                "it is probably still paired with another controller (old MAX! Cube). "
+                "Factory reset the device and pair it again.",
+                self._format_device_identity(device.address),
+                msg.dst_hex,
+                self.own_address,
+            )
+            self._sync_foreign_central_issue(device)
+            self.hass.async_create_task(self._sync_device_registry_entry(device.address))
+            self._notify_diagnostics_updated(device.address)
+
+    def _sync_foreign_central_issue(self, device: KnownDevice) -> None:
+        """Create or remove the repair issue for a device paired elsewhere."""
+        issue_id = f"paired_elsewhere_{device.address}"
+        if device.foreign_central and not device.is_virtual:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                issue_id,
+                is_fixable=False,
+                is_persistent=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="paired_elsewhere",
+                translation_placeholders={
+                    "name": device.name,
+                    "address": device.address,
+                    "central": device.foreign_central,
+                    "own_address": f"{self.own_address:06X}",
+                },
+            )
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
 
     def _reply_time_information(self, address: str) -> None:
         """Answer a device's time request without blocking the read loop."""
@@ -1703,15 +1793,33 @@ class CulMaxCoordinator:
                 )
             else:
                 name = auto_name
-            device = KnownDevice(
-                address=src,
-                device_type=device_type,
-                name=name,
-                serial_number=serial_str,
-                firmware_version=str(firmware),
-                paired=True,
-                last_seen=datetime.now(UTC).isoformat(),
-            )
+            if existing_device is not None and existing_device.device_type == device_type:
+                # Re-pairing a known device: keep links, group, schedule and
+                # config, and keep the object entities already reference.
+                device = existing_device
+                device.name = name
+                device.serial_number = serial_str or device.serial_number
+                device.firmware_version = str(firmware)
+                device.paired = True
+                device.superseded_by = ""
+                device.duplicate_reason = ""
+                device.last_seen = datetime.now(UTC).isoformat()
+                _LOGGER.info(
+                    "Re-paired known device %s; keeping stored links %s and group %d",
+                    src,
+                    device.linked_partners,
+                    device.group_id,
+                )
+            else:
+                device = KnownDevice(
+                    address=src,
+                    device_type=device_type,
+                    name=name,
+                    serial_number=serial_str,
+                    firmware_version=str(firmware),
+                    paired=True,
+                    last_seen=datetime.now(UTC).isoformat(),
+                )
             self._devices[src] = device
             await self._ensure_time_slots_assigned()
             superseded_devices = self._mark_superseded_devices(
@@ -4975,6 +5083,9 @@ class CulMaxCoordinator:
                 last_reported_time=d.get("last_reported_time", ""),
                 last_time_offset_seconds=d.get("last_time_offset_seconds"),
                 time_slot=int(d.get("time_slot", -1)),
+                foreign_central=str(d.get("foreign_central", "") or ""),
+                foreign_central_seen_at=str(d.get("foreign_central_seen_at", "") or ""),
+                last_central_contact_at=str(d.get("last_central_contact_at", "") or ""),
             )
         for addr, commands in data.get("pending_shutter_config", {}).items():
             normalized = addr.upper()
@@ -5063,6 +5174,9 @@ class CulMaxCoordinator:
                     "last_reported_time": d.last_reported_time,
                     "last_time_offset_seconds": d.last_time_offset_seconds,
                     "time_slot": d.time_slot,
+                    "foreign_central": d.foreign_central,
+                    "foreign_central_seen_at": d.foreign_central_seen_at,
+                    "last_central_contact_at": d.last_central_contact_at,
                 }
                 for addr, d in self._devices.items()
             },

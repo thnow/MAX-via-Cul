@@ -132,6 +132,30 @@ Anlernen:
 3. Die LED beginnt zu blinken.
 4. Das Geraet sollte dann angelernt werden.
 
+### Noch an einer anderen Zentrale angemeldet
+
+Ein MAX!-Geraet kennt genau eine Zentrale. Wurde es frueher an einem MAX! Cube
+angelernt und nicht zurueckgesetzt, meldet es sich weiter dort. Es nimmt dann
+keine Konfiguration von Home Assistant an und wiederholt jede Meldung, weil die
+alte Zentrale nicht antwortet. Verknuepfte Thermostate reagieren oft trotzdem,
+deshalb faellt das im Alltag kaum auf. Ein erneutes Anlernen ohne Reset reicht
+nicht: das Geraet fragt dann gezielt seine alte Zentrale.
+
+Die Integration erkennt das an Telegrammen eines bekannten Geraets an eine
+unbekannte Adresse, wenn es sich seit zwei Tagen nicht bei dieser Zentrale
+gemeldet hat. Dann:
+
+- erscheint unter Einstellungen → Reparaturen der Hinweis „… ist noch an einer
+  anderen Zentrale angemeldet“ mit der fremden Adresse,
+- zeigt `Pairing State` den Wert `paired_elsewhere` (Climate-Attribut
+  `paired_elsewhere_central` nennt die Adresse),
+- zeigt die Wochenprogramm-Karte einen Hinweis.
+
+Abhilfe: Geraet zuruecksetzen (siehe oben) und neu anlernen. Name, Verknuepfungen
+und gespeicherte Daten bleiben beim erneuten Anlernen in Home Assistant
+erhalten. Der Hinweis verschwindet, sobald sich das Geraet bei dieser Zentrale
+meldet.
+
 ### Wandthermostat
 
 Reset:
@@ -467,17 +491,16 @@ Ein virtueller Kontakt verhaelt sich wie ein echter MAX!-Fensterkontakt:
 - Ohne verknuepftes Thermostat wird wie bisher einmalig an die Zentrale
   gesendet.
 
-`cul_max.remove_link_partner` kann mit `partner_type` auch eine veraltete
-Verknuepfung zu einem Geraet entfernen, das die Integration nicht kennt, etwa
-wenn ein Fensterkontakt noch an ein ersetztes Thermostat meldet (im Log als
-ShutterContactState an eine unbekannte Adresse mit wiederholten Sendungen
-sichtbar):
+`cul_max.remove_link_partner` kann mit `partner_type` auch eine Verknuepfung zu
+einem Geraet entfernen, das die Integration nicht kennt (z. B. ein nicht mehr
+vorhandenes Thermostat). Das setzt voraus, dass das Geraet an dieser Zentrale
+angemeldet ist (siehe „Noch an einer anderen Zentrale angemeldet“).
 
 ```yaml
 action: cul_max.remove_link_partner
 data:
-  address: 049A02          # Fensterkontakt
-  partner_address: 0EA19C  # alte, unbekannte Adresse
+  address: 1A2B3C          # Geraet mit der veralteten Verknuepfung
+  partner_address: 0E0000  # unbekannte Partneradresse
   partner_type: 1          # 1 = Heizkoerperthermostat
 ```
 

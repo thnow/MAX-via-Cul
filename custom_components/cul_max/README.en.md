@@ -116,6 +116,22 @@ To pair:
 2. Hold the contact's button for approximately three seconds.
 3. The LED starts blinking and the contact should pair.
 
+### Still paired with another controller
+
+A MAX! device knows exactly one controller. If it was paired with a MAX! Cube
+and never reset, it keeps reporting there, ignores configuration from Home
+Assistant and repeats every message because the old controller does not
+answer. Linked thermostats often still react, so this is easy to miss. Pairing
+again without a reset is not enough: the device then asks its old controller.
+
+The integration detects telegrams from a known device to an unknown address
+when the device has not reported to this controller for two days. It then
+raises a repair issue ("… is still paired with another controller"), sets
+`Pairing State` to `paired_elsewhere` (climate attribute
+`paired_elsewhere_central` names the address) and the week profile card shows
+a notice. Fix: factory reset the device and pair it again; its name, links and
+stored data are kept. The notice disappears once the device reports here.
+
 ### Wall thermostat
 
 To reset:
