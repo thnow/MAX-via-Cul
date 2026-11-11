@@ -1445,6 +1445,13 @@ class CulMaxCoordinator:
         """Credit that lower-priority traffic must leave for interactive commands."""
         if priority <= COMMAND_PRIORITY_HIGH:
             return 0.0
+        if priority == COMMAND_PRIORITY_NORMAL:
+            # User-initiated writes (week profile, config) are awaited by the
+            # user: they may use the stored budget and only keep room for one
+            # SetTemperature. The larger profile reserve is for background
+            # traffic only – with a big bucket but slow recovery it otherwise
+            # throttled a week-profile upload to one packet per ~2 minutes.
+            return CUL_CREDIT_INTERACTIVE_RESERVE
         return CUL_CREDIT_INTERACTIVE_RESERVE * self._send_profile.interactive_reserve_packets
 
     async def _command_worker(self) -> None:
