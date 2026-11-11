@@ -115,6 +115,13 @@ CUL_CREDIT_UNKNOWN_WAIT = 5.0
 # interactive SetTemperature can always be sent immediately.
 CUL_CREDIT_INTERACTIVE_RESERVE = 115.0
 CUL_LOVF_MAX_RESENDS = 3
+CUL_CREDIT_STANDARD_MAX = CUL_CREDIT_DEFAULT_MAX
+# Switch to the extended profile only with a clearly larger budget or a
+# clearly faster recovery than standard a-culfw.
+CUL_CREDIT_EXTENDED_MAX_FACTOR = 1.5
+CUL_CREDIT_EXTENDED_RATE = 1.5
+CUL_CREDIT_POLL_INTERVAL = 300.0
+CUL_CREDIT_RATE_MIN_INTERVAL = 20.0
 COMMAND_PRIORITY_HIGH = 0     # interactive: SetTemperature
 COMMAND_PRIORITY_NORMAL = 1   # user-initiated config writes
 COMMAND_PRIORITY_LOW = 2      # background: time sync, retries
@@ -215,6 +222,48 @@ class CommandRequest:
     timeout: float
     future: asyncio.Future[MaxMessage | None]
     priority: int = COMMAND_PRIORITY_NORMAL
+
+
+@dataclass(frozen=True)
+class SendProfile:
+    """Retry/pacing tunables that depend on the CUL's send budget."""
+
+    name: str
+    set_temperature_timeout: float
+    set_temperature_retries: int
+    config_retries: int
+    week_profile_retries: int
+    pending_retry_base_delay: float
+    pending_retry_max_delay: float
+    startup_time_sync_device_delay: float
+    interactive_reserve_packets: int
+
+
+# Standard a-culfw (MAX_CREDIT 900, 1 % duty cycle): conservative.
+SEND_PROFILE_STANDARD = SendProfile(
+    name="standard",
+    set_temperature_timeout=SET_TEMPERATURE_ACK_TIMEOUT,
+    set_temperature_retries=SET_TEMPERATURE_ACK_RETRIES,
+    config_retries=CONFIG_ACK_RETRIES,
+    week_profile_retries=WEEK_PROFILE_ACK_RETRIES,
+    pending_retry_base_delay=PENDING_QUEUE_RETRY_BASE_DELAY,
+    pending_retry_max_delay=PENDING_QUEUE_RETRY_MAX_DELAY,
+    startup_time_sync_device_delay=STARTUP_TIME_SYNC_DEVICE_DELAY,
+    interactive_reserve_packets=1,
+)
+# Firmware reporting a clearly larger budget: recover from lost packets
+# faster. Thermostats ACK about 1.1-1.3 s after the start of a Zs send.
+SEND_PROFILE_EXTENDED = SendProfile(
+    name="extended",
+    set_temperature_timeout=3.0,
+    set_temperature_retries=6,
+    config_retries=CONFIG_ACK_RETRIES + 2,
+    week_profile_retries=WEEK_PROFILE_ACK_RETRIES + 2,
+    pending_retry_base_delay=10.0,
+    pending_retry_max_delay=120.0,
+    startup_time_sync_device_delay=0.5,
+    interactive_reserve_packets=7,
+)
 
 
 class CulCreditError(ConnectionError):
@@ -370,8 +419,10 @@ class CulMaxCoordinator:
         host: str,
         port: int = DEFAULT_PORT,
         own_address: int = DEFAULT_OWN_ADDRESS,
+        config_entry_id: str | None = None,
     ) -> None:
         self.hass = hass
+        self.config_entry_id = config_entry_id
         self.host = host
         self.port = port
         self.own_address = own_address
@@ -412,6 +463,13 @@ class CulMaxCoordinator:
         self._cul_credit_queried_at: float = 0.0
         self._cul_credit_future: asyncio.Future[int] | None = None
         self._last_tx_at: float = 0.0
+        self._cul_credit_rate: float = CUL_CREDIT_RECOVERY_PER_SECOND
+        self._cul_credit_rate_samples: int = 0
+        self._cul_credit_consumed_total: float = 0.0
+        self._cul_credit_last_report: tuple[float, float, float] | None = None
+        self._cul_credit_reported_at: float = 0.0
+        self._send_profile: SendProfile = SEND_PROFILE_STANDARD
+        self._cul_status_listeners: list[Callable[[], None]] = []
 
         self._devices: dict[str, KnownDevice] = {}
         self._store: Store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
@@ -527,6 +585,16 @@ class CulMaxCoordinator:
             return f"{base} · " + ", ".join(flags)
         return base
 
+    def get_registry_device(
+        self, registry: dr.DeviceRegistry, address: str
+    ) -> dr.DeviceEntry | None:
+        """Look up the HA device of one MAX! address owned by this config entry."""
+        if self.config_entry_id is None:
+            return None
+        return registry.async_get_device_by_identifier(
+            (DOMAIN, address.upper()), self.config_entry_id
+        )
+
     async def _sync_device_registry_entry(self, address: str) -> None:
         """Update the HA device-registry model text for one MAX! device."""
         normalized = address.upper()
@@ -534,7 +602,7 @@ class CulMaxCoordinator:
         if device is None:
             return
         registry = dr.async_get(self.hass)
-        entry = registry.async_get_device(identifiers={(DOMAIN, normalized)})
+        entry = self.get_registry_device(registry, normalized)
         if entry is None:
             return
         desired_model = self.get_device_registry_model(device)
@@ -1156,7 +1224,7 @@ class CulMaxCoordinator:
         """Credit that lower-priority traffic must leave for interactive commands."""
         if priority <= COMMAND_PRIORITY_HIGH:
             return 0.0
-        return CUL_CREDIT_INTERACTIVE_RESERVE
+        return CUL_CREDIT_INTERACTIVE_RESERVE * self._send_profile.interactive_reserve_packets
 
     async def _command_worker(self) -> None:
         """Process queued MAX! write operations strictly sequentially.
@@ -1721,8 +1789,8 @@ class CulMaxCoordinator:
             device_address=address,
             counter=counter,
             description=f"SetTemperature {label}",
-            retries=SET_TEMPERATURE_ACK_RETRIES,
-            timeout=SET_TEMPERATURE_ACK_TIMEOUT,
+            retries=self._send_profile.set_temperature_retries,
+            timeout=self._send_profile.set_temperature_timeout,
             priority=COMMAND_PRIORITY_HIGH,
         )
         if effective_mode == MODE_AUTO and temperature <= 0 and until is None:
@@ -1813,7 +1881,7 @@ class CulMaxCoordinator:
             device_address=address,
             counter=counter,
             description=f"ConfigTemperatures {label}",
-            retries=CONFIG_ACK_RETRIES,
+            retries=self._send_profile.config_retries,
             timeout=CONFIG_ACK_TIMEOUT,
         )
 
@@ -1883,7 +1951,11 @@ class CulMaxCoordinator:
     def _pending_retry_delay(self, attempts: int) -> float:
         """Return a conservative retry delay for queued config commands."""
         exponent = max(0, attempts - 1)
-        return min(PENDING_QUEUE_RETRY_MAX_DELAY, PENDING_QUEUE_RETRY_BASE_DELAY * (2 ** exponent))
+        profile = self._send_profile
+        return min(
+            profile.pending_retry_max_delay,
+            profile.pending_retry_base_delay * (2 ** exponent),
+        )
 
     def _mark_pending_attempt(
         self,
@@ -2263,6 +2335,10 @@ class CulMaxCoordinator:
         """Retry due queued climate config in the background."""
         if self._writer is None:
             return
+        if self.hass.loop.time() - self._cul_credit_reported_at >= CUL_CREDIT_POLL_INTERVAL:
+            # Keeps the budget sensor current and feeds the recovery-rate
+            # measurement; "X" does not use the radio.
+            await self._query_cul_credit(force=True)
         for address, queue in list(self._pending_climate_config.items()):
             if not queue:
                 continue
@@ -2312,7 +2388,7 @@ class CulMaxCoordinator:
             device_address=address,
             counter=counter,
             description=f"{command.description} [pending]",
-            retries=WEEK_PROFILE_ACK_RETRIES,
+            retries=self._send_profile.week_profile_retries,
             timeout=WEEK_PROFILE_ACK_TIMEOUT,
         )
         device = self.get_device(address)
@@ -2490,7 +2566,7 @@ class CulMaxCoordinator:
                 device_address=address,
                 counter=counter,
                 description=f"SetGroupId {label}",
-                retries=CONFIG_ACK_RETRIES,
+                retries=self._send_profile.config_retries,
                 timeout=CONFIG_ACK_TIMEOUT,
             )
         device.group_id = group_id
@@ -2534,7 +2610,7 @@ class CulMaxCoordinator:
                 device_address=address,
                 counter=counter,
                 description=f"RemoveGroupId {label}",
-                retries=CONFIG_ACK_RETRIES,
+                retries=self._send_profile.config_retries,
                 timeout=CONFIG_ACK_TIMEOUT,
             )
         device.group_id = 0
@@ -2604,7 +2680,7 @@ class CulMaxCoordinator:
             device_address=address,
             counter=counter,
             description=f"AddLinkPartner {label}",
-            retries=CONFIG_ACK_RETRIES,
+            retries=self._send_profile.config_retries,
             timeout=CONFIG_ACK_TIMEOUT,
         )
 
@@ -2676,7 +2752,7 @@ class CulMaxCoordinator:
             device_address=address,
             counter=counter,
             description=f"RemoveLinkPartner {label}",
-            retries=CONFIG_ACK_RETRIES,
+            retries=self._send_profile.config_retries,
             timeout=CONFIG_ACK_TIMEOUT,
         )
 
@@ -3442,7 +3518,7 @@ class CulMaxCoordinator:
                         "Startup time sync to %s failed",
                         self._format_device_identity(address),
                     )
-                await asyncio.sleep(STARTUP_TIME_SYNC_DEVICE_DELAY)
+                await asyncio.sleep(self._send_profile.startup_time_sync_device_delay)
         except asyncio.CancelledError:
             return
 
@@ -3788,7 +3864,7 @@ class CulMaxCoordinator:
         elapsed = max(0.0, now - self._cul_credit_updated_at)
         self._cul_credit_estimate = min(
             self._cul_credit_max,
-            self._cul_credit_estimate + elapsed * CUL_CREDIT_RECOVERY_PER_SECOND,
+            self._cul_credit_estimate + elapsed * self._cul_credit_rate,
         )
         self._cul_credit_updated_at = now
 
@@ -3796,12 +3872,15 @@ class CulMaxCoordinator:
         """Book one send against the local credit estimate."""
         self._refresh_cul_credit_estimate()
         self._cul_credit_estimate = max(0.0, self._cul_credit_estimate - cost)
+        self._cul_credit_consumed_total += cost
 
     def _handle_credit_report(self, credit: int) -> None:
         """Adopt a credit_10ms value reported by culfw ("X" command)."""
         now = self.hass.loop.time()
+        self._measure_cul_credit_rate(now, float(credit))
         self._cul_credit_estimate = float(credit)
         self._cul_credit_updated_at = now
+        self._cul_credit_reported_at = now
         self._cul_credit_known = True
         if credit > self._cul_credit_max:
             _LOGGER.info(
@@ -3810,9 +3889,81 @@ class CulMaxCoordinator:
                 self._cul_credit_max,
             )
             self._cul_credit_max = float(credit)
+        self._update_send_profile()
         future = self._cul_credit_future
         if future is not None and not future.done():
             future.set_result(credit)
+        self._notify_cul_status()
+
+    def _measure_cul_credit_rate(self, now: float, credit: float) -> None:
+        """Estimate how fast the CUL regains credit from two consecutive reports.
+
+        Standard a-culfw adds 1 credit per second; modified firmware may add
+        more. Samples are only usable while the credit is below its cap, so
+        "recovered" = difference + everything we sent in between.
+        """
+        last = self._cul_credit_last_report
+        self._cul_credit_last_report = (now, credit, self._cul_credit_consumed_total)
+        if last is None:
+            return
+        last_time, last_credit, last_consumed = last
+        elapsed = now - last_time
+        cap = self._cul_credit_max
+        if (
+            elapsed < CUL_CREDIT_RATE_MIN_INTERVAL
+            or last_credit >= cap * 0.98
+            or credit >= cap * 0.98
+        ):
+            return
+        recovered = credit - last_credit + (self._cul_credit_consumed_total - last_consumed)
+        if recovered <= 0:
+            return
+        sample = max(0.1, recovered / elapsed)
+        if self._cul_credit_rate_samples == 0:
+            rate = sample
+        else:
+            rate = 0.7 * self._cul_credit_rate + 0.3 * sample
+        self._cul_credit_rate_samples += 1
+        if abs(rate - self._cul_credit_rate) > 0.05:
+            _LOGGER.info("CUL credit recovery measured at %.2f credit_10ms/s", rate)
+        self._cul_credit_rate = rate
+
+    def _update_send_profile(self) -> None:
+        """Pick standard or extended retry behaviour from the measured budget."""
+        extended = (
+            self._cul_credit_max > CUL_CREDIT_STANDARD_MAX * CUL_CREDIT_EXTENDED_MAX_FACTOR
+            or self._cul_credit_rate > CUL_CREDIT_EXTENDED_RATE
+        )
+        profile = SEND_PROFILE_EXTENDED if extended else SEND_PROFILE_STANDARD
+        if profile is self._send_profile:
+            return
+        _LOGGER.info(
+            "CUL send budget %.0f (recovery %.2f/s): using %s send profile",
+            self._cul_credit_max,
+            self._cul_credit_rate,
+            profile.name,
+        )
+        self._send_profile = profile
+
+    @property
+    def send_profile(self) -> SendProfile:
+        """Return the active send profile."""
+        return self._send_profile
+
+    @callback
+    def add_cul_status_listener(self, cb: Callable[[], None]) -> Callable:
+        """Register a callback for CUL budget/queue status changes."""
+        self._cul_status_listeners.append(cb)
+
+        def remove() -> None:
+            if cb in self._cul_status_listeners:
+                self._cul_status_listeners.remove(cb)
+
+        return remove
+
+    def _notify_cul_status(self) -> None:
+        for cb in list(self._cul_status_listeners):
+            self.hass.loop.call_soon(cb)
 
     def _handle_lovf(self) -> None:
         """culfw dropped a packet because its duty-cycle credit was exhausted."""
@@ -3836,6 +3987,9 @@ class CulMaxCoordinator:
             "credit_10ms": round(self._cul_credit_estimate),
             "credit_max": round(self._cul_credit_max),
             "credit_known": self._cul_credit_known,
+            "recovery_per_second": round(self._cul_credit_rate, 2),
+            "recovery_measured": self._cul_credit_rate_samples > 0,
+            "send_profile": self._send_profile.name,
             "queued_commands": self._command_queue.qsize(),
         }
 
@@ -3909,7 +4063,7 @@ class CulMaxCoordinator:
             if self._cul_credit_known:
                 wait_time = min(
                     CUL_CREDIT_MAX_WAIT_SLICE,
-                    (needed - self._cul_credit_estimate) / CUL_CREDIT_RECOVERY_PER_SECOND + 0.5,
+                    (needed - self._cul_credit_estimate) / self._cul_credit_rate + 0.5,
                 )
             else:
                 wait_time = CUL_CREDIT_UNKNOWN_WAIT

@@ -33,7 +33,7 @@ protocol locally.
 
 ## Requirements
 
-- Home Assistant 2024.1 or newer
+- Home Assistant 2026.11 or newer
 - A CUL or CUNO flashed with CULFW
 - TCP access to the CUL/CUNO, commonly port `2323`
 - CULFW support for MAX!/MORITZ mode
@@ -238,6 +238,17 @@ Repository layout:
 - no generated Python caches committed
 
 ## Changelog
+
+### 0.3.0
+
+- Requires Home Assistant 2026.11 or newer. Uses the native climate
+  temperature attributes and per-config-entry device lookups (removes the
+  deprecation warnings that would break in 2027.8/2027.11).
+- Adapts to the CUL's send budget: an `extended` send profile with faster and
+  more retries is used when culfw reports a clearly larger budget or faster
+  recovery; the recovery rate is measured. See the integration README, including
+  the legal notice on modified firmware.
+- New diagnostic sensor `Send Budget` on the `MAX! CUL` device.
 
 ### 0.2.0
 

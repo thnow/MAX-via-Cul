@@ -309,6 +309,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: CulMaxConfigEntry) -> bo
         host=host,
         port=port,
         own_address=own_address,
+        config_entry_id=entry.entry_id,
     )
 
     if not await coordinator.async_setup():
@@ -1090,7 +1091,7 @@ def _register_services(hass: HomeAssistant, coordinator: CulMaxCoordinator) -> N
 
             removed_device_addresses: list[str] = []
             for address in removable_addresses:
-                device_entry = device_registry.async_get_device(identifiers={(DOMAIN, address)})
+                device_entry = coordinator.get_registry_device(device_registry, address)
                 if device_entry is not None:
                     device_registry.async_remove_device(device_entry.id)
                     removed_device_addresses.append(address)

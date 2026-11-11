@@ -92,7 +92,7 @@ class CulMaxClimate(ClimateEntity):
 
     _attr_has_entity_name = False
     _attr_name = None
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_min_temp = TEMP_MIN
     _attr_max_temp = TEMP_MAX
     _attr_target_temperature_step = 0.5
@@ -119,8 +119,8 @@ class CulMaxClimate(ClimateEntity):
 
         # Set default values to prevent AttributeError
         self._attr_hvac_mode = HVACMode.OFF
-        self._attr_target_temperature = None
-        self._attr_current_temperature = None
+        self._attr_native_target_temperature = None
+        self._attr_native_current_temperature = None
         self._attr_hvac_action = HVACAction.IDLE
         self._attr_preset_mode = "none"
         self._attr_available = False
@@ -173,12 +173,12 @@ class CulMaxClimate(ClimateEntity):
 
     def _apply_state_dict(self, state: dict) -> None:
         """Apply state dict (from ThermostatState or stored last_state)."""
-        self._attr_target_temperature = state.get("desired_temperature")
+        self._attr_native_target_temperature = state.get("desired_temperature")
         measured = state.get("measured_temperature")
         if measured is not None:
-            self._attr_current_temperature = measured
+            self._attr_native_current_temperature = measured
         mode = state.get("mode", MODE_MANUAL)
-        self._attr_hvac_mode = self._hvac_mode_for(mode, self._attr_target_temperature)
+        self._attr_hvac_mode = self._hvac_mode_for(mode, self._attr_native_target_temperature)
         self._attr_preset_mode = "boost" if mode == MODE_BOOST else "none"
 
         valve = state.get("valve_position", 0)
@@ -218,7 +218,7 @@ class CulMaxClimate(ClimateEntity):
         coordinator applies to this entity before the call returns, so after
         success the displayed values are the device-confirmed ones.
         """
-        self._attr_target_temperature = optimistic_target
+        self._attr_native_target_temperature = optimistic_target
         self._attr_hvac_mode = optimistic_hvac
         self._attr_preset_mode = optimistic_preset
         self._command_status = "sending"
@@ -327,7 +327,7 @@ class CulMaxClimate(ClimateEntity):
 
     def _heat_target(self) -> float:
         """Target used when switching to HEAT (never the 4.5 °C 'off' value)."""
-        current = self._attr_target_temperature
+        current = self._attr_native_target_temperature
         if current is not None and current > TEMP_OFF:
             return current
         return self._device.comfort_temperature or 20.0
@@ -347,7 +347,7 @@ class CulMaxClimate(ClimateEntity):
                 description="Automatik (Wochenprogramm)",
                 temperature=0.0,
                 mode=MODE_AUTO,
-                optimistic_target=expected if expected is not None else self._attr_target_temperature,
+                optimistic_target=expected if expected is not None else self._attr_native_target_temperature,
                 optimistic_hvac=HVACMode.AUTO,
             )
         else:
@@ -364,9 +364,9 @@ class CulMaxClimate(ClimateEntity):
         if preset_mode == "boost":
             await self._async_write_with_feedback(
                 description="Boost",
-                temperature=self._attr_target_temperature or 20.0,
+                temperature=self._attr_native_target_temperature or 20.0,
                 mode=MODE_BOOST,
-                optimistic_target=self._attr_target_temperature,
+                optimistic_target=self._attr_native_target_temperature,
                 optimistic_hvac=HVACMode.HEAT,
                 optimistic_preset="boost",
             )
