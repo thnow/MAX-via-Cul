@@ -907,6 +907,9 @@
       },
       "valve_position": {
         "name": "Ventilöffnung"
+      },
+      "measured_temperature": {
+        "name": "Isttemperatur"
       }
     },
     "number": {

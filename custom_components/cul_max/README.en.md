@@ -259,6 +259,7 @@ Radiator and wall thermostats expose:
 
 - A `climate` entity for target temperature and HVAC mode.
 - A "Valve opening" sensor in % (radiator thermostats only, with history).
+- A "Measured temperature" sensor, e.g. as the temperature sensor of an area.
 - `text` entities for weekly schedules.
 - `number` entities for comfort, eco and window-open temperatures,
   window-open duration and measurement offset.

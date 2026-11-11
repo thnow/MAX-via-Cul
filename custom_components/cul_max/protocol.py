@@ -98,6 +98,16 @@ def local_datetime_to_max_day(when: datetime) -> int:
     return (when.weekday() + 2) % 7
 
 
+def order_week_profile_days(days, when: datetime) -> list[int]:
+    """MAX! days (0=Sat … 6=Fri) ordered from today on.
+
+    Uploads trickle out with the radio budget; sending today's program first
+    makes it effective right away instead of after the other days.
+    """
+    today = local_datetime_to_max_day(when)
+    return sorted(days, key=lambda day: (day - today) % 7)
+
+
 @dataclass
 class MaxMessage:
     """Parsed MAX! radio message."""

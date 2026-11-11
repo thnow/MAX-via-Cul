@@ -444,3 +444,11 @@ class VacationEncodingTests(unittest.TestCase):
         self.assertEqual(decoded["mode"], protocol.MODE_VACATION)
         self.assertEqual(decoded["desired_temperature"], 16.0)
         self.assertEqual(decoded["until"], "2026-12-31 23:30")
+
+
+class WeekProfileOrderTests(unittest.TestCase):
+    def test_upload_starts_with_today(self) -> None:
+        # 2026-11-12 is a Thursday = MAX! day 5 (0 = Saturday)
+        when = datetime(2026, 11, 12, 9, 0, tzinfo=ZoneInfo("Europe/Berlin"))
+        self.assertEqual(protocol.order_week_profile_days(range(7), when), [5, 6, 0, 1, 2, 3, 4])
+        self.assertEqual(protocol.order_week_profile_days([0, 2, 6], when), [6, 0, 2])

@@ -119,7 +119,7 @@ class CulMaxConfigButton(ButtonEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_{description.key}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
-            via_device=(DOMAIN, coordinator.controller_identifier),
+            via_device_id=coordinator.controller_device_id,
             name=device.name,
             manufacturer="eQ-3",
             model=coordinator.get_device_registry_model(device),

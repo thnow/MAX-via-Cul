@@ -96,6 +96,7 @@ from .protocol import (
     format_week_profile_lines,
     get_expected_week_profile_temperature,
     local_datetime_to_max_day,
+    order_week_profile_days,
     get_week_profile_segment_start,
     normalize_week_profile_hex,
     parse_time_information_payload,
@@ -156,6 +157,9 @@ PENDING_QUEUE_MAINTENANCE_INTERVAL = 60.0
 PENDING_QUEUE_RETRY_BASE_DELAY = 30.0
 PENDING_QUEUE_RETRY_MAX_DELAY = 300.0
 AUTO_MODE_TIME_SYNC_FOLLOWUP_DELAY = 12.0
+# Skip that follow-up if the clock was set recently and was not off.
+AUTO_MODE_TIME_SYNC_SKIP_IF_SYNCED_WITHIN = timedelta(hours=6)
+AUTO_MODE_TIME_SYNC_MAX_OFFSET = 120
 # Virtual window contacts behave like real ones: the state goes directly to
 # each linked thermostat, which ACKs it; it is repeated periodically
 # (real contacts report hourly) so a lost telegram cannot leave a thermostat
@@ -169,6 +173,10 @@ VIRTUAL_CONTACT_STARTUP_DELAY = 120.0
 EXTERNAL_TEMP_MIN_CHANGE = 0.2
 # Vacation mode
 VACATION_DEFAULT_TEMPERATURE = 16.0
+# TCP liveness: after this much silence from the CUL, ask for its credit
+# ("X", no radio traffic); no answer twice in a row means a dead connection
+# (Cube rebooted, network glitch) and triggers a reconnect.
+CUL_IDLE_PROBE_SECONDS = 60.0
 VACATION_SEND_ROUNDS = 4
 VACATION_RETRY_DELAY = 120.0
 # Many sensors (e.g. ZHA/Zigbee thermometers) only report on change, so a
@@ -295,6 +303,10 @@ class CommandRequest:
     timeout: float
     future: asyncio.Future[MaxMessage | None]
     priority: int = COMMAND_PRIORITY_NORMAL
+    # Requests with the same key replace each other: a newer one marks the
+    # older as superseded, which is then not sent / not retried any more.
+    supersede_key: str | None = None
+    superseded: bool = False
 
 
 @dataclass(frozen=True)
@@ -337,6 +349,10 @@ SEND_PROFILE_EXTENDED = SendProfile(
     startup_time_sync_device_delay=0.5,
     interactive_reserve_packets=7,
 )
+
+
+class CommandSupersededError(Exception):
+    """A newer command for the same target replaced this one before delivery."""
 
 
 class CulCreditError(ConnectionError):
@@ -548,6 +564,8 @@ class CulMaxCoordinator:
         self.host = host
         self.port = port
         self.serial = serial
+        # HA device id of the CUL device (set during setup, before the platforms)
+        self.controller_device_id: str | None = None
         self.own_address = own_address
 
         self._reader: asyncio.StreamReader | None = None
@@ -568,6 +586,7 @@ class CulMaxCoordinator:
             asyncio.PriorityQueue()
         )
         self._command_seq: int = 0
+        self._latest_by_supersede_key: dict[str, CommandRequest] = {}
         self._queued_priority_counts: dict[int, int] = {}
         self._command_enqueued = asyncio.Event()
         self._command_worker_task: asyncio.Task | None = None
@@ -611,6 +630,8 @@ class CulMaxCoordinator:
         self._vacation_task: asyncio.Task | None = None
         self._vacation_timer_unsub: Callable[[], None] | None = None
         self._vacation_listeners: list[Callable[[], None]] = []
+        self._last_rx_at: float = 0.0
+        self._liveness_task: asyncio.Task | None = None
 
         self._devices: dict[str, KnownDevice] = {}
         self._store: Store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
@@ -1093,8 +1114,8 @@ class CulMaxCoordinator:
         task = self._temp_apply_tasks.pop(address, None)
         if task is not None and not task.done():
             task.cancel()
-        self._temp_apply_tasks[address] = self.hass.async_create_task(
-            self._apply_temperature_config_later(address)
+        self._temp_apply_tasks[address] = self._background(
+            self._apply_temperature_config_later(address), f"apply config {address}"
         )
 
     async def _apply_temperature_config_later(self, address: str) -> None:
@@ -1197,6 +1218,8 @@ class CulMaxCoordinator:
             self._polling_task = self.hass.loop.create_task(self._periodic_time_sync_loop())
         if self._pending_queue_task is None or self._pending_queue_task.done():
             self._pending_queue_task = self.hass.loop.create_task(self._pending_queue_maintenance_loop())
+        if self._liveness_task is None or self._liveness_task.done():
+            self._liveness_task = self.hass.loop.create_task(self._liveness_loop())
         await self._load_devices()
         for device in self._devices.values():
             if device.foreign_central:
@@ -1219,6 +1242,10 @@ class CulMaxCoordinator:
         """Close the TCP connection cleanly."""
         self._shutting_down = True
         self._reconnecting = False
+        if self._liveness_task:
+            self._liveness_task.cancel()
+            await asyncio.gather(self._liveness_task, return_exceptions=True)
+            self._liveness_task = None
         if self._polling_task:
             self._polling_task.cancel()
             try:
@@ -1348,6 +1375,7 @@ class CulMaxCoordinator:
             await self._close_connection()
             return False
 
+        self._last_rx_at = self.hass.loop.time()
         self._read_task = self.hass.loop.create_task(self._read_loop())
         self.hass.loop.create_task(self._query_cul_credit(force=True))
         return True
@@ -1381,6 +1409,7 @@ class CulMaxCoordinator:
                 if not line_bytes:
                     _LOGGER.warning("CULFW connection closed by remote host")
                     break
+                self._last_rx_at = self.hass.loop.time()
                 line = line_bytes.decode("ascii", errors="ignore").strip()
                 if not line:
                     continue
@@ -1398,6 +1427,38 @@ class CulMaxCoordinator:
         # Connection lost — try to reconnect
         await self._close_connection()
         self._schedule_reconnect()
+
+    async def _liveness_loop(self) -> None:
+        """Detect a silently dead TCP/serial connection and reconnect."""
+        while not self._shutting_down:
+            idle = self.hass.loop.time() - self._last_rx_at
+            await asyncio.sleep(max(5.0, CUL_IDLE_PROBE_SECONDS - idle))
+            if (
+                self._shutting_down
+                or self._reconnecting
+                or self._writer is None
+                or self.hass.loop.time() - self._last_rx_at < CUL_IDLE_PROBE_SECONDS
+            ):
+                continue
+            # Two tries: a single lost answer must not cost a reconnect.
+            if await self._query_cul_credit(force=True) is not None:
+                continue
+            if self.hass.loop.time() - self._last_rx_at < CUL_IDLE_PROBE_SECONDS:
+                continue
+            if await self._query_cul_credit(force=True) is not None:
+                continue
+            if self._writer is None or self._reconnecting:
+                continue
+            _LOGGER.warning(
+                "CUL %s did not answer for %.0f s; reconnecting",
+                self.display_name,
+                self.hass.loop.time() - self._last_rx_at,
+            )
+            if self._read_task is not None and not self._read_task.done():
+                self._read_task.cancel()
+                await asyncio.gather(self._read_task, return_exceptions=True)
+            await self._close_connection()
+            self._schedule_reconnect()
 
     async def _reconnect_loop(self) -> None:
         """Keep attempting reconnection until successful."""
@@ -1438,6 +1499,12 @@ class CulMaxCoordinator:
 
     def _enqueue_command_request(self, request: CommandRequest) -> None:
         """Put one request into the priority queue (FIFO within a priority)."""
+        if request.supersede_key:
+            previous = self._latest_by_supersede_key.get(request.supersede_key)
+            if previous is not None and not previous.future.done():
+                previous.superseded = True
+                _LOGGER.debug("%s superseded by a newer command", previous.description)
+            self._latest_by_supersede_key[request.supersede_key] = request
         self._command_seq += 1
         self._queued_priority_counts[request.priority] = (
             self._queued_priority_counts.get(request.priority, 0) + 1
@@ -1474,6 +1541,9 @@ class CulMaxCoordinator:
                 try:
                     if request.future.done():
                         continue
+                    if request.superseded:
+                        request.future.set_exception(CommandSupersededError(request.description))
+                        continue
                     ready = await self._wait_for_cul_credit(
                         self._estimate_cul_credit_cost(request.cmd),
                         reserve=self._credit_reserve_for(priority),
@@ -1487,6 +1557,9 @@ class CulMaxCoordinator:
                             self._queued_priority_counts.get(priority, 0) + 1
                         )
                         self._command_queue.put_nowait((priority, seq, request))
+                        continue
+                    if request.superseded:
+                        request.future.set_exception(CommandSupersededError(request.description))
                         continue
                     result = await self._execute_command_request(request)
                     if not request.future.done():
@@ -1528,6 +1601,9 @@ class CulMaxCoordinator:
         lovf_resends = 0
         attempt = 0
         while attempt < request.retries + 1:
+            if attempt > 0 and request.superseded:
+                # A newer command for this device took over: no more retries.
+                raise CommandSupersededError(request.description)
             attempt += 1
             future: asyncio.Future[MaxMessage] = self.hass.loop.create_future()
             self._pending_ack = PendingAck(
@@ -1655,6 +1731,20 @@ class CulMaxCoordinator:
         )
 
         if msg.msg_type == MSG_PAIR_PING:
+            if msg.dst not in (0, self.own_address):
+                # A device still paired with another central (old Cube, another
+                # CUL) asks *that* central to re-pair. Answering would steal
+                # it; a factory reset makes it ask everybody (destination 0).
+                _LOGGER.info(
+                    "PairPing from %s addressed to central %s ignored%s",
+                    msg.src_hex,
+                    msg.dst_hex,
+                    " – reset the device to pair it here" if self._pairing_mode else "",
+                )
+                device = self.get_device(msg.src_hex)
+                if device is not None:
+                    self._check_foreign_central(msg, device)
+                return
             if self._pairing_mode:
                 await self._handle_pair_ping(msg)
             else:
@@ -1902,8 +1992,9 @@ class CulMaxCoordinator:
 
         @callback
         def _changed(event: Event) -> None:
-            self.hass.async_create_task(
-                self._external_temperature_tick(normalized, reason="sensor")
+            self._background(
+                self._external_temperature_tick(normalized, reason="sensor"),
+                f"external temperature {normalized}",
             )
 
         self._ext_unsubs[normalized] = async_track_state_change_event(
@@ -2058,6 +2149,15 @@ class CulMaxCoordinator:
     # Assistant or the CUL is offline. HA remembers each thermostat's
     # previous state so manual/off thermostats are restored afterwards and
     # an early return switches everything back right away.
+
+    def _background(self, coro, name: str) -> asyncio.Task:
+        """Run radio work that may wait for send credit without blocking HA.
+
+        Tasks from hass.async_create_task are awaited by Home Assistant during
+        startup and shutdown; a task waiting minutes for CUL credit then
+        delayed both ("Something is blocking Home Assistant ...").
+        """
+        return self.hass.async_create_background_task(coro, f"cul_max {name}")
 
     def add_vacation_listener(self, cb: Callable[[], None]) -> Callable[[], None]:
         self._vacation_listeners.append(cb)
@@ -2274,6 +2374,12 @@ class CulMaxCoordinator:
                     await self.async_set_temperature(address, temperature, until=device_end)
                 except asyncio.CancelledError:
                     raise
+                except CommandSupersededError:
+                    # changed by hand in the meantime – respect that
+                    await self._vacation_set_record(
+                        address, status="confirmed", error="durch neueren Befehl ersetzt"
+                    )
+                    continue
                 except Exception as err:  # noqa: BLE001 - retried below
                     failed.append(address)
                     await self._vacation_set_record(address, status="failed", error=str(err))
@@ -2335,6 +2441,9 @@ class CulMaxCoordinator:
                         await self.async_set_temperature(address, 0.0, mode=MODE_AUTO)
                 except asyncio.CancelledError:
                     raise
+                except CommandSupersededError:
+                    record.update(status="restored", error="durch neueren Befehl ersetzt", updated_at=self._now_iso())
+                    continue
                 except Exception as err:  # noqa: BLE001 - retried below
                     failed.append(address)
                     record.update(status="restore_failed", error=str(err), updated_at=self._now_iso())
@@ -2344,8 +2453,9 @@ class CulMaxCoordinator:
                 await self._save_devices()
                 self._notify_vacation()
                 if device.external_sensor:
-                    self.hass.async_create_task(
-                        self._external_temperature_tick(address, reason="vacation end")
+                    self._background(
+                        self._external_temperature_tick(address, reason="vacation end"),
+                        f"external temperature {address}",
                     )
             if not failed:
                 return
@@ -2380,7 +2490,7 @@ class CulMaxCoordinator:
         @callback
         def _finished(_now: datetime) -> None:
             self._vacation_timer_unsub = None
-            self.hass.async_create_task(self.async_end_vacation(reason="finished"))
+            self._background(self.async_end_vacation(reason="finished"), "vacation end")
 
         # a little after the thermostats switched back by themselves
         self._vacation_timer_unsub = async_track_point_in_time(
@@ -2397,7 +2507,7 @@ class CulMaxCoordinator:
         except ValueError:
             device_end = None
         if device_end is None or device_end <= dt_util.now():
-            self.hass.async_create_task(self.async_end_vacation(reason="finished"))
+            self._background(self.async_end_vacation(reason="finished"), "vacation end")
             return
         self._arm_vacation_timer()
         unconfirmed = [
@@ -2600,7 +2710,7 @@ class CulMaxCoordinator:
                     err,
                 )
 
-        self.hass.async_create_task(_send())
+        self._background(_send(), f"time information reply {address}")
 
     def _dispatch(self, msg: MaxMessage, decoded: Any) -> None:
         """Call all registered listeners for this message."""
@@ -2854,6 +2964,7 @@ class CulMaxCoordinator:
             retries=self._send_profile.set_temperature_retries,
             timeout=self._send_profile.set_temperature_timeout,
             priority=COMMAND_PRIORITY_HIGH,
+            supersede_key=f"set_temperature:{normalized}",
         )
         if effective_mode == MODE_AUTO and temperature <= 0 and until is None:
             self._schedule_auto_mode_time_sync_followup(normalized)
@@ -4672,7 +4783,7 @@ class CulMaxCoordinator:
             known_days = set()  # the device's other days were programmed elsewhere
         known_days |= set(updates)
         pending_commands: list[PendingClimateCommand] = []
-        for day in sorted(updates):
+        for day in order_week_profile_days(updates, dt_util.now()):
             for part, chunk_hex in split_week_profile_for_send(merged_profile, day):
                 pending_commands.append(
                     PendingClimateCommand(
@@ -4755,8 +4866,12 @@ class CulMaxCoordinator:
                 if device.device_type in CLIMATE_DEVICE_TYPES
                 and self.is_device_paired(device.address)
                 and not device.pending_config
+                # A restart does not change the thermostats' clocks: skip the
+                # ones set recently (saves ≈1 s of radio time per device).
+                and not self._clock_recently_synced(device.address)
             ]
             if not targets:
+                _LOGGER.debug("Startup time sync skipped: all clocks synced recently")
                 return
             _LOGGER.info(
                 "Startup MAX! time sync for %s",
@@ -4927,9 +5042,33 @@ class CulMaxCoordinator:
             await asyncio.sleep(0.25)
         return synced
 
+    def _clock_recently_synced(self, address: str) -> bool:
+        """True if the device got the time recently and its clock was fine."""
+        device = self.get_device(address)
+        if device is None or not device.last_time_sync_at:
+            return False
+        try:
+            synced = datetime.fromisoformat(device.last_time_sync_at)
+        except ValueError:
+            return False
+        if synced.tzinfo is None:
+            synced = synced.replace(tzinfo=UTC)
+        offset = device.last_time_offset_seconds
+        return (
+            datetime.now(UTC) - synced < AUTO_MODE_TIME_SYNC_SKIP_IF_SYNCED_WITHIN
+            and (offset is None or abs(offset) <= AUTO_MODE_TIME_SYNC_MAX_OFFSET)
+        )
+
     def _schedule_auto_mode_time_sync_followup(self, address: str) -> None:
         """Schedule one delayed time refresh after switching a device to auto."""
         normalized = address.upper()
+        if self._clock_recently_synced(normalized):
+            # Saves one radio packet (≈1 s of the 1 % budget) per switch to auto.
+            _LOGGER.debug(
+                "Auto-mode time sync for %s skipped: clock synced recently",
+                self._format_device_identity(normalized),
+            )
+            return
         existing = self._auto_mode_time_sync_tasks.get(normalized)
         if existing is not None and not existing.done():
             existing.cancel()
@@ -5023,6 +5162,7 @@ class CulMaxCoordinator:
         retries: int = ACK_RETRIES,
         timeout: float = ACK_TIMEOUT,
         priority: int = COMMAND_PRIORITY_NORMAL,
+        supersede_key: str | None = None,
     ) -> MaxMessage | None:
         """Queue one MAX! command for serialized execution."""
         future: asyncio.Future[MaxMessage | None] = self.hass.loop.create_future()
@@ -5037,9 +5177,15 @@ class CulMaxCoordinator:
                 timeout=timeout,
                 future=future,
                 priority=priority,
+                supersede_key=supersede_key,
             )
         )
-        return await future
+        try:
+            return await future
+        finally:
+            if supersede_key and self._latest_by_supersede_key.get(supersede_key) is not None:
+                if self._latest_by_supersede_key[supersede_key].future is future:
+                    del self._latest_by_supersede_key[supersede_key]
 
     async def _send_raw(
         self,

@@ -296,6 +296,8 @@ Fuer Heizkoerper- und Wandthermostate:
 
 - `climate`-Entitaet fuer Solltemperatur und HVAC-Modus
 - Sensor „Ventiloeffnung“ in % (nur Heizkoerperthermostate, mit Verlauf)
+- Sensor „Isttemperatur“ (vom Thermostat gemessen), z. B. als
+  Temperatursensor eines HA-Bereichs
 - `text`-Entitaet fuer Wochenprofile
 - `number`-Entitaeten fuer Komfort-/Tagtemperatur, Eco-/Nachttemperatur,
   Fenster-offen-Temperatur und Fenster-offen-Dauer
