@@ -126,7 +126,10 @@ Use `cul_max.import_topology` to restore that structure later.
 ## Lovelace Card
 
 The integration registers `cul-max-week-profile-card` as a frontend resource.
-It can display and edit MAX! week profiles in a compact card.
+It shows each day as a coloured 24 h timeline with a "now" marker, the next
+switching point and status notices (window open, deviation from the schedule,
+upload progress), and lets you edit a day directly in the card, including
+copying it to other days.
 
 Example:
 
@@ -248,6 +251,12 @@ Repository layout:
   lost "closed" telegram could keep a thermostat at its window-open
   temperature indefinitely.
 - `send_virtual_shutter_contact_state` returns `confirmed`.
+- Week profile card redesigned: coloured 24 h timeline per day with "now"
+  marker, next switching point, status notices (window open, deviation from
+  the schedule, upload progress, unconfirmed commands) and an inline day
+  editor with copy-to-days that uploads via `set_week_profile_days`. Renders
+  in a shadow root and only when its entity changes. New option `editable`.
+- Climate entities refresh their attributes on pending-queue progress.
 
 ### 0.3.0
 

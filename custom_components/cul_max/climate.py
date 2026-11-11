@@ -151,6 +151,10 @@ class CulMaxClimate(ClimateEntity):
         self.async_on_remove(
             self._coordinator.add_week_profile_listener(self._address, self._on_week_profile_update)
         )
+        # Pending-queue progress (e.g. week profile upload) changes attributes.
+        self.async_on_remove(
+            self._coordinator.add_diagnostic_listener(self._address, self._on_week_profile_update)
+        )
         # Restore last known state if available
         last = self._device.last_state
         if last:

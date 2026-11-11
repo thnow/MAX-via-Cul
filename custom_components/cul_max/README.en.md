@@ -399,8 +399,31 @@ migrated to the embedded path in storage mode. In YAML mode, register
 `/cul-max/cul-max-week-profile-card.js` manually as a `module` resource.
 Reload the browser after initial registration or an update if necessary.
 
-The card displays daily schedules and opens the climate entity's more-info
-dialog when clicked.
+Options: `show_current_temp` (default `true`) and `editable` (default `true`).
+
+The card shows:
+
+- A 24 h timeline per day, coloured by temperature (off grey, cool blue, eco
+  teal, comfort orange to red), with switching times below.
+- Today highlighted, a "now" marker and the active segment outlined.
+- Mode, target, current temperature and valve position, plus the next
+  switching point (e.g. `morgen 06:05 → 22 °C`).
+- Notices when a window is open, the thermostat deviates from the schedule, a
+  schedule upload is still in progress (open packets and last error) or a
+  command was not confirmed.
+
+Editing:
+
+- Tap a day to open the editor: change switching times (`hh:mm`, 5-minute
+  steps) and temperatures (4.5–30.5 °C, 4.5 = off), add or remove points (at
+  most 13 per day).
+- Copy the day to other days (shortcuts Mon–Fri, Sat–Sun, all).
+- "Übertragen" validates the input and sends only the affected days through
+  `cul_max.set_week_profile_days`; errors are shown in the editor.
+- Schedules inherited from a linked wall thermostat are read-only here; edit
+  them on the wall thermostat.
+
+The three-dot button opens the climate entity's more-info dialog.
 
 ### Set up a complete room
 
