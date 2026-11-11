@@ -279,6 +279,13 @@ Repository layout:
 
 ## Changelog
 
+### 0.5.3
+
+- External room sensor: values are accepted for up to 8 hours. Many
+  sensors (e.g. Zigbee/ZHA thermometers) only report on change and stay
+  silent for hours in a steady room; the old 30-minute limit made the
+  thermostat fall back to its own sensor although the value was still valid.
+
 ### 0.5.2
 
 - Faster week-profile and config uploads on CULs with a large send budget but
