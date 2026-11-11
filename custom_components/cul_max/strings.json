@@ -788,7 +788,14 @@
         "name": "Kennung"
       },
       "pairing_state": {
-        "name": "Anmeldestatus"
+        "name": "Anmeldestatus",
+        "state": {
+          "paired": "Angemeldet",
+          "paired_elsewhere": "An anderer Zentrale",
+          "virtual": "Virtuell",
+          "discovered": "Erkannt, nicht angemeldet",
+          "unknown": "Unbekannt"
+        }
       },
       "last_ack": {
         "name": "Letzte Bestätigung"

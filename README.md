@@ -39,6 +39,10 @@ protocol locally.
 |---|---|
 | ![Choosing an external room sensor](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/room-sensor.png) | ![Shared card for two radiator thermostats](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/shared-room-card.png) |
 
+**Topology picture** (image entity on the CUL device: rooms, devices, links, problems)
+
+![Topology overview](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/topology.png)
+
 ## Supported Devices
 
 - MAX! heating thermostat
@@ -257,6 +261,16 @@ Repository layout:
 - no generated Python caches committed
 
 ## Changelog
+
+### 0.4.1
+
+- Device pages: every MAX! device is "connected via" the CUL device; entity
+  names translated (de/en), pairing state values translated.
+- Legacy per-day text editors and save/discard buttons disabled by default
+  (once in existing installs); comfort/eco/window values apply automatically.
+- Time-sync sensor only for thermostats.
+- New image entity "Topology" with rooms, devices, links and problems.
+- Diagnostics download for the integration and each device.
 
 ### 0.4.0
 

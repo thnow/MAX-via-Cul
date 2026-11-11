@@ -50,7 +50,14 @@
         "name": "Identity"
       },
       "pairing_state": {
-        "name": "Pairing state"
+        "name": "Pairing state",
+        "state": {
+          "paired": "Paired",
+          "paired_elsewhere": "Paired with another controller",
+          "virtual": "Virtual",
+          "discovered": "Discovered, not paired",
+          "unknown": "Unknown"
+        }
       },
       "last_ack": {
         "name": "Last ACK"
