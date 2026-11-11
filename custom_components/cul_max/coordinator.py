@@ -20,6 +20,7 @@ from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.util import dt as dt_util
 
@@ -48,7 +49,17 @@ from .const import (
     STORAGE_SCHEMA_VERSION,
     STORAGE_VERSION,
     CLIMATE_DEVICE_TYPES,
+    STALE_TIMEOUT_CLIMATE,
+    STALE_TIMEOUT_SHUTTER_CONTACT,
     )
+from .topology import (
+    KIND_CONTACT,
+    KIND_THERMOSTAT,
+    KIND_WALL,
+    TopologyEdge,
+    TopologyNode,
+    render_topology_svg,
+)
 from .protocol import (
     MaxMessage,
     ThermostatState,
@@ -155,6 +166,15 @@ EXTERNAL_TEMP_RETRY_DELAY = 60.0
 EXTERNAL_TEMP_HEARTBEAT = {"standard": 20 * 60.0, "extended": 8 * 60.0}
 EXTERNAL_TEMP_MIN_INTERVAL = {"standard": 5 * 60.0, "extended": 90.0}
 EXTERNAL_TEMP_TARGET_MIN_INTERVAL = 10.0
+
+TEMPERATURE_CONFIG_KEYS = (
+    "comfort_temperature",
+    "eco_temperature",
+    "window_open_temperature",
+    "window_open_duration",
+    "measurement_offset",
+)
+TEMPERATURE_CONFIG_APPLY_DELAY = 5.0
 
 # Telegram types a device sends to its central (not to link partners).
 FOREIGN_CENTRAL_MSG_TYPES = {0x00, 0x02, 0x03, 0x30, 0x50, 0x60, 0x70}
@@ -519,6 +539,7 @@ class CulMaxCoordinator:
         self._ext_intended: dict[str, float] = {}
         self._ext_unsubs: dict[str, Callable[[], None]] = {}
         self._ext_locks: dict[str, asyncio.Lock] = {}
+        self._temp_apply_tasks: dict[str, asyncio.Task] = {}
         self._virtual_contact_refresh_after: float = 0.0
         self._cul_status_listeners: list[Callable[[], None]] = []
 
@@ -976,6 +997,45 @@ class CulMaxCoordinator:
             raise ValueError(f"Unbekannte Geraeteadresse {address}")
         self._config_drafts.setdefault(normalized, {})[key] = value
         self._notify_diagnostics_updated(normalized)
+        if key in TEMPERATURE_CONFIG_KEYS:
+            self._schedule_temperature_config_apply(normalized)
+
+    def _schedule_temperature_config_apply(self, address: str) -> None:
+        """Send staged comfort/eco/window values after a short quiet period.
+
+        Several values changed in a row go out as one ConfigTemperatures
+        telegram; no separate "save" step is needed any more.
+        """
+        task = self._temp_apply_tasks.pop(address, None)
+        if task is not None and not task.done():
+            task.cancel()
+        self._temp_apply_tasks[address] = self.hass.async_create_task(
+            self._apply_temperature_config_later(address)
+        )
+
+    async def _apply_temperature_config_later(self, address: str) -> None:
+        try:
+            await asyncio.sleep(TEMPERATURE_CONFIG_APPLY_DELAY)
+        except asyncio.CancelledError:
+            return
+        draft = self._config_drafts.get(address) or {}
+        fields = {key: draft.pop(key) for key in list(draft) if key in TEMPERATURE_CONFIG_KEYS}
+        if not draft:
+            self._config_drafts.pop(address, None)
+        if not fields:
+            return
+        try:
+            await self._async_send_temperature_config(address, **fields)
+        except Exception as err:  # noqa: BLE001 - reported via diagnostics
+            _LOGGER.warning(
+                "Applying %s to %s failed: %s",
+                ", ".join(sorted(fields)),
+                self._format_device_identity(address),
+                err,
+            )
+        finally:
+            self._temp_apply_tasks.pop(address, None)
+            self._notify_diagnostics_updated(address)
 
     async def async_discard_config_draft(self, address: str) -> None:
         """Discard all unsaved config values for one device."""
@@ -1620,6 +1680,11 @@ class CulMaxCoordinator:
     # ------------------------------------------------------------------
 
     @property
+    def controller_identifier(self) -> str:
+        """Device-registry identifier of the CUL controller device."""
+        return f"controller_{self.host}:{self.port}"
+
+    @property
     def virtual_wall_thermostat_address(self) -> int:
         """Address of the virtual wall thermostat (own address + 1)."""
         return (self.own_address + 1) & 0xFFFFFF
@@ -1871,6 +1936,101 @@ class CulMaxCoordinator:
                 "confirmed": confirmed,
             }
             self._notify_week_profile_updated(device.address)
+
+    # ------------------------------------------------------------------
+    # Topology picture
+    # ------------------------------------------------------------------
+
+    def render_topology(self) -> str:
+        """Return an SVG with rooms (HA areas), devices and their links."""
+        registry = dr.async_get(self.hass)
+        areas = ar.async_get(self.hass)
+        nodes: list[TopologyNode] = []
+        keys: set[str] = set()
+        now = datetime.now(UTC)
+        for device in self.get_all_devices():
+            if device.superseded_by:
+                continue
+            if device.device_type == DEVICE_SHUTTER_CONTACT:
+                kind = KIND_CONTACT
+            elif device.device_type == DEVICE_WALL_THERMOSTAT:
+                kind = KIND_WALL
+            elif device.device_type in CLIMATE_DEVICE_TYPES:
+                kind = KIND_THERMOSTAT
+            else:
+                continue
+            entry = self.get_registry_device(registry, device.address)
+            name = (entry.name_by_user or entry.name) if entry is not None else device.name
+            area = areas.async_get_area(entry.area_id) if entry is not None and entry.area_id else None
+            state = device.last_state or {}
+            if kind == KIND_CONTACT:
+                is_open = state.get("is_open")
+                status = "offen" if is_open else "geschlossen" if is_open is not None else "unbekannt"
+            else:
+                mode = state.get("mode")
+                target = state.get("desired_temperature")
+                measured = state.get("measured_temperature")
+                parts = []
+                if mode is not None:
+                    parts.append(
+                        "Aus" if mode == MODE_MANUAL and target is not None and target <= 4.5
+                        else {0: "Auto", 1: "Manuell", 2: "Urlaub", 3: "Boost"}.get(int(mode), "?")
+                    )
+                if target is not None and not (mode == MODE_MANUAL and target <= 4.5):
+                    parts.append(f"{target:.1f}°".replace(".", ","))
+                if measured is not None:
+                    parts.append(f"ist {measured:.1f}°".replace(".", ","))
+                status = " · ".join(parts)
+            notes: list[str] = []
+            problems: list[str] = []
+            if device.external_sensor:
+                sensor_state = self.hass.states.get(device.external_sensor)
+                sensor_name = (
+                    sensor_state.attributes.get("friendly_name", device.external_sensor)
+                    if sensor_state is not None
+                    else device.external_sensor
+                )
+                notes.append(f"Raumfühler: {sensor_name}")
+            if device.foreign_central:
+                problems.append(f"andere Zentrale ({device.foreign_central})")
+            if not device.is_virtual and device.last_seen:
+                try:
+                    last_seen = datetime.fromisoformat(device.last_seen)
+                except ValueError:
+                    last_seen = None
+                limit = STALE_TIMEOUT_SHUTTER_CONTACT if kind == KIND_CONTACT else STALE_TIMEOUT_CLIMATE
+                if last_seen is not None and now - last_seen > limit:
+                    problems.append(f"keine Meldung seit {(now - last_seen).days} Tagen")
+            if state.get("battery_low"):
+                problems.append("Batterie schwach")
+            if device.pending_config:
+                problems.append("Konfiguration ausstehend")
+            nodes.append(
+                TopologyNode(
+                    key=device.address,
+                    room=area.name if area is not None else "Ohne Raum",
+                    kind=kind,
+                    name=name,
+                    status=status,
+                    virtual=device.is_virtual,
+                    problems=problems,
+                    notes=notes,
+                )
+            )
+            keys.add(device.address)
+        edges: list[TopologyEdge] = []
+        seen: set[frozenset[str]] = set()
+        for device in self.get_all_devices():
+            if device.address not in keys:
+                continue
+            for partner in device.linked_partners:
+                pair = frozenset((device.address, partner.upper()))
+                if partner.upper() in keys and pair not in seen and len(pair) == 2:
+                    seen.add(pair)
+                    edges.append(TopologyEdge(device.address, partner.upper()))
+        rooms = {node.room for node in nodes}
+        title = f"MAX! Topologie · {len(nodes)} Geräte in {len(rooms)} Räumen"
+        return render_topology_svg(nodes, edges, title=title)
 
     def _check_foreign_central(self, msg: MaxMessage, device: KnownDevice) -> None:
         """Detect devices that still report to another controller (e.g. old Cube).

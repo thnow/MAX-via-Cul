@@ -23,5 +23,86 @@
       "title": "{name} is still paired with another controller",
       "description": "The device {name} ({address}) reports to address {central} instead of this controller ({own_address}). Usually this is an old MAX! Cube the device is still paired with.\n\nAs long as this persists, the device ignores configuration from Home Assistant and repeats every message because the old controller does not answer (more radio traffic, shorter battery life). Linked thermostats usually still react.\n\nFix: factory reset the device and pair it again with `cul_max.start_pairing`. Its name and stored data are kept in Home Assistant. This notice disappears automatically once the device reports to this controller."
     }
+  },
+  "entity": {
+    "binary_sensor": {
+      "pairing_mode": {
+        "name": "Pairing mode"
+      },
+      "battery": {
+        "name": "Battery"
+      },
+      "stale": {
+        "name": "Stale"
+      },
+      "config_pending": {
+        "name": "Config pending"
+      }
+    },
+    "sensor": {
+      "send_budget": {
+        "name": "Send budget"
+      },
+      "last_seen": {
+        "name": "Last seen"
+      },
+      "identity": {
+        "name": "Identity"
+      },
+      "pairing_state": {
+        "name": "Pairing state"
+      },
+      "last_ack": {
+        "name": "Last ACK"
+      },
+      "last_command_success": {
+        "name": "Last command success"
+      },
+      "last_time_sync": {
+        "name": "Last time sync"
+      },
+      "retry_count": {
+        "name": "Retry count"
+      },
+      "communication": {
+        "name": "Communication"
+      },
+      "peers": {
+        "name": "Peers"
+      },
+      "expected_week_profile_temperature": {
+        "name": "Expected week profile temperature"
+      },
+      "week_profile_validation": {
+        "name": "Week profile validation"
+      }
+    },
+    "number": {
+      "comfort_temperature": {
+        "name": "Comfort temperature"
+      },
+      "eco_temperature": {
+        "name": "Eco temperature"
+      },
+      "window_open_temperature": {
+        "name": "Window open temperature"
+      },
+      "window_open_duration": {
+        "name": "Window open duration"
+      }
+    },
+    "button": {
+      "save_configuration": {
+        "name": "Save configuration"
+      },
+      "discard_draft": {
+        "name": "Discard draft"
+      }
+    },
+    "image": {
+      "topology": {
+        "name": "Topology"
+      }
+    }
   }
 }

@@ -761,5 +761,86 @@
       "title": "{name} ist noch an einer anderen Zentrale angemeldet",
       "description": "Das Gerät {name} ({address}) meldet sich bei der Adresse {central} statt bei dieser Zentrale ({own_address}). Meist ist das ein alter MAX! Cube, an dem das Gerät noch angemeldet ist.\n\nSolange das so bleibt, nimmt das Gerät keine Konfiguration von Home Assistant an und wiederholt jede Meldung, weil die alte Zentrale nicht antwortet (mehr Funkverkehr, kürzere Batterielaufzeit). Verknüpfte Thermostate reagieren meist trotzdem.\n\nAbhilfe: das Gerät auf Werkseinstellungen zurücksetzen und mit `cul_max.start_pairing` neu anlernen. Name und gespeicherte Daten bleiben in Home Assistant erhalten. Der Hinweis verschwindet automatisch, sobald sich das Gerät bei dieser Zentrale meldet."
     }
+  },
+  "entity": {
+    "binary_sensor": {
+      "pairing_mode": {
+        "name": "Anlernmodus"
+      },
+      "battery": {
+        "name": "Batterie"
+      },
+      "stale": {
+        "name": "Keine Meldung"
+      },
+      "config_pending": {
+        "name": "Konfiguration ausstehend"
+      }
+    },
+    "sensor": {
+      "send_budget": {
+        "name": "Sendebudget"
+      },
+      "last_seen": {
+        "name": "Zuletzt gesehen"
+      },
+      "identity": {
+        "name": "Kennung"
+      },
+      "pairing_state": {
+        "name": "Anmeldestatus"
+      },
+      "last_ack": {
+        "name": "Letzte Bestätigung"
+      },
+      "last_command_success": {
+        "name": "Letzter erfolgreicher Befehl"
+      },
+      "last_time_sync": {
+        "name": "Letzte Zeitsynchronisation"
+      },
+      "retry_count": {
+        "name": "Wiederholungen"
+      },
+      "communication": {
+        "name": "Kommunikation"
+      },
+      "peers": {
+        "name": "Verknüpfte Geräte"
+      },
+      "expected_week_profile_temperature": {
+        "name": "Solltemperatur laut Wochenprofil"
+      },
+      "week_profile_validation": {
+        "name": "Wochenprofil-Prüfung"
+      }
+    },
+    "number": {
+      "comfort_temperature": {
+        "name": "Komforttemperatur"
+      },
+      "eco_temperature": {
+        "name": "Absenktemperatur"
+      },
+      "window_open_temperature": {
+        "name": "Fenster-offen-Temperatur"
+      },
+      "window_open_duration": {
+        "name": "Fenster-offen-Dauer"
+      }
+    },
+    "button": {
+      "save_configuration": {
+        "name": "Konfiguration übertragen"
+      },
+      "discard_draft": {
+        "name": "Entwurf verwerfen"
+      }
+    },
+    "image": {
+      "topology": {
+        "name": "Topologie"
+      }
+    }
   }
 }

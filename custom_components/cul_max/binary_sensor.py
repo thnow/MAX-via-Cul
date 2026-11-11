@@ -92,7 +92,7 @@ class CulMaxPairingModeSensor(BinarySensorEntity):
     """Integration-wide sensor showing whether MAX! pairing mode is active."""
 
     _attr_has_entity_name = True
-    _attr_name = "Pairing Mode"
+    _attr_translation_key = "pairing_mode"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:link-variant-plus"
 
@@ -102,7 +102,7 @@ class CulMaxPairingModeSensor(BinarySensorEntity):
             f"{DOMAIN}_pairing_mode_{coordinator.host.replace('.', '_')}_{coordinator.port}"
         )
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"controller_{coordinator.host}:{coordinator.port}")},
+            identifiers={(DOMAIN, coordinator.controller_identifier)},
             name=f"MAX! CUL ({coordinator.host}:{coordinator.port})",
             manufacturer="eQ-3 / CULFW",
             model="MAX! via CUL",
@@ -163,6 +163,7 @@ class CulMaxShutterContact(BinarySensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_contact"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
+            via_device=(DOMAIN, coordinator.controller_identifier),
             name=device.name,
             manufacturer="Virtual" if device.is_virtual else "eQ-3",
             model=coordinator.get_device_registry_model(device),
@@ -224,7 +225,7 @@ class CulMaxBatterySensor(BinarySensorEntity):
     """Battery status sensor for any MAX! device."""
 
     _attr_has_entity_name = True
-    _attr_name = "Battery"
+    _attr_translation_key = "battery"
     _attr_device_class = BinarySensorDeviceClass.BATTERY
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -236,6 +237,7 @@ class CulMaxBatterySensor(BinarySensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_battery"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
+            via_device=(DOMAIN, coordinator.controller_identifier),
             name=device.name,
         )
 
@@ -261,7 +263,7 @@ class CulMaxStaleSensor(BinarySensorEntity):
     """Diagnostic sensor indicating a device has not been heard from in too long."""
 
     _attr_has_entity_name = True
-    _attr_name = "Stale"
+    _attr_translation_key = "stale"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
 
@@ -274,6 +276,7 @@ class CulMaxStaleSensor(BinarySensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_stale"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
+            via_device=(DOMAIN, coordinator.controller_identifier),
             name=device.name,
         )
         self._refresh_state()
@@ -336,7 +339,7 @@ class CulMaxConfigPendingSensor(BinarySensorEntity):
     """Diagnostic sensor mirroring Homegear/FHEM-style config pending state."""
 
     _attr_has_entity_name = True
-    _attr_name = "Config Pending"
+    _attr_translation_key = "config_pending"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
 
@@ -347,6 +350,7 @@ class CulMaxConfigPendingSensor(BinarySensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_config_pending"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
+            via_device=(DOMAIN, coordinator.controller_identifier),
             name=device.name,
         )
         self._refresh_state()

@@ -37,6 +37,7 @@ package.__path__ = [str(BASE_DIR)]
 class _Platform(StrEnum):
     BUTTON = "button"
     CLIMATE = "climate"
+    IMAGE = "image"
     BINARY_SENSOR = "binary_sensor"
     NUMBER = "number"
     SENSOR = "sensor"

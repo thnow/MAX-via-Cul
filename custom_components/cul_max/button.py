@@ -25,14 +25,14 @@ class CulMaxButtonDescription(ButtonEntityDescription):
 BUTTON_TYPES: tuple[CulMaxButtonDescription, ...] = (
     CulMaxButtonDescription(
         key="save_config",
-        name="Save Configuration",
+        translation_key="save_configuration",
         icon="mdi:content-save",
         entity_category=EntityCategory.CONFIG,
         action="save",
     ),
     CulMaxButtonDescription(
         key="discard_config",
-        name="Discard Draft",
+        translation_key="discard_draft",
         icon="mdi:restore",
         entity_category=EntityCategory.CONFIG,
         action="discard",
@@ -78,6 +78,8 @@ async def async_setup_entry(
 
 
 class CulMaxConfigButton(ButtonEntity):
+    # Only needed for the legacy text editors; number values apply on their own.
+    _attr_entity_registry_enabled_default = False
     """Button entity to save or discard staged device configuration."""
 
     _attr_has_entity_name = True
@@ -93,10 +95,10 @@ class CulMaxConfigButton(ButtonEntity):
         self.entity_description = description
         self._address = device.address
 
-        self._attr_name = description.name
         self._attr_unique_id = f"{DOMAIN}_{self._address}_{description.key}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
+            via_device=(DOMAIN, coordinator.controller_identifier),
             name=device.name,
             manufacturer="eQ-3",
             model=coordinator.get_device_registry_model(device),
