@@ -469,6 +469,23 @@ contact list each other as peers, and that the thermostat reacts when the
 external sensor opens and closes. Virtual contact transmissions receive
 priority so they do not wait behind lengthy schedule configuration queues.
 
+A virtual contact behaves like a real MAX! window contact:
+
+- The state is sent directly to every linked thermostat (with that
+  thermostat's group ID, like FHEM's `fakeSC`) and must be acknowledged by it;
+  missing ACKs are retried. The ACK carries the thermostat's new state, so the
+  climate entity shows at once whether it entered or left the window-open
+  temperature.
+- Quick open/close sequences are delivered in order, each one acknowledged.
+- The current state is re-sent every 50 minutes (real contacts report hourly)
+  and once about 2 minutes after startup, so a lost telegram cannot keep a
+  thermostat at its window-open temperature. Unconfirmed deliveries are
+  retried with growing intervals (60 s up to 50 min).
+- The service returns `confirmed: true` when all linked thermostats
+  acknowledged.
+- Without a linked thermostat the state is broadcast once to the central, as
+  before.
+
 Common pitfalls:
 
 - Use `create_virtual_shutter_contact: true` only when creating a new contact;

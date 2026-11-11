@@ -727,11 +727,11 @@ def _register_services(hass: HomeAssistant, coordinator: CulMaxCoordinator) -> N
             _LOGGER.error("send_virtual_shutter_contact_state: missing address, entity_id or device_name")
             return
         is_open = _coerce_bool_value(call.data["is_open"])
-        await coordinator.async_send_virtual_shutter_contact_state(
+        confirmed = await coordinator.async_send_virtual_shutter_contact_state(
             address,
             is_open,
         )
-        return {"device": _device_payload(address), "is_open": is_open}
+        return {"device": _device_payload(address), "is_open": is_open, "confirmed": confirmed}
 
     async def handle_create_room_association(call: ServiceCall) -> dict[str, object]:
         climate_addresses = _resolve_addresses_from_data(
