@@ -938,9 +938,6 @@
       },
       "discard_draft": {
         "name": "Entwurf verwerfen"
-      },
-      "start_pairing": {
-        "name": "Anlernen starten"
       }
     },
     "image": {
@@ -951,6 +948,9 @@
     "switch": {
       "vacation": {
         "name": "Urlaubsmodus"
+      },
+      "pairing": {
+        "name": "Anlernen"
       }
     },
     "date": {

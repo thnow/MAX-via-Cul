@@ -279,6 +279,26 @@ Repository layout:
 
 ## Changelog
 
+### 0.6.1
+
+Thanks to [adampr1](https://github.com/adampr1/MAX-via-Cul) and
+[XneddyX](https://github.com/XneddyX/MAX-via-Cul) for the ideas.
+
+- Several CULs: every gateway now has its own device store. Before, all
+  gateways shared one file and could overwrite each other's device lists.
+  The old store moves to the first gateway automatically (with one CUL
+  nothing changes; the old file stays as a backup).
+- Setup proposes a free MAX! address for every further gateway (two
+  addresses apart, because address + 1 is the virtual wall thermostat);
+  virtual devices get addresses that are unique across all gateways.
+- "Pairing" switch on every CUL device instead of the button: shows whether
+  the pairing window is open and can close it early.
+- "Delete device" works on MAX! device pages.
+- TCP keepalive on the CUL connection in addition to the idle probe.
+- Room sensor values are sent on changes of 0.5 °C (was 0.2 °C) and at most
+  every 3 minutes (was 90 s with an extended send budget): every packet wakes
+  the thermostat, and 0.5 °C is about the accuracy of most thermometers.
+
 ### 0.6.0
 
 Ideas taken over from the fork by
@@ -331,7 +351,7 @@ Ideas taken over from the fork by
   integration (#1).
 - Several CULs: every service is routed to the gateway that owns the device;
   `start_pairing` and the other installation-wide services accept a
-  `gateway`, and each CUL device has a "Start pairing" button (#3).
+  `gateway`, and each CUL device has a pairing control (#3).
 - New sensor "Valve opening" (%) for every radiator thermostat (#3).
 
 - Week profile card: rooms whose program was set elsewhere (e.g. with the old

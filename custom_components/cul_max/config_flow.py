@@ -100,6 +100,24 @@ class CulMaxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def _proposed_own_address(self) -> str:
+        """A free radio address for another gateway.
+
+        Every gateway is its own MAX! central and also uses address + 1 for
+        its virtual wall thermostat, so steps of 2 keep both apart.
+        """
+        taken: set[int] = set()
+        for entry in self._async_current_entries():
+            try:
+                own = int(str(entry.data.get(CONF_OWN_ADDRESS, f"{DEFAULT_OWN_ADDRESS:06X}")), 16)
+            except ValueError:
+                continue
+            taken.update({own, own + 1})
+        proposal = DEFAULT_OWN_ADDRESS
+        while proposal in taken or proposal + 1 in taken:
+            proposal += 2
+        return f"{proposal:06X}"
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -134,7 +152,7 @@ class CulMaxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_PORT, default=DEFAULT_PORT): vol.Coerce(int),
                 vol.Optional(
                     CONF_OWN_ADDRESS,
-                    default=f"{DEFAULT_OWN_ADDRESS:06X}",
+                    default=self._proposed_own_address(),
                 ): str,
             }
         )
@@ -185,7 +203,7 @@ class CulMaxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_BAUDRATE, default=DEFAULT_BAUDRATE): vol.Coerce(int),
                 vol.Optional(
                     CONF_OWN_ADDRESS,
-                    default=f"{DEFAULT_OWN_ADDRESS:06X}",
+                    default=self._proposed_own_address(),
                 ): str,
             }
         )

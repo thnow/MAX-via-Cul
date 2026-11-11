@@ -19,7 +19,9 @@ async def async_setup_entry(
     entry: CulMaxConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    async_add_entities([CulMaxVacationSwitch(entry.runtime_data)])
+    async_add_entities(
+        [CulMaxVacationSwitch(entry.runtime_data), CulMaxPairingSwitch(entry.runtime_data)]
+    )
 
 
 def controller_unique_id(coordinator: CulMaxCoordinator, key: str) -> str:
@@ -79,3 +81,43 @@ class CulMaxVacationSwitch(SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self._coordinator.async_end_vacation(reason="manual")
+
+
+class CulMaxPairingSwitch(SwitchEntity):
+    """Open (on) or close (off) the pairing window of exactly this CUL."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "pairing"
+    _attr_icon = "mdi:link-plus"
+
+    def __init__(self, coordinator: CulMaxCoordinator) -> None:
+        self._coordinator = coordinator
+        self._attr_unique_id = controller_unique_id(coordinator, "pairing")
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.controller_identifier)},
+        )
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(self._coordinator.add_pairing_state_listener(self._on_update))
+
+    @callback
+    def _on_update(self) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def is_on(self) -> bool:
+        return self._coordinator.is_pairing_mode
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        until = self._coordinator.pairing_until
+        return {
+            "pairing_until": until.isoformat() if until else None,
+            "remaining_seconds": self._coordinator.get_pairing_remaining_seconds(),
+        }
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self._coordinator.async_start_pairing()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._coordinator.async_stop_pairing()

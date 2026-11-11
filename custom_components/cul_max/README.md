@@ -88,12 +88,18 @@ Zuerst waehlt man die Anbindung:
 
 Dazu kommt die eigene MAX!-Adresse der Integration.
 
-**Mehrere CULs:** Jeder CUL wird als eigener Eintrag eingerichtet (eigene
-MAX!-Adresse waehlen). Dienste gehen automatisch an den CUL, zu dem das
+**Mehrere CULs:** Jeder CUL wird als eigener Eintrag eingerichtet; der
+Einrichtungsdialog schlaegt dafuer eine freie MAX!-Adresse vor. Jeder CUL hat
+seine eigene Geraeteliste. Dienste gehen automatisch an den CUL, zu dem das
 Geraet gehoert. Dienste ohne Geraetebezug (`start_pairing`, `sync_time`,
 `export_topology` …) haben das Feld `gateway`; zum Anlernen gibt es ausserdem
-auf jeder CUL-Geraeteseite den Button „Anlernen starten“. Zeit-Sync, Wecken
-und Urlaub ohne Gateway-Angabe gelten fuer alle CULs.
+auf jeder CUL-Geraeteseite den Schalter „Anlernen“ (an = Anlernfenster offen,
+aus = vorzeitig beenden). Zeit-Sync, Wecken und Urlaub ohne Gateway-Angabe
+gelten fuer alle CULs.
+
+**Geraet entfernen:** Auf der Geraeteseite eines MAX!-Geraets „Geraet
+loeschen“ waehlen. Das Geraet selbst vorher zuruecksetzen, wenn es an einer
+anderen Zentrale weiterverwendet werden soll.
 
 Hinweis:
 Wenn ein bestehendes MAX!-Setup ersetzt wird, kann es sinnvoll sein, die Funk-Identitaet des alten Cubes sauber zu uebernehmen oder die Komponenten neu zu koppeln.
@@ -359,9 +365,11 @@ So funktioniert es:
   Wandthermostat (Adresse = eigene Adresse + 1, z. B. `123457`) und schickt ihm
   wie ein echtes Wandthermostat `WallThermostatControl` mit Ist- und
   Solltemperatur. Das Thermostat regelt dann nach dem gesendeten Ist-Wert.
-- Gesendet wird bei Aenderungen ab 0,2 K, bei einem neuen Sollwert und sonst
+- Gesendet wird bei Aenderungen ab 0,5 K (hoechstens alle 3 min, mit
+  Standard-Sendebudget alle 5 min), bei einem neuen Sollwert und sonst
   regelmaessig (erweitertes Sendebudget alle 8 min, Standard alle 20 min). Jede
-  Meldung muss vom Thermostat bestaetigt werden.
+  Meldung weckt das Thermostat und muss bestaetigt werden – deshalb nicht
+  oefter als noetig; Heizkoerper reagieren ohnehin traege.
 - Das Wochenprogramm bleibt auf dem Thermostat: mitgeschickt wird der Sollwert
   laut Profil, ausser er wurde seit dem letzten Schaltpunkt geaendert (in Home
   Assistant oder am Drehrad). Bei offenem Fenster wird nie die

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import socket
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -170,7 +171,10 @@ VIRTUAL_CONTACT_STARTUP_DELAY = 120.0
 # External room temperature ("virtual wall thermostat"): a thermostat linked
 # to the virtual wall thermostat regulates on the value sent in
 # WallThermostatControl (0x42) instead of its own sensor at the radiator.
-EXTERNAL_TEMP_MIN_CHANGE = 0.2
+# Room sensor values go out only on a change of at least 0.5 °C (most
+# thermometers are not more accurate than that) and not more often than every
+# 3 minutes: every packet wakes the thermostat, and radiators are slow anyway.
+EXTERNAL_TEMP_MIN_CHANGE = 0.5
 # Vacation mode
 VACATION_DEFAULT_TEMPERATURE = 16.0
 # TCP liveness: after this much silence from the CUL, ask for its credit
@@ -186,7 +190,7 @@ VACATION_RETRY_DELAY = 120.0
 EXTERNAL_TEMP_SENSOR_MAX_AGE = timedelta(hours=8)
 EXTERNAL_TEMP_RETRY_DELAY = 60.0
 EXTERNAL_TEMP_HEARTBEAT = {"standard": 20 * 60.0, "extended": 8 * 60.0}
-EXTERNAL_TEMP_MIN_INTERVAL = {"standard": 5 * 60.0, "extended": 90.0}
+EXTERNAL_TEMP_MIN_INTERVAL = {"standard": 5 * 60.0, "extended": 3 * 60.0}
 EXTERNAL_TEMP_TARGET_MIN_INTERVAL = 10.0
 
 TEMPERATURE_CONFIG_KEYS = (
@@ -481,7 +485,18 @@ async def open_cul_connection(
         from serialx import open_serial_connection  # noqa: PLC0415
 
         return await open_serial_connection(url=host, baudrate=port)
-    return await asyncio.open_connection(host, port)
+    reader, writer = await asyncio.open_connection(host, port)
+    # Let the OS notice a dead peer as well (complements the idle probe).
+    sock = writer.get_extra_info("socket")
+    if sock is not None:
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            for opt, value in (("TCP_KEEPIDLE", 60), ("TCP_KEEPINTVL", 15), ("TCP_KEEPCNT", 4)):
+                if hasattr(socket, opt):
+                    sock.setsockopt(socket.IPPROTO_TCP, getattr(socket, opt), value)
+        except OSError as err:
+            _LOGGER.debug("Could not enable TCP keepalive: %s", err)
+    return reader, writer
 
 
 def _default_vacation_state() -> dict[str, Any]:
@@ -556,6 +571,7 @@ class CulMaxCoordinator:
         own_address: int = DEFAULT_OWN_ADDRESS,
         config_entry_id: str | None = None,
         serial: bool = False,
+        storage_key: str = STORAGE_KEY,
     ) -> None:
         self.hass = hass
         self.config_entry_id = config_entry_id
@@ -634,7 +650,8 @@ class CulMaxCoordinator:
         self._liveness_task: asyncio.Task | None = None
 
         self._devices: dict[str, KnownDevice] = {}
-        self._store: Store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+        # One device store per gateway (config entry)
+        self._store: Store = Store(hass, STORAGE_VERSION, storage_key)
 
         # Per-device listeners: address -> [callback(MaxMessage, decoded)]
         self._listeners: dict[str, list[Callable]] = {}
@@ -2754,6 +2771,18 @@ class CulMaxCoordinator:
             self._pairing_task.cancel()
         self._notify_pairing_state_updated()
         self._pairing_task = self.hass.loop.create_task(self._pairing_timeout(duration))
+
+    async def async_stop_pairing(self) -> None:
+        """Close the pairing window early (no-op if it is not open)."""
+        if self._pairing_task:
+            self._pairing_task.cancel()
+            self._pairing_task = None
+        if not self._pairing_mode:
+            return
+        self._pairing_mode = False
+        self._pairing_until = None
+        _LOGGER.info("MAX! pairing mode stopped")
+        self._notify_pairing_state_updated()
 
     async def _pairing_timeout(self, duration: int) -> None:
         await asyncio.sleep(duration)
@@ -5550,6 +5579,11 @@ class CulMaxCoordinator:
         for address in dict.fromkeys(address.upper() for address in addresses):
             if address in self._devices:
                 del self._devices[address]
+                self._pending_climate_config.pop(address, None)
+                self._pending_shutter_config.pop(address, None)
+                unsub = self._ext_unsubs.pop(address, None)
+                if unsub is not None:
+                    unsub()
                 removed.append(address)
         if removed:
             await self._save_devices()
@@ -5573,7 +5607,12 @@ class CulMaxCoordinator:
 
     def get_next_virtual_address(self) -> str:
         """Return the next free address in the virtual device range A00000-AFFFFF."""
+        # Virtual devices are on air: they must be unique across all gateways
         used = {address.upper() for address in self._devices}
+        for entry in self.hass.config_entries.async_loaded_entries(DOMAIN):
+            other = getattr(entry, "runtime_data", None)
+            if other is not None and other is not self:
+                used.update(d.address.upper() for d in other.get_all_devices())
         for value in range(0xA00000, 0xB00000):
             address = f"{value:06X}"
             if address not in used:

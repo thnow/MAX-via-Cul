@@ -76,11 +76,15 @@ The configuration flow first asks how the CUL is connected:
 
 It also asks for the integration's own MAX! radio address (default `123456`).
 
-**Several CULs:** add each CUL as its own entry (with its own MAX! address).
-Services are routed to the CUL that owns the device. Services without a
-device (`start_pairing`, `sync_time`, `export_topology` …) take a `gateway`
-field, and every CUL device page has a "Start pairing" button. Time sync,
+**Several CULs:** add each CUL as its own entry; setup proposes a free MAX!
+address. Every CUL keeps its own device list. Services are routed to the CUL
+that owns the device. Services without a device (`start_pairing`, `sync_time`,
+`export_topology` …) take a `gateway` field, and every CUL device page has a
+"Pairing" switch (on = pairing window open, off = stop early). Time sync,
 wake-up and vacation without a gateway apply to all CULs.
+
+**Removing a device:** choose "Delete device" on the MAX! device page. Reset
+the device first if it will be used with another central.
 
 When replacing an existing MAX! setup, consider reusing the old Cube's radio
 identity or resetting and pairing the devices again. Devices remember their
@@ -315,8 +319,9 @@ data:
 
 The integration links the thermostat with a virtual wall thermostat (own
 address + 1, e.g. `123457`) and sends `WallThermostatControl` with current and
-target temperature like a real wall thermostat, on changes of 0.2 K or more, on
-a new target and periodically (every 8 min with an extended send budget, 20 min
+target temperature like a real wall thermostat, on changes of 0.5 K or more (at most
+every 3 min, 5 min with the standard send budget – every message wakes the
+thermostat), on a new target and periodically (every 8 min with an extended send budget, 20 min
 otherwise); each message must be acknowledged. The week program stays on the
 thermostat: the target sent is the profile value unless it was changed (Home
 Assistant or the knob) after the current profile segment began; the window-open
