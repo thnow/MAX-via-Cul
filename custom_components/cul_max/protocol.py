@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -430,6 +430,33 @@ def get_expected_week_profile_temperature(
 
     last_value = int(day_hex[48:52], 16)
     return ((last_value >> 9) & 0x3F) / 2.0
+
+
+def get_week_profile_segment_start(
+    profile_hex: str,
+    when: datetime,
+) -> datetime | None:
+    """Return when the currently active temperature of the week profile began.
+
+    Neighbouring points with the same temperature count as one segment, so
+    filler points do not look like switching points.
+    """
+    if not profile_hex:
+        return None
+    day = local_datetime_to_max_day(when)
+    day_hex = normalize_week_profile_hex(profile_hex)[day * 52:(day + 1) * 52]
+    day_minutes = (when.hour * 60) + when.minute
+    points = []
+    for idx in range(13):
+        value = int(day_hex[idx * 4:(idx + 1) * 4], 16)
+        points.append(((value & 0x1FF) * 5, ((value >> 9) & 0x3F) / 2.0))
+    active = next((i for i, (end, _temp) in enumerate(points) if day_minutes < end), 12)
+    start_idx = active
+    while start_idx > 0 and points[start_idx - 1][1] == points[active][1]:
+        start_idx -= 1
+    start_minute = points[start_idx - 1][0] if start_idx > 0 else 0
+    midnight = when.replace(hour=0, minute=0, second=0, microsecond=0)
+    return midnight + timedelta(minutes=start_minute)
 
 
 def decode_max_until_datetime(byte1: int, byte2: int, byte3: int) -> str | None:
@@ -906,6 +933,41 @@ def build_set_temperature(
     length = len(bytes.fromhex(inner))
     packet = f"{length:02X}{inner}"
     return f"Zs{packet}\r\n"
+
+
+def build_wall_thermostat_control(
+    counter: int,
+    src_address: int,
+    dst_address: int,
+    desired_temperature: float,
+    measured_temperature: float,
+    group_id: int = 0,
+) -> str:
+    """Build a WallThermostatControl (0x42) telegram, as sent by a wall thermostat.
+
+    Payload (FHEM fakeWT, matches real wall thermostats):
+      byte 0: bit 7 = bit 8 of measured*10, bits 6..0 = desired*2
+      byte 1: lower 8 bits of measured*10
+    Real wall thermostats use flags 0x04; the heating thermostat ACKs it and
+    regulates on the measured value.
+    """
+    if group_id < 0 or group_id > 255:
+        raise ValueError("group_id must be in range 0..255")
+    desired = max(TEMP_MIN, min(TEMP_MAX, float(desired_temperature)))
+    measured = int(round(max(0.0, min(51.1, float(measured_temperature))) * 10))
+    byte0 = ((measured & 0x100) >> 1) | (int(round(desired * 2)) & 0x7F)
+    byte1 = measured & 0xFF
+    inner = (
+        f"{counter & 0xFF:02X}"
+        f"04"
+        f"{MSG_WALL_THERMOSTAT_CONTROL:02X}"
+        f"{src_address:06X}"
+        f"{dst_address:06X}"
+        f"{group_id & 0xFF:02X}"
+        f"{byte0:02X}{byte1:02X}"
+    )
+    length = len(bytes.fromhex(inner))
+    return f"Zs{length:02X}{inner}\r\n"
 
 
 def build_config_week_profile(

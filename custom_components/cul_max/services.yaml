@@ -41,6 +41,35 @@ set_device_name:
       name: Name
       description: Neuer Anzeigename
 
+set_external_temperature_sensor:
+  name: Externen Raumfuehler verwenden
+  description: >
+    Laesst ein Heizkoerperthermostat nach einem Temperatursensor in Home Assistant
+    regeln statt nach seinem eigenen Fuehler am Heizkoerper (virtuelles
+    Wandthermostat). Ohne Sensor wird wieder der eigene Fuehler verwendet.
+  fields:
+    entity_id:
+      name: Thermostat
+      description: MAX!-Climate-Entity des Heizkoerperthermostats
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+            domain: climate
+    address:
+      name: Adresse
+      description: Alternativ die 6-stellige Hex-Adresse des Thermostats
+      selector:
+        text:
+    sensor_entity_id:
+      name: Temperatursensor
+      description: Leer lassen, um wieder den eigenen Fuehler zu verwenden
+      selector:
+        entity:
+          filter:
+            domain: sensor
+            device_class: temperature
+
 wake_thermostats:
   name: Thermostate wecken
   description: >

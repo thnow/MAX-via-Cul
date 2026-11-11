@@ -269,6 +269,10 @@ Repository layout:
 - Re-pairing a known device keeps its links, group, schedule and stored
   configuration (previously the record was replaced).
 - Translations (de/en) for repair issues and the config flow.
+- External room sensor per radiator thermostat (virtual wall thermostat):
+  regulate on any Home Assistant temperature sensor instead of the sensor at
+  the radiator; selectable in the week profile card or via
+  `set_external_temperature_sensor`, off by default.
 
 ### 0.3.0
 

@@ -15,7 +15,9 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.const import UnitOfTemperature
+from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
@@ -62,6 +64,7 @@ from .protocol import (
     build_set_temperature,
     build_shutter_contact_state,
     build_wake_up,
+    build_wall_thermostat_control,
     decode_ack_state,
     decode_set_temperature,
     decode_wall_thermostat_control,
@@ -76,6 +79,7 @@ from .protocol import (
     format_week_profile_by_day,
     format_week_profile_lines,
     get_expected_week_profile_temperature,
+    get_week_profile_segment_start,
     normalize_week_profile_hex,
     parse_time_information_payload,
     parse_week_profile_text,
@@ -142,6 +146,16 @@ AUTO_MODE_TIME_SYNC_FOLLOWUP_DELAY = 12.0
 VIRTUAL_CONTACT_REFRESH_INTERVAL = 50 * 60.0
 VIRTUAL_CONTACT_RETRY_DELAY = 60.0
 VIRTUAL_CONTACT_STARTUP_DELAY = 120.0
+# External room temperature ("virtual wall thermostat"): a thermostat linked
+# to the virtual wall thermostat regulates on the value sent in
+# WallThermostatControl (0x42) instead of its own sensor at the radiator.
+EXTERNAL_TEMP_MIN_CHANGE = 0.2
+EXTERNAL_TEMP_SENSOR_MAX_AGE = timedelta(minutes=30)
+EXTERNAL_TEMP_RETRY_DELAY = 60.0
+EXTERNAL_TEMP_HEARTBEAT = {"standard": 20 * 60.0, "extended": 8 * 60.0}
+EXTERNAL_TEMP_MIN_INTERVAL = {"standard": 5 * 60.0, "extended": 90.0}
+EXTERNAL_TEMP_TARGET_MIN_INTERVAL = 10.0
+
 # Telegram types a device sends to its central (not to link partners).
 FOREIGN_CENTRAL_MSG_TYPES = {0x00, 0x02, 0x03, 0x30, 0x50, 0x60, 0x70}
 FOREIGN_CENTRAL_GRACE = timedelta(days=2)
@@ -215,6 +229,10 @@ class KnownDevice:
     foreign_central: str = ""
     foreign_central_seen_at: str = ""
     last_central_contact_at: str = ""
+    # External room temperature sensor (HA entity) used via the virtual wall
+    # thermostat; empty = thermostat regulates on its own sensor.
+    external_sensor: str = ""
+    last_target_change_at: str = ""
 
 
 @dataclass
@@ -496,6 +514,11 @@ class CulMaxCoordinator:
         self._virtual_contact_sent_at: dict[str, float] = {}
         self._virtual_contact_confirmed: dict[str, bool] = {}
         self._virtual_contact_failures: dict[str, int] = {}
+        # External temperature: per thermostat last delivery and listeners
+        self._ext_last: dict[str, dict[str, Any]] = {}
+        self._ext_intended: dict[str, float] = {}
+        self._ext_unsubs: dict[str, Callable[[], None]] = {}
+        self._ext_locks: dict[str, asyncio.Lock] = {}
         self._virtual_contact_refresh_after: float = 0.0
         self._cul_status_listeners: list[Callable[[], None]] = []
 
@@ -1034,6 +1057,8 @@ class CulMaxCoordinator:
         for device in self._devices.values():
             if device.foreign_central:
                 self._sync_foreign_central_issue(device)
+            if device.external_sensor:
+                self._subscribe_external_sensor(device.address)
         await self._ensure_time_slots_assigned()
         if await self._connect():
             self._virtual_contact_refresh_after = (
@@ -1111,6 +1136,9 @@ class CulMaxCoordinator:
                 await self._read_task
             except asyncio.CancelledError:
                 pass
+        for unsub in self._ext_unsubs.values():
+            unsub()
+        self._ext_unsubs.clear()
         await self._close_connection()
         await self._save_devices_now()
         _LOGGER.info("CUL TCP connection to %s:%d closed", self.host, self.port)
@@ -1153,6 +1181,12 @@ class CulMaxCoordinator:
             auto_ack = f"Za{self.own_address:06X}\n"
             _LOGGER.info("CUL TX: %s", auto_ack.strip())
             await self._send_raw(auto_ack)
+            await asyncio.sleep(0.1)
+            # Virtual wall thermostat: culfw ACKs SetTemperature telegrams that
+            # linked thermostats send to it (knob turned on the thermostat).
+            fake_wt = f"Zw{self.virtual_wall_thermostat_address:06X}\n"
+            _LOGGER.info("CUL TX: %s", fake_wt.strip())
+            await self._send_raw(fake_wt)
             await asyncio.sleep(0.1)
         except (ConnectionError, OSError) as e:
             _LOGGER.warning("CULFW init sequence failed at %s:%d: %s", self.host, self.port, e)
@@ -1443,8 +1477,8 @@ class CulMaxCoordinator:
         msg = parse_message(line)
         if msg is None:
             return
-        if msg.src == self.own_address:
-            # Echo of an ACK that culfw sent on its own (auto-ACK via "Za").
+        if msg.src in (self.own_address, self.virtual_wall_thermostat_address):
+            # Echo of an ACK that culfw sent on its own (auto-ACK via "Za"/"Zw").
             _LOGGER.debug("CUL auto-ACK sent to %s (counter=%d)", msg.dst_hex, msg.counter)
             self._consume_cul_credit(self._estimate_cul_credit_cost("Zf" + line[1:].split(" ")[0]))
             return
@@ -1581,6 +1615,263 @@ class CulMaxCoordinator:
             )
             self._reply_time_information(msg.src_hex)
 
+    # ------------------------------------------------------------------
+    # External room temperature (virtual wall thermostat)
+    # ------------------------------------------------------------------
+
+    @property
+    def virtual_wall_thermostat_address(self) -> int:
+        """Address of the virtual wall thermostat (own address + 1)."""
+        return (self.own_address + 1) & 0xFFFFFF
+
+    def _read_external_temperature(self, device: KnownDevice) -> tuple[float | None, str]:
+        """Return (temperature in °C, status) of the configured sensor."""
+        state = self.hass.states.get(device.external_sensor)
+        if state is None:
+            return None, "sensor_missing"
+        try:
+            value = float(state.state)
+        except (TypeError, ValueError):
+            return None, "sensor_unavailable"
+        unit = state.attributes.get("unit_of_measurement")
+        if unit == UnitOfTemperature.FAHRENHEIT:
+            value = (value - 32.0) * 5.0 / 9.0
+        reported = max(
+            state.last_updated,
+            getattr(state, "last_reported", state.last_updated) or state.last_updated,
+        )
+        if dt_util.utcnow() - reported > EXTERNAL_TEMP_SENSOR_MAX_AGE:
+            return None, "sensor_stale"
+        if not 0.0 <= value <= 51.0:
+            return None, "sensor_out_of_range"
+        return round(value, 1), "ok"
+
+    def _intended_target(self, device: KnownDevice) -> float | None:
+        """Target the virtual wall thermostat sends along.
+
+        The thermostat's week program stays in charge: in auto mode the
+        profile value applies unless the target was changed (HA, knob) after
+        the current profile segment began. An open window never becomes the
+        target. In other modes the thermostat's own target is kept.
+        """
+        state = device.last_state or {}
+        desired = state.get("desired_temperature")
+        mode = state.get("mode")
+        validation = self.get_week_profile_validation(device.address)
+        window_open = bool(validation.get("window_open_active"))
+        remembered = self._ext_intended.get(device.address)
+        if mode == MODE_AUTO:
+            now = dt_util.now()
+            profile = self.get_effective_week_profile(device.address)
+            expected = get_expected_week_profile_temperature(profile, now) if profile else None
+            if window_open:
+                return remembered if remembered is not None else expected
+            if expected is None:
+                result = desired
+            else:
+                segment_start = get_week_profile_segment_start(profile, now)
+                changed_at = None
+                if device.last_target_change_at:
+                    try:
+                        changed_at = datetime.fromisoformat(device.last_target_change_at)
+                    except ValueError:
+                        changed_at = None
+                if changed_at is not None and segment_start is not None and changed_at >= segment_start:
+                    result = desired
+                else:
+                    result = expected
+        else:
+            if window_open:
+                return remembered if remembered is not None else desired
+            result = desired
+        if result is not None:
+            self._ext_intended[device.address] = float(result)
+        return float(result) if result is not None else None
+
+    def get_external_temperature_status(self, address: str) -> dict[str, Any]:
+        """Diagnostics for the climate entity / week profile card."""
+        device = self.get_device(address)
+        if device is None or not device.external_sensor:
+            return {"external_temperature_sensor": None}
+        last = self._ext_last.get(device.address, {})
+        value, sensor_status = self._read_external_temperature(device)
+        if sensor_status != "ok":
+            status = sensor_status
+        elif not last:
+            status = "waiting"
+        elif last.get("confirmed"):
+            status = "active"
+        else:
+            status = "unconfirmed"
+        return {
+            "external_temperature_sensor": device.external_sensor,
+            "external_temperature": value,
+            "external_temperature_status": status,
+            "external_temperature_sent": last.get("measured"),
+            "external_target_sent": last.get("desired"),
+            "external_temperature_sent_at": last.get("at_iso"),
+            "external_temperature_confirmed": bool(last.get("confirmed")),
+        }
+
+    @callback
+    def _subscribe_external_sensor(self, address: str) -> None:
+        """(Re)subscribe to the configured external sensor."""
+        normalized = address.upper()
+        unsub = self._ext_unsubs.pop(normalized, None)
+        if unsub is not None:
+            unsub()
+        device = self.get_device(normalized)
+        if device is None or not device.external_sensor:
+            return
+
+        @callback
+        def _changed(event: Event) -> None:
+            self.hass.async_create_task(
+                self._external_temperature_tick(normalized, reason="sensor")
+            )
+
+        self._ext_unsubs[normalized] = async_track_state_change_event(
+            self.hass, [device.external_sensor], _changed
+        )
+
+    async def async_set_external_temperature_sensor(
+        self, address: str, sensor_entity_id: str | None
+    ) -> dict[str, Any]:
+        """Let a thermostat regulate on an external sensor, or switch back.
+
+        Links/unlinks the thermostat with the virtual wall thermostat on the
+        device itself (AddLinkPartner/RemoveLinkPartner, type wall thermostat).
+        """
+        normalized = address.upper()
+        device = self.get_device(normalized)
+        if device is None:
+            raise ValueError(f"Unbekannte Geraeteadresse {address}")
+        if device.device_type not in (DEVICE_HEATING_THERMOSTAT, DEVICE_HEATING_THERMOSTAT_PLUS):
+            raise ValueError(
+                "Ein externer Raumfuehler ist nur fuer Heizkoerperthermostate moeglich "
+                "(Wandthermostate haben einen eigenen Fuehler)."
+            )
+        self._require_paired_for_write(normalized)
+        sensor = (sensor_entity_id or "").strip()
+        if sensor:
+            if self.hass.states.get(sensor) is None:
+                raise ValueError(f"Sensor {sensor} nicht gefunden.")
+            if not sensor.startswith("sensor."):
+                raise ValueError("Bitte einen Temperatursensor (sensor.*) waehlen.")
+        previous = device.external_sensor
+        vwt = self.virtual_wall_thermostat_address
+        label = self.format_device_label(normalized)
+        if sensor and not previous:
+            counter = self._next_counter()
+            await self._set_last_command(normalized, "AddLinkPartner virtueller Wandthermostat")
+            await self._send_command(
+                build_add_link_partner(counter, self.own_address, int(normalized, 16), vwt, DEVICE_WALL_THERMOSTAT),
+                expected_src=normalized,
+                device_address=normalized,
+                counter=counter,
+                description=f"AddLinkPartner {label} -> virtueller Wandthermostat {vwt:06X}",
+                retries=self._send_profile.config_retries,
+                timeout=CONFIG_ACK_TIMEOUT,
+            )
+        elif not sensor and previous:
+            counter = self._next_counter()
+            await self._set_last_command(normalized, "RemoveLinkPartner virtueller Wandthermostat")
+            await self._send_command(
+                build_remove_link_partner(counter, self.own_address, int(normalized, 16), vwt, DEVICE_WALL_THERMOSTAT),
+                expected_src=normalized,
+                device_address=normalized,
+                counter=counter,
+                description=f"RemoveLinkPartner {label} -> virtueller Wandthermostat {vwt:06X}",
+                retries=self._send_profile.config_retries,
+                timeout=CONFIG_ACK_TIMEOUT,
+            )
+        device.external_sensor = sensor
+        self._ext_last.pop(normalized, None)
+        await self._save_devices()
+        self._subscribe_external_sensor(normalized)
+        _LOGGER.info(
+            "%s regulates on %s",
+            self._format_device_identity(normalized),
+            sensor or "its own sensor",
+        )
+        if sensor:
+            await self._external_temperature_tick(normalized, reason="enabled")
+        self._notify_week_profile_updated(normalized)
+        self._notify_diagnostics_updated(normalized)
+        return self.get_external_temperature_status(normalized)
+
+    async def _external_temperature_tick(self, address: str, *, reason: str) -> None:
+        """Send WallThermostatControl if the value or target changed or a heartbeat is due."""
+        device = self.get_device(address)
+        if device is None or not device.external_sensor or self._writer is None:
+            return
+        lock = self._ext_locks.setdefault(device.address, asyncio.Lock())
+        if lock.locked():
+            return
+        async with lock:
+            measured, sensor_status = self._read_external_temperature(device)
+            if measured is None:
+                _LOGGER.debug(
+                    "External temperature for %s not sent: %s",
+                    self._format_device_identity(device.address),
+                    sensor_status,
+                )
+                return
+            desired = self._intended_target(device)
+            if desired is None:
+                return
+            profile = self._send_profile.name
+            now = self.hass.loop.time()
+            last = self._ext_last.get(device.address)
+            if last is not None:
+                age = now - last["at"]
+                if not last.get("confirmed"):
+                    due = age >= EXTERNAL_TEMP_RETRY_DELAY
+                elif desired != last["desired"]:
+                    due = age >= EXTERNAL_TEMP_TARGET_MIN_INTERVAL
+                elif abs(measured - last["measured"]) >= EXTERNAL_TEMP_MIN_CHANGE:
+                    due = age >= EXTERNAL_TEMP_MIN_INTERVAL.get(profile, 300.0)
+                else:
+                    due = age >= EXTERNAL_TEMP_HEARTBEAT.get(profile, 1200.0)
+                if not due:
+                    return
+            counter = self._next_counter()
+            cmd = build_wall_thermostat_control(
+                counter,
+                self.virtual_wall_thermostat_address,
+                int(device.address, 16),
+                desired,
+                measured,
+                0,
+            )
+            description = (
+                f"WallThermostatControl {self.format_device_label(device.address)}: "
+                f"Ist {measured:.1f} (extern), Soll {desired:.1f}"
+            )
+            confirmed = True
+            try:
+                await self._send_command(
+                    cmd,
+                    expected_src=device.address,
+                    device_address=device.address,
+                    counter=counter,
+                    description=description,
+                    retries=2,
+                    timeout=self._send_profile.set_temperature_timeout,
+                    priority=COMMAND_PRIORITY_NORMAL,
+                )
+            except Exception as err:  # noqa: BLE001 - retried later
+                confirmed = False
+                _LOGGER.warning("%s not confirmed (%s, trigger %s)", description, err, reason)
+            self._ext_last[device.address] = {
+                "at": self.hass.loop.time(),
+                "at_iso": datetime.now(UTC).isoformat(),
+                "measured": measured,
+                "desired": desired,
+                "confirmed": confirmed,
+            }
+            self._notify_week_profile_updated(device.address)
+
     def _check_foreign_central(self, msg: MaxMessage, device: KnownDevice) -> None:
         """Detect devices that still report to another controller (e.g. old Cube).
 
@@ -1608,8 +1899,8 @@ class CulMaxCoordinator:
             return
         if msg.dst == 0 or msg.msg_type not in FOREIGN_CENTRAL_MSG_TYPES:
             return
-        if self.get_device(msg.dst_hex) is not None:
-            return  # talks to a device we know (link partner)
+        if self.get_device(msg.dst_hex) is not None or msg.dst == self.virtual_wall_thermostat_address:
+            return  # talks to a device we know (link partner / virtual WT)
         if device.last_central_contact_at:
             try:
                 last = datetime.fromisoformat(device.last_central_contact_at)
@@ -2470,6 +2761,9 @@ class CulMaxCoordinator:
         if self._writer is None:
             return
         await self._refresh_virtual_contacts()
+        for device in list(self._devices.values()):
+            if device.external_sensor:
+                await self._external_temperature_tick(device.address, reason="periodic")
         if self.hass.loop.time() - self._cul_credit_reported_at >= CUL_CREDIT_POLL_INTERVAL:
             # Keeps the budget sensor current and feeds the recovery-rate
             # measurement; "X" does not use the radio.
@@ -4825,6 +5119,9 @@ class CulMaxCoordinator:
         device = self._devices.get(address)
         if device is None:
             return thermostat_state_from_dict(address, update)
+        new_target = update.get("desired_temperature")
+        if new_target is not None and new_target != device.last_state.get("desired_temperature"):
+            device.last_target_change_at = datetime.now(UTC).isoformat()
         await self._update_device_state(address, update)
         return thermostat_state_from_dict(address, device.last_state)
 
@@ -5086,6 +5383,8 @@ class CulMaxCoordinator:
                 foreign_central=str(d.get("foreign_central", "") or ""),
                 foreign_central_seen_at=str(d.get("foreign_central_seen_at", "") or ""),
                 last_central_contact_at=str(d.get("last_central_contact_at", "") or ""),
+                external_sensor=str(d.get("external_sensor", "") or ""),
+                last_target_change_at=str(d.get("last_target_change_at", "") or ""),
             )
         for addr, commands in data.get("pending_shutter_config", {}).items():
             normalized = addr.upper()
@@ -5177,6 +5476,8 @@ class CulMaxCoordinator:
                     "foreign_central": d.foreign_central,
                     "foreign_central_seen_at": d.foreign_central_seen_at,
                     "last_central_contact_at": d.last_central_contact_at,
+                    "external_sensor": d.external_sensor,
+                    "last_target_change_at": d.last_target_change_at,
                 }
                 for addr, d in self._devices.items()
             },
