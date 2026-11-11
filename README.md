@@ -277,6 +277,13 @@ Repository layout:
 
 ## Changelog
 
+### 0.5.1
+
+- Week profile card: rooms whose program was set elsewhere (e.g. with the old
+  Cube) can be edited now. MAX! devices cannot report their program, so such
+  days are shown as "unbekannt" (unknown) until they are set from Home
+  Assistant; previously the card ignored all clicks in that case.
+
 ### 0.5.0
 
 - Vacation mode using the thermostats' own vacation mode: switch, temperature,

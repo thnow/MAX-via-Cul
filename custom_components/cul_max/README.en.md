@@ -521,6 +521,11 @@ you generally do not need to write the same schedule to each radiator.
 
 ### Weekly schedule Lovelace card
 
+MAX! devices cannot report their week program. If a program was set outside
+Home Assistant (e.g. with the old Cube) the card shows those days as
+"unbekannt" (unknown). Tapping a day still opens the editor (starting from the
+eco/comfort temperatures); "Auch übernehmen für" sets several days at once.
+
 In Lovelace storage mode, the integration registers its card resource
 automatically and makes it available in the visual card editor.
 
