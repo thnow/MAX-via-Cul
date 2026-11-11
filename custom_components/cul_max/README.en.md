@@ -63,12 +63,24 @@ Its main components are:
 
 ## Setup
 
-You need a CUL/CUNO running CULFW with MAX!/MORITZ support, TCP access
-(typically port `2323`) and the `cul_max` custom integration installed in
-Home Assistant 2026.11 or newer.
+You need a CUL/CUNO running CULFW with MAX!/MORITZ support (a MAX! Cube
+flashed with a-culfw works too) and the `cul_max` custom integration installed
+in Home Assistant 2026.11 or newer.
 
-The configuration flow asks for the CUL host name or IP address, TCP port and
-the integration's own MAX! radio address. The default address is `123456`.
+The configuration flow first asks how the CUL is connected:
+
+- **Network:** host name or IP address and TCP port (typically `2323`).
+- **USB stick / serial:** the serial device (prefer the stable name below
+  `/dev/serial/by-id/`) and baud rate (38400 for a CUL); setup checks that a
+  CULFW answers.
+
+It also asks for the integration's own MAX! radio address (default `123456`).
+
+**Several CULs:** add each CUL as its own entry (with its own MAX! address).
+Services are routed to the CUL that owns the device. Services without a
+device (`start_pairing`, `sync_time`, `export_topology` …) take a `gateway`
+field, and every CUL device page has a "Start pairing" button. Time sync,
+wake-up and vacation without a gateway apply to all CULs.
 
 When replacing an existing MAX! setup, consider reusing the old Cube's radio
 identity or resetting and pairing the devices again. Devices remember their
@@ -246,6 +258,7 @@ queue spreads the commands automatically.
 Radiator and wall thermostats expose:
 
 - A `climate` entity for target temperature and HVAC mode.
+- A "Valve opening" sensor in % (radiator thermostats only, with history).
 - `text` entities for weekly schedules.
 - `number` entities for comfort, eco and window-open temperatures,
   window-open duration and measurement offset.

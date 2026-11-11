@@ -103,7 +103,7 @@ class CulMaxPairingModeSensor(BinarySensorEntity):
         )
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, coordinator.controller_identifier)},
-            name=f"MAX! CUL ({coordinator.host}:{coordinator.port})",
+            name=coordinator.display_name,
             manufacturer="eQ-3 / CULFW",
             model="MAX! via CUL",
         )

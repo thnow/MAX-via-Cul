@@ -6,6 +6,7 @@ from __future__ import annotations
 from datetime import datetime as DateTime
 import json
 import logging
+import re
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
@@ -19,6 +20,11 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CLIMATE_DEVICE_TYPES,
+    CONF_BAUDRATE,
+    CONF_CONNECTION,
+    CONF_DEVICE,
+    CONNECTION_SERIAL,
+    DEFAULT_BAUDRATE,
     CONF_HOST,
     CONF_OWN_ADDRESS,
     CONF_PORT,
@@ -336,8 +342,13 @@ def _addresses_in_areas(hass: HomeAssistant, area_ids: list[str]) -> list[str]:
 
 async def async_setup_entry(hass: HomeAssistant, entry: CulMaxConfigEntry) -> bool:
     """Set up MAX! via CUL from a config entry."""
-    host = entry.data[CONF_HOST]
-    port = entry.data.get(CONF_PORT, DEFAULT_PORT)
+    serial = entry.data.get(CONF_CONNECTION) == CONNECTION_SERIAL
+    if serial:
+        host = entry.data[CONF_DEVICE]
+        port = int(entry.data.get(CONF_BAUDRATE, DEFAULT_BAUDRATE))
+    else:
+        host = entry.data[CONF_HOST]
+        port = entry.data.get(CONF_PORT, DEFAULT_PORT)
     own_address_str = entry.data.get(CONF_OWN_ADDRESS, f"{DEFAULT_OWN_ADDRESS:06X}")
 
     try:
@@ -351,6 +362,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: CulMaxConfigEntry) -> bo
         port=port,
         own_address=own_address,
         config_entry_id=entry.entry_id,
+        serial=serial,
     )
 
     if not await coordinator.async_setup():
@@ -367,13 +379,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: CulMaxConfigEntry) -> bo
     dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, coordinator.controller_identifier)},
-        name=f"MAX! CUL ({host}:{port})",
+        name=coordinator.display_name,
         manufacturer="eQ-3 / CULFW",
         model="MAX! via CUL",
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    _register_services(hass, coordinator)
+    _register_services(hass, coordinator, entry.entry_id)
     return True
 
 
@@ -432,8 +444,77 @@ def _hide_legacy_week_profile_editors(hass: HomeAssistant, entry: ConfigEntry) -
         )
 
 
-def _register_services(hass: HomeAssistant, coordinator: CulMaxCoordinator) -> None:
-    """Register integration-level services."""
+_SERVICE_HANDLERS = f"{DOMAIN}_service_handlers"
+# Services that act on the whole installation: without a target they run on
+# every gateway instead of asking which one is meant.
+ALL_GATEWAY_SERVICES = {"wake_thermostats", "sync_time", "start_vacation", "end_vacation"}
+_HEX_ADDRESS = re.compile(r"^[0-9A-Fa-f]{6}$")
+
+
+def _service_handlers(hass: HomeAssistant) -> dict[str, dict[str, object]]:
+    """entry_id -> {service name -> handler bound to that gateway's coordinator}."""
+    return hass.data.setdefault(_SERVICE_HANDLERS, {})
+
+
+def _entries_for_call(hass: HomeAssistant, data: dict) -> set[str]:
+    """Config entries (gateways) that a service call refers to.
+
+    Looks at every value of the call: MAX! addresses, entity IDs, device
+    names and areas are mapped to the gateway that owns the device.
+    """
+    loaded = {
+        entry.entry_id: entry.runtime_data
+        for entry in hass.config_entries.async_loaded_entries(DOMAIN)
+        if getattr(entry, "runtime_data", None) is not None
+    }
+    found: set[str] = set()
+    entity_registry = er.async_get(hass)
+    device_registry = dr.async_get(hass)
+
+    def visit(value: object, key: str = "") -> None:
+        if isinstance(value, (list, tuple, set)):
+            for item in value:
+                visit(item, key)
+            return
+        if not isinstance(value, str) or not value.strip():
+            return
+        text = value.strip()
+        if key == "areas":
+            for device in dr.async_entries_for_area(device_registry, text):
+                found.update(eid for eid in getattr(device, "config_entries", ()) if eid in loaded)
+            return
+        if "." in text and " " not in text:
+            reg_entry = entity_registry.async_get(text)
+            if reg_entry is not None and reg_entry.config_entry_id in loaded:
+                found.add(reg_entry.config_entry_id)
+            return
+        if _HEX_ADDRESS.match(text):
+            for entry_id, coord in loaded.items():
+                if coord.get_device(text.upper()) is not None:
+                    found.add(entry_id)
+            return
+        if "name" in key:
+            needle = text.casefold()
+            for entry_id, coord in loaded.items():
+                if any(d.name.strip().casefold() == needle for d in coord.get_all_devices()):
+                    found.add(entry_id)
+
+    for key, value in data.items():
+        if key != "gateway":
+            visit(value, key)
+    return found
+
+
+def _register_services(
+    hass: HomeAssistant, coordinator: CulMaxCoordinator, entry_id: str
+) -> None:
+    """Register integration-level services.
+
+    Every gateway (config entry) gets its own set of handlers; one dispatcher
+    per service picks the gateway from the optional ``gateway`` field or from
+    the devices the call refers to.
+    """
+    handlers = _service_handlers(hass).setdefault(entry_id, {})
 
     def _register(
         service_name: str,
@@ -442,12 +523,63 @@ def _register_services(hass: HomeAssistant, coordinator: CulMaxCoordinator) -> N
         schema: vol.Schema | None = None,
         supports_response: SupportsResponse = SupportsResponse.NONE,
     ) -> None:
-        """Register a service under the integration domain."""
+        """Register (once) the dispatcher of one service under the domain."""
+        handlers[service_name] = handler
+        if hass.services.has_service(DOMAIN, service_name):
+            return
+        full_schema = (
+            schema.extend({vol.Optional("gateway"): cv.string})
+            if isinstance(schema, vol.Schema)
+            else vol.Schema({vol.Optional("gateway"): cv.string}, extra=vol.ALLOW_EXTRA)
+        )
+
+        async def dispatch(call: ServiceCall, _name: str = service_name):
+            per_entry = {
+                eid: entry_handlers[_name]
+                for eid, entry_handlers in _service_handlers(hass).items()
+                if _name in entry_handlers
+            }
+            if not per_entry:
+                raise HomeAssistantError("Kein MAX!-Gateway geladen.")
+            gateway = str(call.data.get("gateway") or "").strip()
+            if gateway:
+                targets = [
+                    eid for eid in per_entry
+                    if eid == gateway
+                    or (entry := hass.config_entries.async_get_entry(eid)) is not None
+                    and gateway in (entry.title, entry.data.get(CONF_HOST))
+                ]
+                if not targets:
+                    raise HomeAssistantError(f"Unbekanntes MAX!-Gateway: {gateway}")
+            elif len(per_entry) == 1:
+                targets = list(per_entry)
+            else:
+                referenced = _entries_for_call(hass, dict(call.data)) & set(per_entry)
+                if len(referenced) == 1:
+                    targets = list(referenced)
+                elif len(referenced) > 1:
+                    raise HomeAssistantError(
+                        "Die Geräte dieses Aufrufs gehören zu verschiedenen MAX!-Gateways."
+                    )
+                elif _name in ALL_GATEWAY_SERVICES:
+                    targets = list(per_entry)
+                else:
+                    raise HomeAssistantError(
+                        "Mehrere MAX!-Gateways eingerichtet – bitte im Feld „Gateway“ eines auswählen."
+                    )
+            if len(targets) == 1:
+                return await per_entry[targets[0]](call)
+            responses: dict[str, object] = {}
+            for eid in targets:
+                entry = hass.config_entries.async_get_entry(eid)
+                responses[entry.title if entry else eid] = await per_entry[eid](call)
+            return {"gateways": responses}
+
         hass.services.async_register(
             DOMAIN,
             service_name,
-            handler,
-            schema=schema,
+            dispatch,
+            schema=full_schema,
             supports_response=supports_response,
         )
 
@@ -1609,8 +1741,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: CulMaxConfigEntry) -> b
     """Unload the config entry and close serial connection."""
     coordinator: CulMaxCoordinator = entry.runtime_data
     await coordinator.async_shutdown()
-    # Only remove services if no other entries are still loaded
-    if not hass.config_entries.async_entries(DOMAIN):
+    # Drop this gateway's handlers; remove the services with the last one
+    handlers = _service_handlers(hass)
+    handlers.pop(entry.entry_id, None)
+    if not handlers:
         for service_name in SERVICE_NAMES:
             hass.services.async_remove(DOMAIN, service_name)
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

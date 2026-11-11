@@ -13,6 +13,12 @@ start_pairing:
           max: 3600
           step: 1
           mode: box
+    gateway:
+      name: Gateway
+      description: Nur bei mehreren CULs nötig – welches Gateway gemeint ist
+      selector:
+        config_entry:
+          integration: cul_max
 
 set_device_name:
   name: Gerätename setzen
@@ -77,6 +83,13 @@ wake_thermostats:
     State-Updates oder Konfigurationsschritte zu triggern. Nicht fuer den
     Dauerbetrieb gedacht, da haeufiges Wecken Batterielaufzeit und Funklast
     erhoeht.
+  fields:
+    gateway:
+      name: Gateway
+      description: Nur bei mehreren CULs nötig – welches Gateway gemeint ist
+      selector:
+        config_entry:
+          integration: cul_max
 
 sync_time:
   name: Uhrzeit synchronisieren
@@ -123,6 +136,12 @@ sync_time:
       description: Alternativ mehrere gespeicherte MAX!-Geraetenamen angeben
       selector:
         object:
+    gateway:
+      name: Gateway
+      description: Nur bei mehreren CULs nötig – welches Gateway gemeint ist
+      selector:
+        config_entry:
+          integration: cul_max
 
 set_week_profile:
   name: Wochenprofil setzen
@@ -1074,6 +1093,12 @@ export_topology:
         Home-Assistant-Konfigurationsverzeichnisses gespeichert.
       selector:
         text:
+    gateway:
+      name: Gateway
+      description: Nur bei mehreren CULs nötig – welches Gateway gemeint ist
+      selector:
+        config_entry:
+          integration: cul_max
 
 import_topology:
   name: MAX!-Topologie importieren
@@ -1121,6 +1146,12 @@ import_topology:
       description: Spielt gespeicherte Wochenprofile fuer Klima-Geraete wieder ein
       selector:
         boolean:
+    gateway:
+      name: Gateway
+      description: Nur bei mehreren CULs nötig – welches Gateway gemeint ist
+      selector:
+        config_entry:
+          integration: cul_max
 
 cleanup_superseded_devices:
   name: Ersetzte Geraete aufraeumen
@@ -1145,6 +1176,12 @@ cleanup_superseded_devices:
       description: Entfernt auch als entdeckt markierte, nicht gekoppelte Altgeraete
       selector:
         boolean:
+    gateway:
+      name: Gateway
+      description: Nur bei mehreren CULs nötig – welches Gateway gemeint ist
+      selector:
+        config_entry:
+          integration: cul_max
 
 start_vacation:
   name: Urlaubsmodus starten
@@ -1195,9 +1232,23 @@ start_vacation:
       selector:
         area:
           multiple: true
+    gateway:
+      name: Gateway
+      description: Nur bei mehreren CULs nötig – welches Gateway gemeint ist
+      selector:
+        config_entry:
+          integration: cul_max
 
 end_vacation:
   name: Urlaubsmodus beenden
   description: >
     Beendet den Urlaub vorzeitig: Thermostate gehen sofort zurück in ihr
     Wochenprogramm bzw. in ihren vorherigen manuellen Zustand.
+  fields:
+    gateway:
+      name: Gateway
+      description: Nur bei mehreren CULs nötig – welches Gateway gemeint ist
+      selector:
+        config_entry:
+          integration: cul_max
+

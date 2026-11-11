@@ -127,6 +127,12 @@ STORAGE_SCHEMA_VERSION = 2
 CONF_HOST = "host"
 CONF_PORT = "port"
 CONF_OWN_ADDRESS = "own_address"
+CONF_CONNECTION = "connection"
+CONF_DEVICE = "device"
+CONF_BAUDRATE = "baudrate"
+CONNECTION_TCP = "tcp"
+CONNECTION_SERIAL = "serial"
+DEFAULT_BAUDRATE = 38400
 
 # Default source address (used when sending commands)
 DEFAULT_OWN_ADDRESS = 0x123456

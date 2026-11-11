@@ -5,7 +5,7 @@ from datetime import timedelta
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
-from homeassistant.const import UnitOfTemperature
+from homeassistant.const import PERCENTAGE, UnitOfTemperature
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
@@ -14,7 +14,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from . import CulMaxConfigEntry
-from .const import CLIMATE_DEVICE_TYPES, DOMAIN
+from .const import (
+    CLIMATE_DEVICE_TYPES,
+    DEVICE_HEATING_THERMOSTAT,
+    DEVICE_HEATING_THERMOSTAT_PLUS,
+    DOMAIN,
+)
 from .coordinator import CulMaxCoordinator, KnownDevice
 from .protocol import MaxMessage, format_week_profile_lines
 
@@ -68,7 +73,7 @@ class CulMaxSendBudgetSensor(SensorEntity):
         )
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, coordinator.controller_identifier)},
-            name=f"MAX! CUL ({coordinator.host}:{coordinator.port})",
+            name=coordinator.display_name,
             manufacturer="eQ-3 / CULFW",
             model="MAX! via CUL",
         )
@@ -633,6 +638,42 @@ class CulMaxWeekProfileValidationSensor(SensorEntity):
         return self._attrs
 
 
+class CulMaxValvePositionSensor(SensorEntity):
+    """Valve opening of a radiator thermostat in percent (with history)."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "valve_position"
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:valve"
+
+    def __init__(self, coordinator: CulMaxCoordinator, device: KnownDevice) -> None:
+        self._coordinator = coordinator
+        self._device = device
+        self._address = device.address
+        self._attr_unique_id = f"{DOMAIN}_{self._address}_valve_position"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, self._address)},
+            via_device=(DOMAIN, coordinator.controller_identifier),
+            name=device.name,
+        )
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(self._coordinator.add_listener(self._address, self._on_message))
+
+    @callback
+    def _on_message(self, msg: MaxMessage | None, decoded: Any) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> int | None:
+        value = (self._device.last_state or {}).get("valve_position")
+        try:
+            return int(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+
 def _build_diagnostic_entities(
     coordinator: CulMaxCoordinator,
     device: KnownDevice,
@@ -653,4 +694,6 @@ def _build_diagnostic_entities(
         entities.append(CulMaxLastTimeSyncSensor(coordinator, device))
         entities.insert(3, CulMaxExpectedWeekProfileTemperatureSensor(coordinator, device))
         entities.insert(4, CulMaxWeekProfileValidationSensor(coordinator, device))
+    if device.device_type in (DEVICE_HEATING_THERMOSTAT, DEVICE_HEATING_THERMOSTAT_PLUS):
+        entities.insert(0, CulMaxValvePositionSensor(coordinator, device))
     return entities

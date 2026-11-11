@@ -452,6 +452,18 @@ def _deserialize_pending_climate_command(data: dict[str, Any]) -> PendingClimate
     )
 
 
+async def open_cul_connection(
+    host: str, port: int, *, serial: bool = False
+) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+    """Open the CUL either via TCP (host, port) or USB/serial (device, baud rate)."""
+    if serial:
+        # Same library Home Assistant's own serial integrations use.
+        from serialx import open_serial_connection  # noqa: PLC0415
+
+        return await open_serial_connection(url=host, baudrate=port)
+    return await asyncio.open_connection(host, port)
+
+
 def _default_vacation_state() -> dict[str, Any]:
     """Persisted vacation settings and run state."""
     return {
@@ -523,11 +535,15 @@ class CulMaxCoordinator:
         port: int = DEFAULT_PORT,
         own_address: int = DEFAULT_OWN_ADDRESS,
         config_entry_id: str | None = None,
+        serial: bool = False,
     ) -> None:
         self.hass = hass
         self.config_entry_id = config_entry_id
+        # TCP: host/port. USB/serial: host = device path, port = baud rate
+        # (kept in the same fields so identifiers stay stable and simple).
         self.host = host
         self.port = port
+        self.serial = serial
         self.own_address = own_address
 
         self._reader: asyncio.StreamReader | None = None
@@ -1287,7 +1303,7 @@ class CulMaxCoordinator:
         await self._close_connection()
         try:
             self._reader, self._writer = await asyncio.wait_for(
-                asyncio.open_connection(self.host, self.port),
+                open_cul_connection(self.host, self.port, serial=self.serial),
                 timeout=10.0,
             )
             self._reconnect_delay = RECONNECT_DELAY_MIN
@@ -1297,7 +1313,7 @@ class CulMaxCoordinator:
             self._cul_credit_known = False
             self._cul_credit_queried_at = 0.0
             _LOGGER.info("Connected to CULFW at %s:%d", self.host, self.port)
-        except (OSError, asyncio.TimeoutError) as e:
+        except (OSError, asyncio.TimeoutError, ImportError) as e:
             _LOGGER.error("Cannot connect to CULFW at %s:%d — %s", self.host, self.port, e)
             return False
 
@@ -1758,6 +1774,13 @@ class CulMaxCoordinator:
     def controller_identifier(self) -> str:
         """Device-registry identifier of the CUL controller device."""
         return f"controller_{self.host}:{self.port}"
+
+    @property
+    def display_name(self) -> str:
+        """Name of the controller device, e.g. 'MAX! CUL (192.168.1.5:2323)'."""
+        if self.serial:
+            return f"MAX! CUL ({self.host.rsplit('/', 1)[-1]})"
+        return f"MAX! CUL ({self.host}:{self.port})"
 
     @property
     def virtual_wall_thermostat_address(self) -> int:

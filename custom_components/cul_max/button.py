@@ -74,7 +74,28 @@ async def async_setup_entry(
             async_add_entities(new_entities)
 
     entry.async_on_unload(coordinator.add_global_listener(on_new_device))
+    entities.append(CulMaxStartPairingButton(coordinator))
     async_add_entities(entities)
+
+
+class CulMaxStartPairingButton(ButtonEntity):
+    """Opens the pairing window on exactly this CUL (useful with several gateways)."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "start_pairing"
+    _attr_icon = "mdi:link-plus"
+
+    def __init__(self, coordinator: CulMaxCoordinator) -> None:
+        self._coordinator = coordinator
+        self._attr_unique_id = (
+            f"{DOMAIN}_start_pairing_{coordinator.host.replace('.', '_')}_{coordinator.port}"
+        )
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.controller_identifier)},
+        )
+
+    async def async_press(self) -> None:
+        await self._coordinator.async_start_pairing()
 
 
 class CulMaxConfigButton(ButtonEntity):

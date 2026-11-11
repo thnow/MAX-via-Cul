@@ -70,19 +70,30 @@ Aktuell ausgelegt fuer:
 
 ### Voraussetzungen
 
-- ein mit CULFW geflashter CUL/CUNO
-- aktivierter TCP-Zugriff auf den CUL, typischerweise Port `2323`
+- ein mit CULFW geflashter CUL/CUNO (auch ein MAX! Cube mit a-culfw)
+- Anbindung per TCP (typischerweise Port `2323`) oder als USB-Stick
+  (z. B. CUL, nanoCUL, meist 38400 Baud)
 - Home Assistant 2026.11 oder neuer mit installiertem Custom Component `cul_max`
 
 ### Konfiguration
 
 Die Integration wird ueber den Config Flow eingerichtet.
 
-Dabei werden im Wesentlichen abgefragt:
+Zuerst waehlt man die Anbindung:
 
-- Hostname oder IP-Adresse des CUL
-- TCP-Port
-- eigene MAX!-Adresse der Integration
+- **Netzwerk:** Hostname oder IP-Adresse und TCP-Port des CUL
+- **USB-Stick / seriell:** serielles Geraet (am besten der stabile Name unter
+  `/dev/serial/by-id/`) und Baudrate; die Einrichtung prueft, ob ein CULFW
+  antwortet
+
+Dazu kommt die eigene MAX!-Adresse der Integration.
+
+**Mehrere CULs:** Jeder CUL wird als eigener Eintrag eingerichtet (eigene
+MAX!-Adresse waehlen). Dienste gehen automatisch an den CUL, zu dem das
+Geraet gehoert. Dienste ohne Geraetebezug (`start_pairing`, `sync_time`,
+`export_topology` …) haben das Feld `gateway`; zum Anlernen gibt es ausserdem
+auf jeder CUL-Geraeteseite den Button „Anlernen starten“. Zeit-Sync, Wecken
+und Urlaub ohne Gateway-Angabe gelten fuer alle CULs.
 
 Hinweis:
 Wenn ein bestehendes MAX!-Setup ersetzt wird, kann es sinnvoll sein, die Funk-Identitaet des alten Cubes sauber zu uebernehmen oder die Komponenten neu zu koppeln.
@@ -284,6 +295,7 @@ Je nach Geraetetyp stellt die Integration mehrere Entitaeten bereit.
 Fuer Heizkoerper- und Wandthermostate:
 
 - `climate`-Entitaet fuer Solltemperatur und HVAC-Modus
+- Sensor „Ventiloeffnung“ in % (nur Heizkoerperthermostate, mit Verlauf)
 - `text`-Entitaet fuer Wochenprofile
 - `number`-Entitaeten fuer Komfort-/Tagtemperatur, Eco-/Nachttemperatur,
   Fenster-offen-Temperatur und Fenster-offen-Dauer
