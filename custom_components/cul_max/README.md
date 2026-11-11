@@ -575,7 +575,33 @@ angelegt werden:
 type: custom:cul-max-week-profile-card
 entity: climate.thermostat_bad
 title: Bad Wochenprofil
+show_current_temp: true   # Ist-Temperatur anzeigen (Standard)
+editable: true            # Bearbeiten in der Karte erlauben (Standard)
 ```
+
+Was die Karte zeigt:
+
+- pro Tag eine 24-h-Zeitleiste, nach Temperatur eingefaerbt (Aus grau, kuehl
+  blau, Eco petrol, Komfort orange bis rot), mit Schaltzeiten darunter
+- den heutigen Tag hervorgehoben, eine Jetzt-Markierung und den aktiven
+  Abschnitt umrandet
+- Modus, Soll-, Ist-Temperatur und Ventilstellung sowie den naechsten
+  Schaltpunkt (z. B. `morgen 06:05 → 22 °C`)
+- Hinweise, wenn ein Fenster offen ist, das Thermostat vom Plan abweicht, ein
+  Wochenprofil noch uebertragen wird (mit Anzahl offener Pakete und letztem
+  Fehler) oder ein Befehl nicht bestaetigt wurde
+
+Bearbeiten:
+
+- Einen Tag antippen oeffnet den Editor: Schaltzeiten (`hh:mm`, 5-Minuten-
+  Schritte) und Temperaturen (4,5–30,5 °C, 4,5 = Aus) aendern, Schaltpunkte
+  hinzufuegen oder entfernen (hoechstens 13 pro Tag).
+- Unter „Auch uebernehmen fuer“ laesst sich der Tag auf andere Tage kopieren
+  (Kurzwahl Mo–Fr, Sa–So, Alle).
+- „Uebertragen“ prueft die Eingaben und sendet nur die betroffenen Tage ueber
+  `cul_max.set_week_profile_days`. Fehler erscheinen direkt im Editor.
+- Stammt das Profil von einem verknuepften Wandthermostat, ist die Karte
+  nicht bearbeitbar; das Profil wird dann am Wandthermostat geaendert.
 
 Hinweise:
 
@@ -587,8 +613,8 @@ Hinweise:
   `module`.
 - Nach einem Update oder der ersten automatischen Registrierung kann ein
   Browser-Reload sinnvoll sein.
-- Die Karte zeigt das Wochenprofil lesbar pro Tag und oeffnet beim Klick das
-  Mehr-Infos-Dialogfenster der Climate-Entitaet
+- Das Drei-Punkte-Symbol oeffnet das Mehr-Infos-Dialogfenster der
+  Climate-Entitaet
 
 ### Kompletten Raum aufbauen
 
