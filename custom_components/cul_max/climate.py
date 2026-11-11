@@ -32,7 +32,7 @@ from .const import (
     TEMP_OFF,
     CLIMATE_DEVICE_TYPES,
 )
-from .coordinator import CulMaxCoordinator, KnownDevice
+from .coordinator import CommandSupersededError, CulMaxCoordinator, KnownDevice
 from .protocol import (
     MaxMessage,
     ThermostatState,
@@ -112,7 +112,7 @@ class CulMaxClimate(ClimateEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
-            via_device=(DOMAIN, coordinator.controller_identifier),
+            via_device_id=coordinator.controller_device_id,
             name=device.name,
             manufacturer="eQ-3",
             model=coordinator.get_device_registry_model(device),
@@ -234,6 +234,10 @@ class CulMaxClimate(ClimateEntity):
             await self._coordinator.async_set_temperature(
                 self._address, temperature, mode=mode
             )
+        except CommandSupersededError:
+            # A newer change for this thermostat replaced this one; that call
+            # owns the displayed state now.
+            return
         except Exception as err:
             self._command_status = "failed"
             self._command_error = str(err)

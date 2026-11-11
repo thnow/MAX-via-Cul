@@ -376,13 +376,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: CulMaxConfigEntry) -> bo
 
     # Controller device first, so every MAX! device can reference it
     # ("connected via") and the controller page lists all devices.
-    dr.async_get(hass).async_get_or_create(
+    controller = dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, coordinator.controller_identifier)},
         name=coordinator.display_name,
         manufacturer="eQ-3 / CULFW",
         model="MAX! via CUL",
     )
+
+    # Entities link their MAX! device to it by HA device id ("connected via").
+    coordinator.controller_device_id = controller.id
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _register_services(hass, coordinator, entry.entry_id)

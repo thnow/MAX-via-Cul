@@ -279,6 +279,37 @@ Repository layout:
 
 ## Changelog
 
+### 0.6.0
+
+Ideas taken over from the fork by
+[siebenbit](https://github.com/siebenbit/MAX-via-Cul) – thank you!
+
+- Dead connections are detected: after 60 s without data from the CUL the
+  integration asks for its send credit (no radio traffic) and reconnects if
+  it gets no answer (Cube reboot, network glitch).
+- Pairing ignores devices that still belong to another central (their pairing
+  request is addressed to that central); answering would take them over.
+  Important with several CULs. Reset such a device to pair it here.
+- Week profiles are sent starting with today, so today's program applies
+  first while the rest trickles out with the radio budget.
+- No extra time sync after switching to auto if the thermostat's clock was
+  set within the last 6 hours (saves one packet per switch).
+- A newer temperature change for the same thermostat replaces an older one
+  that is still waiting for radio time; the older one is neither sent nor
+  retried any more.
+- New sensor "Measured temperature" per thermostat, e.g. for area
+  temperatures and history.
+- Restarts no longer resend the time to every thermostat whose clock was set
+  within the last 6 hours (about 1 s of radio time per device each restart).
+- Home Assistant starts and stops quickly again: radio work that waits for
+  send credit (room sensor values, config apply, vacation end) runs as
+  background task instead of holding up startup ("Something is blocking Home
+  Assistant from wrapping up the start up phase").
+- Devices are linked to the CUL with `via_device_id` (the `via_device`
+  parameter is deprecated and stops working in Home Assistant 2027.8).
+- `ROADMAP.md` collects ideas for later (transmission queue card, pairing
+  card with live results).
+
 ### 0.5.3
 
 - External room sensor: values are accepted for up to 8 hours. Many

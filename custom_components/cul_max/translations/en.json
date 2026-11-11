@@ -103,6 +103,9 @@
       },
       "valve_position": {
         "name": "Valve opening"
+      },
+      "measured_temperature": {
+        "name": "Measured temperature"
       }
     },
     "number": {

@@ -128,7 +128,7 @@ class CulMaxLastSeenSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_last_seen"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
-            via_device=(DOMAIN, coordinator.controller_identifier),
+            via_device_id=coordinator.controller_device_id,
             name=device.name,
             manufacturer="Virtual" if device.is_virtual else "eQ-3",
             model=coordinator.get_device_registry_model(device),
@@ -171,7 +171,7 @@ class CulMaxIdentitySensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_identity"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
-            via_device=(DOMAIN, coordinator.controller_identifier),
+            via_device_id=coordinator.controller_device_id,
             name=device.name,
         )
         self._sync_from_device()
@@ -229,7 +229,7 @@ class CulMaxPairingStateSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_pairing_state"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
-            via_device=(DOMAIN, coordinator.controller_identifier),
+            via_device_id=coordinator.controller_device_id,
             name=device.name,
         )
         self._sync_from_device()
@@ -272,7 +272,7 @@ class CulMaxLastAckSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_last_ack"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
-            via_device=(DOMAIN, coordinator.controller_identifier),
+            via_device_id=coordinator.controller_device_id,
             name=device.name,
         )
         self._sync_from_device()
@@ -306,7 +306,7 @@ class CulMaxLastCommandSuccessSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_last_command_success"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
-            via_device=(DOMAIN, coordinator.controller_identifier),
+            via_device_id=coordinator.controller_device_id,
             name=device.name,
         )
         self._sync_from_device()
@@ -340,7 +340,7 @@ class CulMaxLastTimeSyncSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_last_time_sync"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
-            via_device=(DOMAIN, coordinator.controller_identifier),
+            via_device_id=coordinator.controller_device_id,
             name=device.name,
         )
         self._sync_from_device()
@@ -375,7 +375,7 @@ class CulMaxRetryCountSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_retry_count"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
-            via_device=(DOMAIN, coordinator.controller_identifier),
+            via_device_id=coordinator.controller_device_id,
             name=device.name,
         )
         self._sync_from_device()
@@ -412,7 +412,7 @@ class CulMaxCommunicationStatusSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_communication"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
-            via_device=(DOMAIN, coordinator.controller_identifier),
+            via_device_id=coordinator.controller_device_id,
             name=device.name,
         )
         self._sync_from_device()
@@ -478,7 +478,7 @@ class CulMaxPeersSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_peers"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
-            via_device=(DOMAIN, coordinator.controller_identifier),
+            via_device_id=coordinator.controller_device_id,
             name=device.name,
         )
         self._sync_from_device()
@@ -528,7 +528,7 @@ class CulMaxExpectedWeekProfileTemperatureSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_expected_week_profile_temperature"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
-            via_device=(DOMAIN, coordinator.controller_identifier),
+            via_device_id=coordinator.controller_device_id,
             name=device.name,
         )
         self._sync_from_device()
@@ -583,7 +583,7 @@ class CulMaxWeekProfileValidationSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_week_profile_validation"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
-            via_device=(DOMAIN, coordinator.controller_identifier),
+            via_device_id=coordinator.controller_device_id,
             name=device.name,
         )
         self._sync_from_device()
@@ -654,7 +654,7 @@ class CulMaxValvePositionSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_valve_position"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
-            via_device=(DOMAIN, coordinator.controller_identifier),
+            via_device_id=coordinator.controller_device_id,
             name=device.name,
         )
 
@@ -670,6 +670,43 @@ class CulMaxValvePositionSensor(SensorEntity):
         value = (self._device.last_state or {}).get("valve_position")
         try:
             return int(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+
+class CulMaxMeasuredTemperatureSensor(SensorEntity):
+    """Room temperature measured by the thermostat (usable as area temperature)."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "measured_temperature"
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 1
+
+    def __init__(self, coordinator: CulMaxCoordinator, device: KnownDevice) -> None:
+        self._coordinator = coordinator
+        self._device = device
+        self._address = device.address
+        self._attr_unique_id = f"{DOMAIN}_{self._address}_measured_temperature"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, self._address)},
+            via_device_id=coordinator.controller_device_id,
+            name=device.name,
+        )
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(self._coordinator.add_listener(self._address, self._on_message))
+
+    @callback
+    def _on_message(self, msg: MaxMessage | None, decoded: Any) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> float | None:
+        value = (self._device.last_state or {}).get("measured_temperature")
+        try:
+            return float(value) if value is not None else None
         except (TypeError, ValueError):
             return None
 
@@ -696,4 +733,6 @@ def _build_diagnostic_entities(
         entities.insert(4, CulMaxWeekProfileValidationSensor(coordinator, device))
     if device.device_type in (DEVICE_HEATING_THERMOSTAT, DEVICE_HEATING_THERMOSTAT_PLUS):
         entities.insert(0, CulMaxValvePositionSensor(coordinator, device))
+    if device.device_type in CLIMATE_DEVICE_TYPES and not device.is_virtual:
+        entities.insert(0, CulMaxMeasuredTemperatureSensor(coordinator, device))
     return entities
