@@ -9,7 +9,7 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import CoreState, HomeAssistant, ServiceCall, SupportsResponse
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -49,6 +49,7 @@ DAY_FIELD_TO_LABEL = {
 SERVICE_NAMES: tuple[str, ...] = (
     "start_pairing",
     "set_device_name",
+    "set_external_temperature_sensor",
     "wake_thermostats",
     "sync_time",
     "set_week_profile",
@@ -397,6 +398,19 @@ def _register_services(hass: HomeAssistant, coordinator: CulMaxCoordinator) -> N
             "device": _device_payload(address),
             "name": name,
         }
+
+    async def handle_set_external_temperature_sensor(call: ServiceCall) -> dict[str, object] | None:
+        address = _resolve_device_address(hass, call)
+        if address is None and call.data.get("device_name"):
+            address = _resolve_device_address_from_name(coordinator, str(call.data["device_name"]))
+        if address is None:
+            raise HomeAssistantError("set_external_temperature_sensor: Thermostat nicht gefunden")
+        sensor = call.data.get("sensor_entity_id") or None
+        try:
+            status = await coordinator.async_set_external_temperature_sensor(address, sensor)
+        except ValueError as err:
+            raise HomeAssistantError(str(err)) from err
+        return {"device": _device_payload(address), **status}
 
     async def handle_wake_thermostats(call: ServiceCall) -> dict[str, object]:
         addresses = [
@@ -1130,6 +1144,17 @@ def _register_services(hass: HomeAssistant, coordinator: CulMaxCoordinator) -> N
             vol.Optional("entity_id"): cv.entity_id,
             vol.Optional("device_name"): cv.string,
             vol.Required("name"): cv.string,
+        }),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    _register(
+        "set_external_temperature_sensor",
+        handle_set_external_temperature_sensor,
+        schema=vol.Schema({
+            vol.Optional("address"): cv.string,
+            vol.Optional("entity_id"): cv.entity_id,
+            vol.Optional("device_name"): cv.string,
+            vol.Optional("sensor_entity_id"): vol.Any(None, "", cv.entity_id),
         }),
         supports_response=SupportsResponse.OPTIONAL,
     )

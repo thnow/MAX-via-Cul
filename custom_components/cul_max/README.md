@@ -226,6 +226,48 @@ Rueckmeldung und Anzeige:
 - Aenderungen am Wandthermostat (Drehrad, Modustaste) werden direkt aus dessen
   `SetTemperature`-Telegramm uebernommen.
 
+### Externer Raumfuehler (virtuelles Wandthermostat)
+
+Haengt ein Heizkoerperthermostat hinter einem Vorhang oder direkt am warmen
+Heizkoerper, misst es zu hoch und regelt schlecht. Statt eines Offsets kann es
+nach einem beliebigen Temperatursensor in Home Assistant regeln, z. B. einem
+Thermometer auf dem Schreibtisch. Das ist **pro Thermostat waehlbar und
+standardmaessig aus**.
+
+Einschalten in der Wochenprogramm-Karte: Zeile „Regelung nach“ → *aendern* →
+Sensor waehlen (Sensoren im selben Bereich stehen oben) → *Uebernehmen*. Oder
+per Dienst:
+
+```yaml
+action: cul_max.set_external_temperature_sensor
+data:
+  entity_id: climate.thermostat_kinderzimmer
+  sensor_entity_id: sensor.thermometer_kinderzimmer_temperatur  # leer = eigener Fuehler
+```
+
+So funktioniert es:
+
+- Die Integration verknuepft das Thermostat mit einem virtuellen
+  Wandthermostat (Adresse = eigene Adresse + 1, z. B. `123457`) und schickt ihm
+  wie ein echtes Wandthermostat `WallThermostatControl` mit Ist- und
+  Solltemperatur. Das Thermostat regelt dann nach dem gesendeten Ist-Wert.
+- Gesendet wird bei Aenderungen ab 0,2 K, bei einem neuen Sollwert und sonst
+  regelmaessig (erweitertes Sendebudget alle 8 min, Standard alle 20 min). Jede
+  Meldung muss vom Thermostat bestaetigt werden.
+- Das Wochenprogramm bleibt auf dem Thermostat: mitgeschickt wird der Sollwert
+  laut Profil, ausser er wurde seit dem letzten Schaltpunkt geaendert (in Home
+  Assistant oder am Drehrad). Bei offenem Fenster wird nie die
+  Fenster-offen-Temperatur als Sollwert gesendet.
+- Ist der Sensor nicht verfuegbar oder aelter als 30 Minuten, wird nichts
+  gesendet; das Thermostat regelt dann wieder nach seinem eigenen Fuehler.
+- Die Climate-Entitaet zeigt `external_temperature_sensor`,
+  `external_temperature`, `external_temperature_status` (`active`, `waiting`,
+  `unconfirmed`, `sensor_stale`, ...) und den Zeitpunkt der letzten Bestaetigung.
+- Nur fuer Heizkoerperthermostate; Raeume mit echtem Wandthermostat brauchen es
+  nicht. Jedes Thermostat mit externem Fuehler kostet bei Standard-Firmware
+  einen spuerbaren Teil des Funkbudgets, daher nur dort einschalten, wo es
+  noetig ist.
+
 ### Fensterkontakte
 
 Fuer echte und virtuelle MAX!-Fensterkontakte:

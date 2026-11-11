@@ -159,6 +159,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this._editing = null; // { day, segments, copyTo:Set, busy, error }
+    this._sensorEdit = null; // { value, busy, error }
     this._lastStateObj = null;
   }
 
@@ -494,6 +495,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
           ${chipsHtml}
           ${next ? `<div class="next"><ha-icon icon="mdi:clock-outline"></ha-icon>Nächster Wechsel: ${next}</div>` : ""}
           ${status}
+          ${this._sensorRowHtml(stateObjs, shortNames)}
           <div class="axis"><span>0</span><span>6</span><span>12</span><span>18</span><span>24</span></div>
           <div class="days">${rows}</div>
           ${editable && !this._editing ? `<div class="hint">Tag antippen zum Bearbeiten</div>` : ""}
@@ -502,6 +504,135 @@ class CulMaxWeekProfileCard extends HTMLElement {
       ${this._styles()}`;
 
     this._bindEvents(editable);
+  }
+
+  _areaOf(entityId) {
+    const ent = this._hass?.entities?.[entityId];
+    return ent?.area_id || this._hass?.devices?.[ent?.device_id]?.area_id || null;
+  }
+
+  /** Temperature sensors usable as room sensor; same area as the thermostat first. */
+  _temperatureSensors(areaId) {
+    return Object.values(this._hass.states)
+      .filter(
+        (st) =>
+          st.entity_id.startsWith("sensor.") &&
+          st.attributes.device_class === "temperature" &&
+          ["°C", "°F"].includes(st.attributes.unit_of_measurement) &&
+          this._hass.entities?.[st.entity_id]?.platform !== "cul_max"
+      )
+      .map((st) => ({
+        id: st.entity_id,
+        name: st.attributes.friendly_name || st.entity_id,
+        value: st.state,
+        unit: st.attributes.unit_of_measurement,
+        sameArea: Boolean(areaId) && this._areaOf(st.entity_id) === areaId,
+      }))
+      .sort((a, b) => Number(b.sameArea) - Number(a.sameArea) || a.name.localeCompare(b.name, "de"));
+  }
+
+  _sensorRowHtml(stateObjs, shortNames) {
+    const supported = stateObjs
+      .map((st, idx) => ({ st, name: shortNames[idx] }))
+      .filter(({ st }) => st.attributes.external_sensor_supported);
+    if (!supported.length) return "";
+    const canEdit = this._config.editable !== false;
+    const sensorName = (id) => this._hass.states[id]?.attributes?.friendly_name || id;
+    const statusText = (a) => {
+      const at = a.external_temperature_sent_at
+        ? new Date(a.external_temperature_sent_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })
+        : "";
+      switch (a.external_temperature_status) {
+        case "active":
+          return { level: "ok", text: `bestätigt ${at}` };
+        case "waiting":
+          return { level: "info", text: "wird übertragen …" };
+        case "unconfirmed":
+          return { level: "warn", text: "vom Thermostat nicht bestätigt, neuer Versuch folgt" };
+        case "sensor_stale":
+          return { level: "warn", text: "Sensor liefert keine aktuellen Werte – Thermostat regelt selbst" };
+        default:
+          return { level: "warn", text: "Sensor nicht verfügbar – Thermostat regelt selbst" };
+      }
+    };
+    const sensors = [...new Set(supported.map(({ st }) => st.attributes.external_temperature_sensor || ""))];
+    let body;
+    if (sensors.length === 1 && !sensors[0]) {
+      body = `<span>Regelung nach: <b>Fühler am Thermostat</b></span>`;
+    } else {
+      body = supported
+        .map(({ st, name }) => {
+          const a = st.attributes;
+          const who = supported.length > 1 ? `${esc(name)}: ` : "";
+          if (!a.external_temperature_sensor) return `<div>${who}<b>Fühler am Thermostat</b></div>`;
+          const stat = statusText(a);
+          return `<div>${who}Regelung nach <b>${esc(sensorName(a.external_temperature_sensor))}</b>${
+            a.external_temperature != null ? ` ${fmtTemp(a.external_temperature)}` : ""
+          } <span class="reg-state ${stat.level}">${esc(stat.text)}</span></div>`;
+        })
+        .join("");
+    }
+    const ed = this._sensorEdit;
+    let editor = "";
+    if (ed) {
+      const areaId = this._areaOf(supported[0].st.entity_id);
+      const options = this._temperatureSensors(areaId)
+        .map(
+          (x) =>
+            `<option value="${esc(x.id)}" ${x.id === ed.value ? "selected" : ""}>${esc(x.name)} (${esc(x.value)} ${esc(
+              x.unit
+            )})${x.sameArea ? " · gleicher Raum" : ""}</option>`
+        )
+        .join("");
+      editor = `
+        <div class="reg-editor">
+          <select class="reg-select" ${ed.busy ? "disabled" : ""}>
+            <option value="" ${!ed.value ? "selected" : ""}>Fühler am Thermostat (Standard)</option>
+            ${options}
+          </select>
+          <div class="ed-note">Das Thermostat regelt dann nach diesem Sensor statt nach seinem Fühler am
+            Heizkörper (virtuelles Wandthermostat). Das Wochenprogramm bleibt auf dem Thermostat.${
+              supported.length > 1 ? " Gilt für alle Thermostate dieser Karte." : ""
+            }</div>
+          ${ed.error ? `<div class="status error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><span>${esc(ed.error)}</span></div>` : ""}
+          <div class="ed-actions">
+            <button class="text reg-cancel" ${ed.busy ? "disabled" : ""}>Abbrechen</button>
+            <button class="primary reg-save" ${ed.busy ? "disabled" : ""}>${ed.busy ? "Wird eingerichtet …" : "Übernehmen"}</button>
+          </div>
+        </div>`;
+    }
+    return `
+      <div class="reg">
+        <ha-icon icon="mdi:home-thermometer-outline"></ha-icon>
+        <div class="reg-body">${body}</div>
+        ${canEdit && !ed ? `<button class="text reg-edit">ändern</button>` : ""}
+      </div>
+      ${editor}`;
+  }
+
+  async _saveSensor() {
+    const ed = this._sensorEdit;
+    const select = this.shadowRoot.querySelector(".reg-select");
+    ed.value = select ? select.value : ed.value;
+    ed.busy = true;
+    ed.error = null;
+    this._render();
+    const targets = this._entityIds().filter(
+      (id) => this._hass.states[id]?.attributes?.external_sensor_supported
+    );
+    try {
+      for (const id of targets) {
+        await this._hass.callService("cul_max", "set_external_temperature_sensor", {
+          entity_id: id,
+          sensor_entity_id: ed.value || null,
+        });
+      }
+      this._sensorEdit = null;
+    } catch (err) {
+      ed.busy = false;
+      ed.error = err?.message || String(err);
+    }
+    this._render();
   }
 
   _editorHtml(dayKey, longLabel, targetNames = null) {
@@ -676,6 +807,22 @@ class CulMaxWeekProfileCard extends HTMLElement {
       });
     }
 
+    root.querySelector(".reg-edit")?.addEventListener("click", () => {
+      const first = this._entityIds()
+        .map((id) => this._hass.states[id])
+        .find((st) => st?.attributes?.external_sensor_supported);
+      this._sensorEdit = { value: first?.attributes?.external_temperature_sensor || "", busy: false, error: null };
+      this._render();
+    });
+    root.querySelector(".reg-select")?.addEventListener("change", (ev) => {
+      if (this._sensorEdit) this._sensorEdit.value = ev.target.value;
+    });
+    root.querySelector(".reg-cancel")?.addEventListener("click", () => {
+      this._sensorEdit = null;
+      this._render();
+    });
+    root.querySelector(".reg-save")?.addEventListener("click", () => this._saveSensor());
+
     const editor = root.querySelector(".editor");
     if (!editor || !this._editing) return;
     const ed = this._editing;
@@ -808,6 +955,24 @@ class CulMaxWeekProfileCard extends HTMLElement {
       .times span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
       .times.two { height: 26px; }
       .times span.l1 { top: 12px; }
+      .reg {
+        display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 0.9rem;
+        color: var(--primary-text-color);
+      }
+      .reg > ha-icon { --mdc-icon-size: 18px; color: var(--secondary-text-color); flex: none; }
+      .reg-body { flex: 1; display: grid; gap: 2px; }
+      .reg-state { font-size: 0.8rem; padding: 1px 6px; border-radius: 6px; margin-left: 4px; }
+      .reg-state.ok { background: rgba(var(--rgb-success-color, 67, 160, 71), 0.18); }
+      .reg-state.info { background: rgba(var(--rgb-primary-color, 3, 169, 244), 0.14); }
+      .reg-state.warn { background: rgba(var(--rgb-warning-color, 255, 166, 0), 0.2); }
+      .reg-editor {
+        margin: 6px 0 4px 26px; padding: 10px; border-radius: 10px; border: 1px solid var(--divider-color);
+      }
+      .reg-select {
+        width: 100%; font: inherit; padding: 6px 8px; border-radius: 6px;
+        border: 1px solid var(--divider-color); background: var(--card-background-color);
+        color: var(--primary-text-color);
+      }
       .hint { margin-top: 8px; font-size: 0.78rem; color: var(--secondary-text-color); text-align: right; }
       .editor {
         margin: 2px 0 10px 40px; padding: 12px; border-radius: 10px;

@@ -257,6 +257,8 @@ class CulMaxClimate(ClimateEntity):
             "is_paired": self._coordinator.is_device_paired(self._address),
             "pairing_state": self._coordinator.get_pairing_state(self._address),
             "paired_elsewhere_central": self._device.foreign_central or None,
+            "external_sensor_supported": self._device.device_type
+            in (DEVICE_HEATING_THERMOSTAT, DEVICE_HEATING_THERMOSTAT_PLUS),
             "device_label": (
                 f"{self._device.serial_number} / {self._address}"
                 if self._device.serial_number
@@ -291,6 +293,7 @@ class CulMaxClimate(ClimateEntity):
         attrs["actual_target_temperature"] = validation.get("actual_target_temperature")
         attrs["temperature_delta_to_expected"] = validation.get("temperature_delta")
         attrs.update(self._coordinator.get_pending_queue_details(self._address))
+        attrs.update(self._coordinator.get_external_temperature_status(self._address))
         if effective_week_profile:
             attrs["week_profile_lines"] = format_week_profile_lines(effective_week_profile)
             attrs.update(

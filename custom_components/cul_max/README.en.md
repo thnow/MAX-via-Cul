@@ -193,6 +193,36 @@ Press **Save Configuration** to send them to the device, or **Discard Draft**
 to abandon the edits. Direct service calls provide another way to configure
 devices.
 
+### External room sensor (virtual wall thermostat)
+
+A radiator thermostat behind a curtain or close to the hot radiator measures
+too high and regulates poorly. Instead of an offset it can regulate on any
+temperature sensor in Home Assistant. This is **per thermostat and off by
+default**.
+
+Enable it in the week profile card ("Regelung nach" → *ändern* → choose a
+sensor; sensors in the same area are listed first) or with the service:
+
+```yaml
+action: cul_max.set_external_temperature_sensor
+data:
+  entity_id: climate.kids_room
+  sensor_entity_id: sensor.kids_room_temperature  # empty = own sensor
+```
+
+The integration links the thermostat with a virtual wall thermostat (own
+address + 1, e.g. `123457`) and sends `WallThermostatControl` with current and
+target temperature like a real wall thermostat, on changes of 0.2 K or more, on
+a new target and periodically (every 8 min with an extended send budget, 20 min
+otherwise); each message must be acknowledged. The week program stays on the
+thermostat: the target sent is the profile value unless it was changed (Home
+Assistant or the knob) after the current profile segment began; the window-open
+temperature is never sent as target. If the sensor is unavailable or older than
+30 minutes nothing is sent and the thermostat falls back to its own sensor. The
+climate entity exposes `external_temperature_sensor`, `external_temperature`,
+`external_temperature_status` and the last confirmation time. Radiator
+thermostats only; use it where needed, it costs radio budget.
+
 ### Window contacts
 
 Physical and virtual MAX! contacts expose a `binary_sensor` for their

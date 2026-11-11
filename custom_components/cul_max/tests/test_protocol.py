@@ -380,3 +380,40 @@ class SetTemperatureRxTests(unittest.TestCase):
             protocol.decode_set_temperature(msg),
             {"mode": MODE_MANUAL, "desired_temperature": 21.5},
         )
+
+
+class WallThermostatControlTests(unittest.TestCase):
+    """0x42 encoding, checked against real wall thermostat telegrams."""
+
+    def test_matches_real_wall_thermostat_telegram(self) -> None:
+        # real: Z0C37044202B6DA06432C0024CB  (desired 18.0, measured 20.3)
+        cmd = protocol.build_wall_thermostat_control(0x37, 0x02B6DA, 0x06432C, 18.0, 20.3)
+        self.assertEqual(cmd.strip(), "Zs0C37044202B6DA06432C0024CB")
+
+    def test_measured_above_25_6_uses_ninth_bit(self) -> None:
+        cmd = protocol.build_wall_thermostat_control(1, 0x123457, 0x0E8703, 22.0, 26.4)
+        msg = protocol.parse_message("Z" + cmd.strip()[2:])
+        decoded = protocol.decode_wall_thermostat_control(msg)
+        self.assertEqual(decoded.desired_temperature, 22.0)
+        self.assertEqual(decoded.measured_temperature, 26.4)
+
+    def test_round_trip_half_degrees(self) -> None:
+        cmd = protocol.build_wall_thermostat_control(2, 0x123457, 0x0E8703, 21.5, 19.7)
+        decoded = protocol.decode_wall_thermostat_control(protocol.parse_message("Z" + cmd.strip()[2:]))
+        self.assertEqual((decoded.desired_temperature, decoded.measured_temperature), (21.5, 19.7))
+
+
+class WeekProfileSegmentStartTests(unittest.TestCase):
+    def test_segment_start_follows_switch_points(self) -> None:
+        tz = ZoneInfo("Europe/Berlin")
+        profile = encode_week_profile(parse_week_profile_text("Wed 18,06:05,22,15:30,18"))
+        start = protocol.get_week_profile_segment_start
+        self.assertEqual(start(profile, datetime(2026, 11, 11, 10, 0, tzinfo=tz)).strftime("%H:%M"), "06:05")
+        self.assertEqual(start(profile, datetime(2026, 11, 11, 16, 0, tzinfo=tz)).strftime("%H:%M"), "15:30")
+        self.assertEqual(start(profile, datetime(2026, 11, 11, 5, 0, tzinfo=tz)).strftime("%H:%M"), "00:00")
+
+    def test_equal_neighbours_are_one_segment(self) -> None:
+        tz = ZoneInfo("Europe/Berlin")
+        profile = encode_week_profile(parse_week_profile_text("Wed 18,06:05,18,15:30,18"))
+        when = datetime(2026, 11, 11, 16, 0, tzinfo=tz)
+        self.assertEqual(protocol.get_week_profile_segment_start(profile, when).strftime("%H:%M"), "00:00")
