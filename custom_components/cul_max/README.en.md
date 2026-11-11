@@ -319,8 +319,10 @@ a new target and periodically (every 8 min with an extended send budget, 20 min
 otherwise); each message must be acknowledged. The week program stays on the
 thermostat: the target sent is the profile value unless it was changed (Home
 Assistant or the knob) after the current profile segment began; the window-open
-temperature is never sent as target. If the sensor is unavailable or older than
-30 minutes nothing is sent and the thermostat falls back to its own sensor. The
+temperature is never sent as target. If the sensor is unavailable or its value
+is older than 8 hours nothing is sent and the thermostat falls back to its own
+sensor (many sensors, e.g. Zigbee thermometers, only report on change, so the
+last value stays valid while the room temperature is steady). The
 climate entity exposes `external_temperature_sensor`, `external_temperature`,
 `external_temperature_status` and the last confirmation time. Radiator
 thermostats only; use it where needed, it costs radio budget.
