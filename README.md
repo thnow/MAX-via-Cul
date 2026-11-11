@@ -279,6 +279,14 @@ Repository layout:
 
 ## Changelog
 
+### 0.5.2
+
+- Faster week-profile and config uploads on CULs with a large send budget but
+  standard recovery: user-initiated writes now keep only one packet in
+  reserve (the large reserve applies to background traffic only). Uploads
+  that used to send one packet every ~2 minutes now go out at once as long as
+  the stored budget lasts.
+
 ### 0.5.1
 
 - USB/serial CUL sticks: choose "USB stick / serial" when adding the
