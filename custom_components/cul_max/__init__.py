@@ -1,7 +1,9 @@
 """MAX! via CUL custom integration for Home Assistant."""
 from __future__ import annotations
 
-from datetime import datetime
+# Alias: platform modules (cul_max.date / cul_max.time) are set as attributes
+# of this package once Home Assistant loads them; keep stdlib names distinct.
+from datetime import datetime as DateTime
 import json
 import logging
 import voluptuous as vol
@@ -71,6 +73,8 @@ SERVICE_NAMES: tuple[str, ...] = (
     "export_topology",
     "import_topology",
     "cleanup_superseded_devices",
+    "start_vacation",
+    "end_vacation",
 )
 
 
@@ -262,7 +266,7 @@ def _resolve_addresses_from_data(
     return list(dict.fromkeys(resolved))
 
 
-def _parse_until_value(hass: HomeAssistant, raw: str) -> datetime:
+def _parse_until_value(hass: HomeAssistant, raw: str) -> DateTime:
     """Parse a user-supplied until value into a timezone-aware local datetime."""
     text = raw.strip()
     if not text:
@@ -272,7 +276,7 @@ def _parse_until_value(hass: HomeAssistant, raw: str) -> datetime:
     if parsed is None:
         for fmt in ("%d.%m.%Y %H:%M", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M"):
             try:
-                parsed = datetime.strptime(text, fmt)
+                parsed = DateTime.strptime(text, fmt)
                 break
             except ValueError:
                 continue
@@ -292,6 +296,42 @@ def _parse_until_value(hass: HomeAssistant, raw: str) -> datetime:
     if parsed <= dt_util.now():
         raise ValueError("Until-Zeitpunkt muss in der Zukunft liegen.")
     return parsed
+
+
+def _parse_vacation_end(hass: HomeAssistant, raw: object) -> DateTime:
+    """Parse the vacation return time (any minute; rounded down when sent)."""
+    if isinstance(raw, DateTime):
+        parsed: DateTime | None = raw
+    else:
+        text = str(raw).strip()
+        parsed = dt_util.parse_datetime(text)
+        if parsed is None:
+            for fmt in ("%d.%m.%Y %H:%M", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M"):
+                try:
+                    parsed = DateTime.strptime(text, fmt)
+                    break
+                except ValueError:
+                    continue
+    if parsed is None:
+        raise ValueError("Rückkehr als ISO-Zeit oder im Format TT.MM.JJJJ HH:MM angeben.")
+    if parsed.tzinfo is None:
+        timezone = dt_util.get_time_zone(hass.config.time_zone) or dt_util.DEFAULT_TIME_ZONE
+        parsed = parsed.replace(tzinfo=timezone)
+    return dt_util.as_local(parsed)
+
+
+def _addresses_in_areas(hass: HomeAssistant, area_ids: list[str]) -> list[str]:
+    """MAX! device addresses whose HA device sits in one of the areas."""
+    registry = dr.async_get(hass)
+    wanted = set(area_ids)
+    addresses: list[str] = []
+    for device in registry.devices.values():
+        if device.area_id not in wanted:
+            continue
+        for domain, identifier in device.identifiers:
+            if domain == DOMAIN and len(identifier) == 6:
+                addresses.append(identifier.upper())
+    return addresses
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: CulMaxConfigEntry) -> bool:
@@ -320,6 +360,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: CulMaxConfigEntry) -> bo
 
     _hide_legacy_week_profile_editors(hass, entry)
     _remove_orphaned_time_sync_sensors(hass, entry, coordinator)
+    _remove_replaced_vacation_entities(hass, entry)
 
     # Controller device first, so every MAX! device can reference it
     # ("connected via") and the controller page lists all devices.
@@ -337,6 +378,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: CulMaxConfigEntry) -> bo
 
 
 LEGACY_EDITORS_HIDDEN = "legacy_editors_hidden_v2"
+
+
+def _remove_replaced_vacation_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """The combined date+time return entity was split into date and time."""
+    registry = er.async_get(hass)
+    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if reg_entry.domain == "datetime" and reg_entry.unique_id.startswith(f"{DOMAIN}_vacation_end_"):
+            registry.async_remove(reg_entry.entity_id)
 
 
 def _remove_orphaned_time_sync_sensors(
@@ -579,6 +628,37 @@ def _register_services(hass: HomeAssistant, coordinator: CulMaxCoordinator) -> N
             "window_open_duration": device.window_open_duration if device else None,
             "measurement_offset": device.measurement_offset if device else None,
         }
+
+
+    async def handle_start_vacation(call: ServiceCall) -> dict[str, object]:
+        addresses: list[str] = []
+        for entity_id in call.data.get("entity_ids", []) or []:
+            address = _resolve_device_address_from_entity_id(hass, str(entity_id))
+            if address:
+                addresses.append(address)
+        area_ids = call.data.get("areas", []) or []
+        if area_ids:
+            in_areas = [
+                a for a in _addresses_in_areas(hass, list(area_ids))
+                if (d := coordinator.get_device(a)) is not None and d.device_type in CLIMATE_DEVICE_TYPES
+            ]
+            if not in_areas:
+                raise HomeAssistantError("In den gewählten Bereichen gibt es keine MAX!-Thermostate.")
+            addresses.extend(in_areas)
+        end = call.data.get("end")
+        try:
+            status = await coordinator.async_start_vacation(
+                temperature=call.data.get("temperature"),
+                end=_parse_vacation_end(hass, end) if end else None,
+                preheat_hours=call.data.get("preheat_hours"),
+                addresses=list(dict.fromkeys(addresses)) or None,
+            )
+        except ValueError as err:
+            raise HomeAssistantError(str(err)) from err
+        return status
+
+    async def handle_end_vacation(call: ServiceCall) -> dict[str, object]:
+        return await coordinator.async_end_vacation(reason="manual")
 
     async def handle_set_desired_temperature(call: ServiceCall) -> dict[str, object] | None:
         address = _resolve_device_address(hass, call)
@@ -1284,6 +1364,24 @@ def _register_services(hass: HomeAssistant, coordinator: CulMaxCoordinator) -> N
             vol.Optional("window_open_duration"): vol.All(vol.Coerce(int), vol.Range(min=0, max=60)),
             vol.Optional("measurement_offset"): vol.All(vol.Coerce(float), vol.Range(min=-3.5, max=3.5)),
         }),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    _register(
+        "start_vacation",
+        handle_start_vacation,
+        schema=vol.Schema({
+            vol.Optional("temperature"): vol.All(vol.Coerce(float), vol.Range(min=4.5, max=30.5)),
+            vol.Optional("end"): vol.Any(cv.datetime, cv.string),
+            vol.Optional("preheat_hours"): vol.All(vol.Coerce(float), vol.Range(min=0, max=24)),
+            vol.Optional("entity_ids"): cv.entity_ids,
+            vol.Optional("areas"): vol.All(cv.ensure_list, [cv.string]),
+        }),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    _register(
+        "end_vacation",
+        handle_end_vacation,
+        schema=vol.Schema({}),
         supports_response=SupportsResponse.OPTIONAL,
     )
     _register(

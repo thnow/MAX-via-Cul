@@ -1145,3 +1145,59 @@ cleanup_superseded_devices:
       description: Entfernt auch als entdeckt markierte, nicht gekoppelte Altgeraete
       selector:
         boolean:
+
+start_vacation:
+  name: Urlaubsmodus starten
+  description: >
+    Setzt die Thermostate in den MAX!-Urlaubsmodus. Sie halten die
+    Urlaubstemperatur und kehren zum Rückkehrzeitpunkt (abzüglich Vorheizen)
+    selbstständig zu ihrem Wochenprogramm zurück – auch ohne Home Assistant.
+    Vorher manuell eingestellte Thermostate werden danach wiederhergestellt.
+    Ohne Felder gelten die Einstellungen am CUL-Gerät für alle Thermostate.
+  fields:
+    temperature:
+      name: Urlaubstemperatur
+      description: Temperatur während der Abwesenheit
+      selector:
+        number:
+          min: 4.5
+          max: 30.5
+          step: 0.5
+          mode: box
+          unit_of_measurement: "°C"
+    end:
+      name: Rückkehr
+      description: Datum und Uhrzeit der Rückkehr (Auflösung 30 Minuten)
+      selector:
+        datetime:
+    preheat_hours:
+      name: Vorheizen
+      description: So viele Stunden vor der Rückkehr gehen die Thermostate zurück ins Programm
+      selector:
+        number:
+          min: 0
+          max: 24
+          step: 0.5
+          mode: box
+          unit_of_measurement: h
+    entity_ids:
+      name: Thermostate
+      description: Nur diese Thermostate (leer = alle)
+      selector:
+        entity:
+          multiple: true
+          filter:
+            integration: cul_max
+            domain: climate
+    areas:
+      name: Bereiche
+      description: Nur Thermostate in diesen Bereichen (leer = alle)
+      selector:
+        area:
+          multiple: true
+
+end_vacation:
+  name: Urlaubsmodus beenden
+  description: >
+    Beendet den Urlaub vorzeitig: Thermostate gehen sofort zurück in ihr
+    Wochenprogramm bzw. in ihren vorherigen manuellen Zustand.

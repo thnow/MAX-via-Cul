@@ -754,6 +754,36 @@
           "description": "Entfernt auch als entdeckt markierte, nicht gekoppelte Altgeraete"
         }
       }
+    },
+    "start_vacation": {
+      "name": "Urlaubsmodus starten",
+      "description": "Setzt die Thermostate in den MAX!-Urlaubsmodus. Sie halten die Urlaubstemperatur und kehren zum Rückkehrzeitpunkt (abzüglich Vorheizen) selbstständig zu ihrem Wochenprogramm zurück – auch ohne Home Assistant. Vorher manuell eingestellte Thermostate werden danach wiederhergestellt. Ohne Felder gelten die Einstellungen am CUL-Gerät für alle Thermostate.",
+      "fields": {
+        "temperature": {
+          "name": "Urlaubstemperatur",
+          "description": "Temperatur während der Abwesenheit"
+        },
+        "end": {
+          "name": "Rückkehr",
+          "description": "Datum und Uhrzeit der Rückkehr (Auflösung 30 Minuten)"
+        },
+        "preheat_hours": {
+          "name": "Vorheizen",
+          "description": "So viele Stunden vor der Rückkehr gehen die Thermostate zurück ins Programm"
+        },
+        "entity_ids": {
+          "name": "Thermostate",
+          "description": "Nur diese Thermostate (leer = alle)"
+        },
+        "areas": {
+          "name": "Bereiche",
+          "description": "Nur Thermostate in diesen Bereichen (leer = alle)"
+        }
+      }
+    },
+    "end_vacation": {
+      "name": "Urlaubsmodus beenden",
+      "description": "Beendet den Urlaub vorzeitig: Thermostate gehen sofort zurück in ihr Wochenprogramm bzw. in ihren vorherigen manuellen Zustand."
     }
   },
   "issues": {
@@ -834,6 +864,12 @@
       },
       "window_open_duration": {
         "name": "Fenster-offen-Dauer"
+      },
+      "vacation_temperature": {
+        "name": "Urlaub: Temperatur"
+      },
+      "vacation_preheat": {
+        "name": "Urlaub: Vorheizen"
       }
     },
     "button": {
@@ -847,6 +883,21 @@
     "image": {
       "topology": {
         "name": "Topologie"
+      }
+    },
+    "switch": {
+      "vacation": {
+        "name": "Urlaubsmodus"
+      }
+    },
+    "date": {
+      "vacation_end_date": {
+        "name": "Urlaub: Rückkehr (Datum)"
+      }
+    },
+    "time": {
+      "vacation_end_time": {
+        "name": "Urlaub: Rückkehr (Uhrzeit)"
       }
     }
   }

@@ -23,6 +23,7 @@ through Home Assistant to virtual contacts still require Home Assistant.
 - Monitor last contact, stale states, acknowledgements, retries and pending
   configuration.
 - Export and import the known MAX! topology as JSON.
+- Vacation mode for the whole flat with automatic return to the week program.
 
 ## Architecture
 
@@ -177,6 +178,67 @@ like any other image entity.
 
 ![Topology](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/topology.png)
 
+## Vacation mode
+
+For time away the integration uses the MAX! thermostats' built-in vacation
+mode: every thermostat receives the vacation temperature together with an end
+time, holds that temperature and returns to its week program **on its own** at
+the end time. This works even if Home Assistant or the CUL is down during the
+vacation.
+
+The CUL device provides:
+
+| Entity | Meaning |
+| --- | --- |
+| Vacation mode (switch) | On = all paired thermostats and wall thermostats go on vacation, off = return early |
+| Vacation: temperature | Temperature while away, default 16 °C |
+| Vacation: return date and return time | Day and time of your return (default time 18:00) |
+| Vacation: preheat | Thermostats return to their program this many hours earlier |
+
+Behaviour:
+
+- MAX! only supports full and half hours for the end time; it is rounded down
+  to :00 or :30 (after subtracting the preheat time).
+- Every thermostat acknowledges the command. The switch attributes show
+  `confirmed`, `pending` or `failed` per device; unconfirmed devices are
+  retried automatically. Wall thermostats are set first so they do not
+  override their rooms with the week program.
+- The integration remembers the state before the vacation. Thermostats that
+  were in manual mode (or off) are set back to it afterwards; all others simply
+  continue with their week program.
+- Switch off = early return: all thermostats go back immediately.
+- Changing the temperature or return time during a vacation re-sends it (e.g.
+  to extend the vacation).
+- Window contacts and external room sensors keep working during the vacation.
+- The week profile card shows "Urlaub bis …" (vacation until …).
+
+The easiest way is the bundled card (registered as a resource
+automatically):
+
+```yaml
+type: custom:cul-max-vacation-card
+```
+
+Normally it shows return date and time, temperature and preheat with a "start
+vacation" button for the whole flat. During a vacation it shows the return
+time, temperature, when the thermostats go back to their program and how many
+confirmed, plus "change" and "end vacation".
+
+For automations or single rooms use `cul_max.start_vacation` (optional
+`temperature`, `end`, `preheat_hours`, `entity_ids`, `areas`) and
+`cul_max.end_vacation`:
+
+```yaml
+action: cul_max.start_vacation
+data:
+  temperature: 16
+  end: "2026-12-27 18:00"
+  preheat_hours: 2
+```
+
+With the standard send budget a whole flat takes one to two minutes; the
+queue spreads the commands automatically.
+
 ## Entities
 
 ### Thermostats
@@ -325,6 +387,7 @@ association, time synchronisation and cleanup dry runs.
 | --- | --- |
 | Pairing and naming | `start_pairing`, `set_device_name` |
 | Temperature and schedules | `set_temperature_config`, `set_desired_temperature`, `set_week_profile`, `set_week_profile_days` |
+| Vacation | `start_vacation`, `end_vacation` |
 | Time and wake-up | `sync_time`, `wake_thermostats` |
 | Device associations | `set_group_id`, `remove_group_id`, `add_link_partner`, `remove_link_partner`, `associate_devices`, `deassociate_devices` |
 | Virtual contacts | `create_virtual_shutter_contact`, `delete_virtual_device`, `send_virtual_shutter_contact_state` |

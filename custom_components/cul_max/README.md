@@ -20,6 +20,7 @@ weiter sinnvoll zusammenarbeiten.
 - virtuelle MAX!-Fensterkontakte fuer externe Sensorquellen wie Zigbee, Matter oder IKEA
 - Diagnose-Entitaeten fuer `last_seen`, `stale`, `last_ack`, Retries und Kommunikationsstatus
 - JSON-Export und -Import der bekannten MAX!-Topologie
+- Urlaubsmodus fuer die ganze Wohnung mit automatischer Rueckkehr zum Wochenprogramm
 
 ## Zielbild
 
@@ -211,6 +212,68 @@ Geraete ohne Bereich erscheinen im Raum ihres verknuepften Thermostats. Das
 Bild laesst sich wie jedes Bild in Dashboards verwenden (z. B. Bildkarte).
 
 ![Topologie](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/topology.png)
+
+## Urlaubsmodus
+
+Fuer Abwesenheiten nutzt die Integration den eingebauten Urlaubsmodus der
+MAX!-Thermostate: Jedes Thermostat bekommt die Urlaubstemperatur zusammen mit
+einem Endzeitpunkt, haelt diese Temperatur und kehrt zum Endzeitpunkt
+**selbststaendig** zu seinem Wochenprogramm zurueck. Das funktioniert auch,
+wenn Home Assistant oder der CUL waehrend des Urlaubs nicht laufen.
+
+Am CUL-Geraet gibt es dafuer:
+
+| Entitaet | Bedeutung |
+| --- | --- |
+| Urlaubsmodus (Schalter) | Ein = alle angemeldeten Thermostate und Wandthermostate in den Urlaub, Aus = vorzeitig zurueck |
+| Urlaub: Temperatur | Temperatur waehrend der Abwesenheit, Standard 16 °C |
+| Urlaub: Rueckkehr (Datum) und (Uhrzeit) | Tag und Uhrzeit der Rueckkehr (Standard-Uhrzeit 18:00) |
+| Urlaub: Vorheizen | So viele Stunden vor der Rueckkehr gehen die Thermostate zurueck ins Programm |
+
+Ablauf und Verhalten:
+
+- MAX! kennt fuer das Ende nur volle und halbe Stunden; der Zeitpunkt wird
+  (nach Abzug der Vorheizzeit) auf :00 bzw. :30 abgerundet.
+- Jedes Thermostat bestaetigt den Befehl. Der Schalter zeigt in seinen
+  Attributen pro Geraet `confirmed`, `pending` oder `failed`; nicht bestaetigte
+  Geraete werden automatisch erneut versucht. Wandthermostate werden zuerst
+  gesetzt, damit sie ihre Raeume nicht mit dem Wochenprogramm ueberschreiben.
+- Die Integration merkt sich den Zustand vor dem Urlaub. Thermostate, die
+  vorher manuell (oder aus) waren, werden danach wieder so gesetzt; alle
+  anderen laufen einfach im Wochenprogramm weiter.
+- Schalter aus = vorzeitige Rueckkehr: alle Thermostate gehen sofort zurueck.
+- Aendert man Temperatur oder Rueckkehr waehrend des Urlaubs, wird neu
+  gesendet (z. B. Urlaub verlaengern).
+- Fensterkontakte und externe Raumfuehler arbeiten im Urlaub normal weiter.
+- Die Wochenprogramm-Karte zeigt „Urlaub bis …“ an.
+
+Am bequemsten geht das mit der mitgelieferten Karte (wird automatisch als
+Ressource registriert):
+
+```yaml
+type: custom:cul-max-vacation-card
+```
+
+Sie zeigt im Normalbetrieb Rueckkehr (Datum, Uhrzeit), Temperatur und
+Vorheizen mit einem Knopf „Urlaub starten“ fuer die ganze Wohnung. Waehrend des
+Urlaubs zeigt sie Rueckkehr, Temperatur, wann die Thermostate zurueck ins
+Programm gehen und wie viele den Urlaub bestaetigt haben, dazu „Aendern“ und
+„Urlaub beenden“.
+
+Fuer Automationen oder nur einzelne Raeume gibt es die Dienste
+`cul_max.start_vacation` (optional `temperature`, `end`, `preheat_hours`,
+`entity_ids`, `areas`) und `cul_max.end_vacation`:
+
+```yaml
+action: cul_max.start_vacation
+data:
+  temperature: 16
+  end: "2026-12-27 18:00"
+  preheat_hours: 2
+```
+
+Mit dem Standard-Sendebudget dauert das Setzen einer ganzen Wohnung ein bis
+zwei Minuten, die Warteschlange verteilt die Befehle automatisch.
 
 ## Entitaeten
 

@@ -17,7 +17,10 @@ from typing import Any
 
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import Event, HomeAssistant, callback
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import (
+    async_track_point_in_time,
+    async_track_state_change_event,
+)
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import area_registry as ar
@@ -51,6 +54,8 @@ from .const import (
     CLIMATE_DEVICE_TYPES,
     STALE_TIMEOUT_CLIMATE,
     STALE_TIMEOUT_SHUTTER_CONTACT,
+    TEMP_MAX,
+    TEMP_MIN,
     )
 from .topology import (
     KIND_CONTACT,
@@ -161,6 +166,10 @@ VIRTUAL_CONTACT_STARTUP_DELAY = 120.0
 # to the virtual wall thermostat regulates on the value sent in
 # WallThermostatControl (0x42) instead of its own sensor at the radiator.
 EXTERNAL_TEMP_MIN_CHANGE = 0.2
+# Vacation mode
+VACATION_DEFAULT_TEMPERATURE = 16.0
+VACATION_SEND_ROUNDS = 4
+VACATION_RETRY_DELAY = 120.0
 EXTERNAL_TEMP_SENSOR_MAX_AGE = timedelta(minutes=30)
 EXTERNAL_TEMP_RETRY_DELAY = 60.0
 EXTERNAL_TEMP_HEARTBEAT = {"standard": 20 * 60.0, "extended": 8 * 60.0}
@@ -437,6 +446,35 @@ def _deserialize_pending_climate_command(data: dict[str, Any]) -> PendingClimate
     )
 
 
+def _default_vacation_state() -> dict[str, Any]:
+    """Persisted vacation settings and run state."""
+    return {
+        "active": False,
+        "temperature": VACATION_DEFAULT_TEMPERATURE,
+        "end": None,            # planned return (ISO, local tz)
+        "preheat_hours": 0.0,   # thermostats return to their program this much earlier
+        "device_end": None,     # end sent to the thermostats (ISO, :00/:30)
+        "started_at": None,
+        "devices": {},          # address -> {prev_mode, prev_temperature, status, error, updated_at}
+    }
+
+
+def _floor_half_hour(when: datetime) -> datetime:
+    """Round down to the MAX! until resolution (:00 / :30)."""
+    return when.replace(minute=0 if when.minute < 30 else 30, second=0, microsecond=0)
+
+
+def _vacation_until_passed(until: Any) -> bool:
+    """True if a decoded 'YYYY-MM-DD HH:MM' until (local time) lies in the past."""
+    if not until:
+        return False
+    try:
+        parsed = datetime.strptime(str(until), "%Y-%m-%d %H:%M")
+    except ValueError:
+        return False
+    return parsed.replace(tzinfo=dt_util.get_default_time_zone()) <= dt_util.now()
+
+
 class CulMaxCoordinator:
     _SUPPORTED_LINK_TYPES: dict[int, set[int]] = {
         DEVICE_SHUTTER_CONTACT: {
@@ -542,6 +580,11 @@ class CulMaxCoordinator:
         self._temp_apply_tasks: dict[str, asyncio.Task] = {}
         self._virtual_contact_refresh_after: float = 0.0
         self._cul_status_listeners: list[Callable[[], None]] = []
+        # Vacation mode (whole flat or selected thermostats), persisted
+        self._vacation: dict[str, Any] = _default_vacation_state()
+        self._vacation_task: asyncio.Task | None = None
+        self._vacation_timer_unsub: Callable[[], None] | None = None
+        self._vacation_listeners: list[Callable[[], None]] = []
 
         self._devices: dict[str, KnownDevice] = {}
         self._store: Store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
@@ -1120,7 +1163,9 @@ class CulMaxCoordinator:
             if device.external_sensor:
                 self._subscribe_external_sensor(device.address)
         await self._ensure_time_slots_assigned()
-        if await self._connect():
+        connected = await self._connect()
+        self._resume_vacation()
+        if connected:
             self._virtual_contact_refresh_after = (
                 self.hass.loop.time() + VIRTUAL_CONTACT_STARTUP_DELAY
             )
@@ -1199,6 +1244,15 @@ class CulMaxCoordinator:
         for unsub in self._ext_unsubs.values():
             unsub()
         self._ext_unsubs.clear()
+        if self._vacation_timer_unsub is not None:
+            self._vacation_timer_unsub()
+            self._vacation_timer_unsub = None
+        if self._vacation_task is not None and not self._vacation_task.done():
+            self._vacation_task.cancel()
+            try:
+                await self._vacation_task
+            except asyncio.CancelledError:
+                pass
         await self._close_connection()
         await self._save_devices_now()
         _LOGGER.info("CUL TCP connection to %s:%d closed", self.host, self.port)
@@ -1722,6 +1776,8 @@ class CulMaxCoordinator:
         state = device.last_state or {}
         desired = state.get("desired_temperature")
         mode = state.get("mode")
+        if mode == MODE_VACATION and _vacation_until_passed(state.get("until")):
+            mode = MODE_AUTO  # the thermostat has returned to its program by itself
         validation = self.get_week_profile_validation(device.address)
         window_open = bool(validation.get("window_open_active"))
         remembered = self._ext_intended.get(device.address)
@@ -1936,6 +1992,365 @@ class CulMaxCoordinator:
                 "confirmed": confirmed,
             }
             self._notify_week_profile_updated(device.address)
+
+    # ------------------------------------------------------------------
+    # Vacation mode
+    # ------------------------------------------------------------------
+    #
+    # Uses the thermostats' own vacation mode (SetTemperature mode 2 with an
+    # until timestamp): they hold the vacation temperature and return to
+    # their week program at the until time on their own, even if Home
+    # Assistant or the CUL is offline. HA remembers each thermostat's
+    # previous state so manual/off thermostats are restored afterwards and
+    # an early return switches everything back right away.
+
+    def add_vacation_listener(self, cb: Callable[[], None]) -> Callable[[], None]:
+        self._vacation_listeners.append(cb)
+
+        def remove() -> None:
+            if cb in self._vacation_listeners:
+                self._vacation_listeners.remove(cb)
+
+        return remove
+
+    def _notify_vacation(self) -> None:
+        for cb in list(self._vacation_listeners):
+            try:
+                cb()
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("Vacation listener failed")
+
+    def _vacation_targets(self, addresses: list[str] | None = None) -> list[KnownDevice]:
+        """Paired real thermostats; wall thermostats first (they drive their room)."""
+        wanted = {a.upper() for a in addresses} if addresses else None
+        devices = [
+            d for d in self._devices.values()
+            if d.device_type in CLIMATE_DEVICE_TYPES
+            and d.paired
+            and not d.is_virtual
+            and not d.superseded_by
+            and (wanted is None or d.address in wanted)
+        ]
+        if wanted is not None:
+            unknown = wanted - {d.address for d in devices}
+            if unknown:
+                raise ValueError(
+                    "Keine angemeldeten MAX!-Thermostate: " + ", ".join(sorted(unknown))
+                )
+        return sorted(devices, key=lambda d: (d.device_type != DEVICE_WALL_THERMOSTAT, d.name.lower()))
+
+    def get_vacation_status(self) -> dict[str, Any]:
+        """Settings, run state and per-thermostat delivery for entities and services."""
+        vac = self._vacation
+        devices = vac.get("devices") or {}
+        counts: dict[str, int] = {}
+        details: dict[str, str] = {}
+        registry = dr.async_get(self.hass)
+        for address, info in devices.items():
+            status = str(info.get("status", "pending"))
+            counts[status] = counts.get(status, 0) + 1
+            entry = self.get_registry_device(registry, address)
+            device = self.get_device(address)
+            name = (
+                (entry.name_by_user or entry.name) if entry is not None
+                else (device.name if device else address)
+            )
+            details[name] = status
+        return {
+            "active": bool(vac.get("active")),
+            "temperature": float(vac.get("temperature") or VACATION_DEFAULT_TEMPERATURE),
+            "end": vac.get("end"),
+            "preheat_hours": float(vac.get("preheat_hours") or 0.0),
+            "device_end": vac.get("device_end"),
+            "started_at": vac.get("started_at"),
+            "counts": counts,
+            "devices": details,
+        }
+
+    def vacation_end(self) -> datetime | None:
+        """Planned return (local time) or None."""
+        return self._vacation_end_datetime()
+
+    def _vacation_end_datetime(self) -> datetime | None:
+        raw = self._vacation.get("end")
+        if not raw:
+            return None
+        try:
+            return dt_util.as_local(datetime.fromisoformat(str(raw)))
+        except ValueError:
+            return None
+
+    def _compute_device_end(self, end: datetime, preheat_hours: float) -> datetime:
+        return _floor_half_hour(dt_util.as_local(end) - timedelta(hours=preheat_hours))
+
+    async def async_set_vacation_settings(
+        self,
+        *,
+        temperature: float | None = None,
+        end: datetime | None = None,
+        preheat_hours: float | None = None,
+    ) -> None:
+        """Change the settings; a running vacation is re-sent with the new values."""
+        changed = False
+        if temperature is not None and float(temperature) != self._vacation.get("temperature"):
+            self._vacation["temperature"] = max(TEMP_MIN, min(TEMP_MAX, round(float(temperature) * 2) / 2))
+            changed = True
+        if end is not None:
+            iso = dt_util.as_local(end).replace(second=0, microsecond=0).isoformat()
+            if iso != self._vacation.get("end"):
+                self._vacation["end"] = iso
+                changed = True
+        if preheat_hours is not None and float(preheat_hours) != self._vacation.get("preheat_hours"):
+            self._vacation["preheat_hours"] = max(0.0, float(preheat_hours))
+            changed = True
+        if not changed:
+            return
+        await self._save_devices()
+        self._notify_vacation()
+        if self._vacation.get("active"):
+            await self.async_start_vacation(
+                addresses=list((self._vacation.get("devices") or {}).keys()) or None
+            )
+
+    async def async_start_vacation(
+        self,
+        *,
+        temperature: float | None = None,
+        end: datetime | None = None,
+        preheat_hours: float | None = None,
+        addresses: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Put the thermostats into vacation mode until the (preheat-adjusted) end."""
+        if temperature is not None:
+            self._vacation["temperature"] = max(TEMP_MIN, min(TEMP_MAX, round(float(temperature) * 2) / 2))
+        if end is not None:
+            self._vacation["end"] = dt_util.as_local(end).replace(second=0, microsecond=0).isoformat()
+        if preheat_hours is not None:
+            self._vacation["preheat_hours"] = max(0.0, float(preheat_hours))
+        end_dt = self._vacation_end_datetime()
+        if end_dt is None:
+            raise ValueError("Bitte zuerst das Urlaubsende (Rückkehr) setzen.")
+        device_end = self._compute_device_end(end_dt, float(self._vacation.get("preheat_hours") or 0.0))
+        if device_end <= dt_util.now() + timedelta(minutes=5):
+            raise ValueError(
+                "Das Urlaubsende (abzüglich Vorheizen) muss mindestens ein paar Minuten in der Zukunft liegen."
+            )
+        targets = self._vacation_targets(addresses)
+        if not targets:
+            raise ValueError("Keine angemeldeten MAX!-Thermostate gefunden.")
+
+        was_active = bool(self._vacation.get("active"))
+        records: dict[str, dict[str, Any]] = (
+            dict(self._vacation.get("devices") or {}) if was_active else {}
+        )
+        for device in targets:
+            record = records.get(device.address)
+            if record is None:
+                state = device.last_state or {}
+                prev_mode = state.get("mode", MODE_AUTO)
+                if prev_mode in (MODE_BOOST, MODE_VACATION):
+                    prev_mode = MODE_AUTO
+                record = {
+                    "prev_mode": int(prev_mode),
+                    "prev_temperature": state.get("desired_temperature"),
+                }
+            record.update(status="pending", error="", updated_at=self._now_iso())
+            records[device.address] = record
+        self._vacation.update(
+            active=True,
+            devices=records,
+            device_end=device_end.isoformat(),
+            started_at=self._vacation.get("started_at") if was_active else self._now_iso(),
+        )
+        await self._save_devices_now()
+        self._arm_vacation_timer()
+        self._notify_vacation()
+        _LOGGER.info(
+            "Vacation: %d thermostat(s) to %.1f °C until %s (return %s)",
+            len(targets),
+            self._vacation["temperature"],
+            device_end.strftime("%Y-%m-%d %H:%M"),
+            end_dt.strftime("%Y-%m-%d %H:%M"),
+        )
+        self._run_vacation_task(self._vacation_send_all([d.address for d in targets]))
+        return self.get_vacation_status()
+
+    async def async_end_vacation(self, *, reason: str = "manual") -> dict[str, Any]:
+        """Return early (or finish): restore every thermostat's previous state."""
+        if not self._vacation.get("active"):
+            return self.get_vacation_status()
+        if self._vacation_timer_unsub is not None:
+            self._vacation_timer_unsub()
+            self._vacation_timer_unsub = None
+        records = dict(self._vacation.get("devices") or {})
+        for record in records.values():
+            record.update(status="restoring", error="", updated_at=self._now_iso())
+        self._vacation["active"] = False
+        await self._save_devices_now()
+        self._notify_vacation()
+        _LOGGER.info("Vacation ended (%s): restoring %d thermostat(s)", reason, len(records))
+        self._run_vacation_task(self._vacation_restore_all(records, natural=(reason == "finished")))
+        return self.get_vacation_status()
+
+    def _run_vacation_task(self, coro) -> None:
+        if self._vacation_task is not None and not self._vacation_task.done():
+            self._vacation_task.cancel()
+        self._vacation_task = self.hass.loop.create_task(coro)
+
+    async def _vacation_set_record(self, address: str, **values: Any) -> None:
+        record = (self._vacation.get("devices") or {}).get(address)
+        if record is None:
+            return
+        record.update(values, updated_at=self._now_iso())
+        await self._save_devices()
+        self._notify_vacation()
+
+    async def _vacation_send_all(self, addresses: list[str]) -> None:
+        """Send the vacation command; retry thermostats that did not confirm."""
+        temperature = float(self._vacation["temperature"])
+        device_end = datetime.fromisoformat(self._vacation["device_end"])
+        remaining = list(addresses)
+        for attempt in range(VACATION_SEND_ROUNDS):
+            failed: list[str] = []
+            for address in remaining:
+                if not self._vacation.get("active"):
+                    return
+                try:
+                    await self.async_set_temperature(address, temperature, until=device_end)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as err:  # noqa: BLE001 - retried below
+                    failed.append(address)
+                    await self._vacation_set_record(address, status="failed", error=str(err))
+                else:
+                    # the ACK carries mode and target but not the until time
+                    await self._merge_thermostat_state(
+                        address,
+                        {"mode": MODE_VACATION, "until": device_end.strftime("%Y-%m-%d %H:%M")},
+                        keep_missing_measurement=True,
+                    )
+                    self._dispatch_state_refresh(address)
+                    await self._vacation_set_record(address, status="confirmed", error="")
+            if not failed:
+                return
+            remaining = failed
+            if attempt + 1 < VACATION_SEND_ROUNDS:
+                await asyncio.sleep(VACATION_RETRY_DELAY)
+        _LOGGER.warning(
+            "Vacation command not confirmed by: %s",
+            ", ".join(self.format_device_label(a) for a in remaining),
+        )
+
+    async def _vacation_restore_all(self, records: dict[str, dict[str, Any]], *, natural: bool) -> None:
+        """Bring the thermostats back to where they were before the vacation."""
+        order = sorted(
+            records,
+            key=lambda a: (
+                (self.get_device(a).device_type if self.get_device(a) else 0) != DEVICE_WALL_THERMOSTAT,
+                a,
+            ),
+        )
+        remaining = order
+        for attempt in range(VACATION_SEND_ROUNDS):
+            failed: list[str] = []
+            for address in remaining:
+                if self._vacation.get("active"):
+                    return  # a new vacation started meanwhile
+                record = records[address]
+                device = self.get_device(address)
+                if device is None:
+                    continue
+                state = device.last_state or {}
+                prev_mode = int(record.get("prev_mode", MODE_AUTO))
+                prev_temp = record.get("prev_temperature")
+                still_in_vacation = state.get("mode") == MODE_VACATION
+                try:
+                    if prev_mode == MODE_MANUAL and prev_temp is not None:
+                        if natural or still_in_vacation or state.get("mode") == MODE_AUTO:
+                            await self.async_set_temperature(address, float(prev_temp), mode=MODE_MANUAL)
+                    elif natural:
+                        # The thermostat already switched back to its program at
+                        # the until time; reflect that until it reports again.
+                        if still_in_vacation:
+                            await self._merge_thermostat_state(
+                                address, {"mode": MODE_AUTO}, keep_missing_measurement=True
+                            )
+                            self._dispatch_state_refresh(address)
+                    elif still_in_vacation or not state:
+                        await self.async_set_temperature(address, 0.0, mode=MODE_AUTO)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as err:  # noqa: BLE001 - retried below
+                    failed.append(address)
+                    record.update(status="restore_failed", error=str(err), updated_at=self._now_iso())
+                else:
+                    record.update(status="restored", error="", updated_at=self._now_iso())
+                self._vacation["devices"] = records
+                await self._save_devices()
+                self._notify_vacation()
+                if device.external_sensor:
+                    self.hass.async_create_task(
+                        self._external_temperature_tick(address, reason="vacation end")
+                    )
+            if not failed:
+                return
+            remaining = failed
+            if attempt + 1 < VACATION_SEND_ROUNDS:
+                await asyncio.sleep(VACATION_RETRY_DELAY)
+
+    def _dispatch_state_refresh(self, address: str) -> None:
+        """Push the stored state to the climate entity of one thermostat."""
+        device = self.get_device(address)
+        if device is None:
+            return
+        state = thermostat_state_from_dict(address, device.last_state)
+        for cb in list(self._listeners.get(address, [])):
+            try:
+                cb(None, state)
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("State refresh listener failed for %s", address)
+
+    def _arm_vacation_timer(self) -> None:
+        if self._vacation_timer_unsub is not None:
+            self._vacation_timer_unsub()
+            self._vacation_timer_unsub = None
+        raw = self._vacation.get("device_end")
+        if not self._vacation.get("active") or not raw:
+            return
+        try:
+            device_end = datetime.fromisoformat(str(raw))
+        except ValueError:
+            return
+
+        @callback
+        def _finished(_now: datetime) -> None:
+            self._vacation_timer_unsub = None
+            self.hass.async_create_task(self.async_end_vacation(reason="finished"))
+
+        # a little after the thermostats switched back by themselves
+        self._vacation_timer_unsub = async_track_point_in_time(
+            self.hass, _finished, device_end + timedelta(minutes=2)
+        )
+
+    def _resume_vacation(self) -> None:
+        """After a restart: finish an expired vacation or continue a running one."""
+        if not self._vacation.get("active"):
+            return
+        raw = self._vacation.get("device_end")
+        try:
+            device_end = datetime.fromisoformat(str(raw)) if raw else None
+        except ValueError:
+            device_end = None
+        if device_end is None or device_end <= dt_util.now():
+            self.hass.async_create_task(self.async_end_vacation(reason="finished"))
+            return
+        self._arm_vacation_timer()
+        unconfirmed = [
+            address for address, record in (self._vacation.get("devices") or {}).items()
+            if record.get("status") != "confirmed"
+        ]
+        if unconfirmed:
+            self._run_vacation_task(self._vacation_send_all(unconfirmed))
 
     # ------------------------------------------------------------------
     # Topology picture
@@ -5575,6 +5990,11 @@ class CulMaxCoordinator:
             ]
             if restored:
                 self._pending_climate_config[normalized] = restored
+        stored_vacation = data.get("vacation")
+        if isinstance(stored_vacation, dict):
+            self._vacation = {**_default_vacation_state(), **stored_vacation}
+            if not isinstance(self._vacation.get("devices"), dict):
+                self._vacation["devices"] = {}
         _LOGGER.info("Loaded %d known MAX! devices from storage", len(self._devices))
         for address in self._devices:
             await self._sync_device_registry_entry(address)
@@ -5668,5 +6088,6 @@ class CulMaxCoordinator:
                 for addr, commands in self._pending_climate_config.items()
                 if commands
             },
+            "vacation": self._vacation,
         }
         return data
