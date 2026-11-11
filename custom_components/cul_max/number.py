@@ -32,7 +32,7 @@ class CulMaxNumberDescription(NumberEntityDescription):
 NUMBER_TYPES: tuple[CulMaxNumberDescription, ...] = (
     CulMaxNumberDescription(
         key="comfort_temperature",
-        name="Comfort Temperature",
+        translation_key="comfort_temperature",
         native_min_value=4.5,
         native_max_value=30.5,
         native_step=0.5,
@@ -44,7 +44,7 @@ NUMBER_TYPES: tuple[CulMaxNumberDescription, ...] = (
     ),
     CulMaxNumberDescription(
         key="eco_temperature",
-        name="Eco Temperature",
+        translation_key="eco_temperature",
         native_min_value=4.5,
         native_max_value=30.5,
         native_step=0.5,
@@ -56,7 +56,7 @@ NUMBER_TYPES: tuple[CulMaxNumberDescription, ...] = (
     ),
     CulMaxNumberDescription(
         key="window_open_temperature",
-        name="Window Open Temperature",
+        translation_key="window_open_temperature",
         native_min_value=4.5,
         native_max_value=30.5,
         native_step=0.5,
@@ -68,7 +68,7 @@ NUMBER_TYPES: tuple[CulMaxNumberDescription, ...] = (
     ),
     CulMaxNumberDescription(
         key="window_open_duration",
-        name="Window Open Duration",
+        translation_key="window_open_duration",
         native_min_value=0,
         native_max_value=60,
         native_step=5,
@@ -135,7 +135,6 @@ class CulMaxConfigNumber(NumberEntity):
         self.entity_description = description
         self._address = device.address
 
-        self._attr_name = description.name
         self._attr_unique_id = f"{DOMAIN}_{self._address}_{description.key}"
         self._attr_native_min_value = description.native_min_value
         self._attr_native_max_value = description.native_max_value
@@ -145,6 +144,7 @@ class CulMaxConfigNumber(NumberEntity):
         self._attr_device_class = description.device_class
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
+            via_device=(DOMAIN, coordinator.controller_identifier),
             name=device.name,
             manufacturer="eQ-3",
             model=coordinator.get_device_registry_model(device),

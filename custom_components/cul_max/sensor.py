@@ -55,7 +55,7 @@ class CulMaxSendBudgetSensor(SensorEntity):
     """Remaining CUL send credit (culfw credit_10ms) and the active send profile."""
 
     _attr_has_entity_name = True
-    _attr_name = "Send Budget"
+    _attr_translation_key = "send_budget"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:radio-tower"
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -67,7 +67,7 @@ class CulMaxSendBudgetSensor(SensorEntity):
             f"{DOMAIN}_send_budget_{coordinator.host.replace('.', '_')}_{coordinator.port}"
         )
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"controller_{coordinator.host}:{coordinator.port}")},
+            identifiers={(DOMAIN, coordinator.controller_identifier)},
             name=f"MAX! CUL ({coordinator.host}:{coordinator.port})",
             manufacturer="eQ-3 / CULFW",
             model="MAX! via CUL",
@@ -112,7 +112,7 @@ class CulMaxLastSeenSensor(SensorEntity):
     """Timestamp sensor showing the last RF contact of a MAX! device."""
 
     _attr_has_entity_name = True
-    _attr_name = "Last Seen"
+    _attr_translation_key = "last_seen"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = SensorDeviceClass.TIMESTAMP
 
@@ -123,6 +123,7 @@ class CulMaxLastSeenSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_last_seen"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
+            via_device=(DOMAIN, coordinator.controller_identifier),
             name=device.name,
             manufacturer="Virtual" if device.is_virtual else "eQ-3",
             model=coordinator.get_device_registry_model(device),
@@ -154,7 +155,7 @@ class CulMaxIdentitySensor(SensorEntity):
     """Diagnostic sensor exposing serial number and RF address together."""
 
     _attr_has_entity_name = True
-    _attr_name = "Identity"
+    _attr_translation_key = "identity"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:card-account-details-outline"
 
@@ -165,6 +166,7 @@ class CulMaxIdentitySensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_identity"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
+            via_device=(DOMAIN, coordinator.controller_identifier),
             name=device.name,
         )
         self._sync_from_device()
@@ -211,7 +213,7 @@ class CulMaxPairingStateSensor(SensorEntity):
     """Diagnostic sensor exposing whether a device is paired or only discovered."""
 
     _attr_has_entity_name = True
-    _attr_name = "Pairing State"
+    _attr_translation_key = "pairing_state"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:link-variant"
 
@@ -222,6 +224,7 @@ class CulMaxPairingStateSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_pairing_state"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
+            via_device=(DOMAIN, coordinator.controller_identifier),
             name=device.name,
         )
         self._sync_from_device()
@@ -253,7 +256,7 @@ class CulMaxLastAckSensor(SensorEntity):
     """Timestamp sensor showing the last successful ACK for a MAX! device."""
 
     _attr_has_entity_name = True
-    _attr_name = "Last Ack"
+    _attr_translation_key = "last_ack"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = SensorDeviceClass.TIMESTAMP
 
@@ -264,6 +267,7 @@ class CulMaxLastAckSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_last_ack"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
+            via_device=(DOMAIN, coordinator.controller_identifier),
             name=device.name,
         )
         self._sync_from_device()
@@ -286,7 +290,7 @@ class CulMaxLastCommandSuccessSensor(SensorEntity):
     """Timestamp sensor showing the last successful write command for a device."""
 
     _attr_has_entity_name = True
-    _attr_name = "Last Command Success"
+    _attr_translation_key = "last_command_success"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = SensorDeviceClass.TIMESTAMP
 
@@ -297,6 +301,7 @@ class CulMaxLastCommandSuccessSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_last_command_success"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
+            via_device=(DOMAIN, coordinator.controller_identifier),
             name=device.name,
         )
         self._sync_from_device()
@@ -319,7 +324,7 @@ class CulMaxLastTimeSyncSensor(SensorEntity):
     """Timestamp sensor showing the last outgoing time sync for a device."""
 
     _attr_has_entity_name = True
-    _attr_name = "Last Time Sync"
+    _attr_translation_key = "last_time_sync"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = SensorDeviceClass.TIMESTAMP
 
@@ -330,6 +335,7 @@ class CulMaxLastTimeSyncSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_last_time_sync"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
+            via_device=(DOMAIN, coordinator.controller_identifier),
             name=device.name,
         )
         self._sync_from_device()
@@ -352,7 +358,7 @@ class CulMaxRetryCountSensor(SensorEntity):
     """Diagnostic counter for retries on a MAX! device."""
 
     _attr_has_entity_name = True
-    _attr_name = "Retry Count"
+    _attr_translation_key = "retry_count"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = "retries"
@@ -364,6 +370,7 @@ class CulMaxRetryCountSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_retry_count"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
+            via_device=(DOMAIN, coordinator.controller_identifier),
             name=device.name,
         )
         self._sync_from_device()
@@ -390,7 +397,7 @@ class CulMaxCommunicationStatusSensor(SensorEntity):
     """Summary diagnostic sensor for communication health and recent failures."""
 
     _attr_has_entity_name = True
-    _attr_name = "Communication"
+    _attr_translation_key = "communication"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: CulMaxCoordinator, device: KnownDevice) -> None:
@@ -400,6 +407,7 @@ class CulMaxCommunicationStatusSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_communication"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
+            via_device=(DOMAIN, coordinator.controller_identifier),
             name=device.name,
         )
         self._sync_from_device()
@@ -454,7 +462,7 @@ class CulMaxPeersSensor(SensorEntity):
     """Readable summary of linked partners for one MAX! device."""
 
     _attr_has_entity_name = True
-    _attr_name = "Peers"
+    _attr_translation_key = "peers"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:account-network-outline"
 
@@ -465,6 +473,7 @@ class CulMaxPeersSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_peers"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
+            via_device=(DOMAIN, coordinator.controller_identifier),
             name=device.name,
         )
         self._sync_from_device()
@@ -501,7 +510,7 @@ class CulMaxExpectedWeekProfileTemperatureSensor(SensorEntity):
     """Current target temperature derived from the stored week profile."""
 
     _attr_has_entity_name = True
-    _attr_name = "Expected Week Profile Temperature"
+    _attr_translation_key = "expected_week_profile_temperature"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_suggested_display_precision = 1
@@ -514,6 +523,7 @@ class CulMaxExpectedWeekProfileTemperatureSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_expected_week_profile_temperature"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
+            via_device=(DOMAIN, coordinator.controller_identifier),
             name=device.name,
         )
         self._sync_from_device()
@@ -556,7 +566,7 @@ class CulMaxWeekProfileValidationSensor(SensorEntity):
     """Best-effort validation whether the active device behavior matches the week profile."""
 
     _attr_has_entity_name = True
-    _attr_name = "Week Profile Validation"
+    _attr_translation_key = "week_profile_validation"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:calendar-check"
 
@@ -568,6 +578,7 @@ class CulMaxWeekProfileValidationSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_week_profile_validation"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
+            via_device=(DOMAIN, coordinator.controller_identifier),
             name=device.name,
         )
         self._sync_from_device()
@@ -634,11 +645,12 @@ def _build_diagnostic_entities(
         CulMaxLastSeenSensor(coordinator, device),
         CulMaxLastAckSensor(coordinator, device),
         CulMaxLastCommandSuccessSensor(coordinator, device),
-        CulMaxLastTimeSyncSensor(coordinator, device),
         CulMaxRetryCountSensor(coordinator, device),
         CulMaxCommunicationStatusSensor(coordinator, device),
     ]
     if device.device_type in CLIMATE_DEVICE_TYPES:
+        # only thermostats receive the time
+        entities.append(CulMaxLastTimeSyncSensor(coordinator, device))
         entities.insert(3, CulMaxExpectedWeekProfileTemperatureSensor(coordinator, device))
         entities.insert(4, CulMaxWeekProfileValidationSensor(coordinator, device))
     return entities

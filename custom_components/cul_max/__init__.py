@@ -318,9 +318,68 @@ async def async_setup_entry(hass: HomeAssistant, entry: CulMaxConfigEntry) -> bo
 
     entry.runtime_data = coordinator
 
+    _hide_legacy_week_profile_editors(hass, entry)
+    _remove_orphaned_time_sync_sensors(hass, entry, coordinator)
+
+    # Controller device first, so every MAX! device can reference it
+    # ("connected via") and the controller page lists all devices.
+    dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, coordinator.controller_identifier)},
+        name=f"MAX! CUL ({host}:{port})",
+        manufacturer="eQ-3 / CULFW",
+        model="MAX! via CUL",
+    )
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _register_services(hass, coordinator)
     return True
+
+
+LEGACY_EDITORS_HIDDEN = "legacy_editors_hidden"
+
+
+def _remove_orphaned_time_sync_sensors(
+    hass: HomeAssistant, entry: ConfigEntry, coordinator: CulMaxCoordinator
+) -> None:
+    """Window contacts never receive the time; drop their old time-sync sensor."""
+    registry = er.async_get(hass)
+    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if not reg_entry.unique_id.endswith("_last_time_sync"):
+            continue
+        address = reg_entry.unique_id.removeprefix(f"{DOMAIN}_").removesuffix("_last_time_sync")
+        device = coordinator.get_device(address)
+        if device is not None and device.device_type not in CLIMATE_DEVICE_TYPES:
+            registry.async_remove(reg_entry.entity_id)
+
+
+def _hide_legacy_week_profile_editors(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Disable the per-day text editors and save/discard buttons once.
+
+    The week profile card replaced them and comfort/eco/window values now
+    apply on their own. Users can re-enable the entities at any time; this
+    runs only once per config entry.
+    """
+    if entry.data.get(LEGACY_EDITORS_HIDDEN):
+        return
+    registry = er.async_get(hass)
+    disabled = 0
+    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        legacy = reg_entry.domain == "text" or reg_entry.unique_id.endswith(
+            ("_save_configuration", "_discard_draft")
+        )
+        if legacy and reg_entry.disabled_by is None:
+            registry.async_update_entity(
+                reg_entry.entity_id, disabled_by=er.RegistryEntryDisabler.INTEGRATION
+            )
+            disabled += 1
+    hass.config_entries.async_update_entry(entry, data={**entry.data, LEGACY_EDITORS_HIDDEN: True})
+    if disabled:
+        _LOGGER.info(
+            "Disabled %d legacy week-profile editor entities (use the week profile card instead; "
+            "they can be re-enabled in the entity settings)",
+            disabled,
+        )
 
 
 def _register_services(hass: HomeAssistant, coordinator: CulMaxCoordinator) -> None:

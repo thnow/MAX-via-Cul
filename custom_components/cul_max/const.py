@@ -128,6 +128,7 @@ CLIMATE_DEVICE_TYPES = {
 PLATFORMS: list[Platform] = [
     Platform.BUTTON,
     Platform.CLIMATE,
+    Platform.IMAGE,
     Platform.BINARY_SENSOR,
     Platform.NUMBER,
     Platform.SENSOR,

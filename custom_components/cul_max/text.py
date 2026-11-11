@@ -96,6 +96,8 @@ class CulMaxWeekProfileDayText(TextEntity):
 
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.CONFIG
+    # Superseded by the week profile card; kept for automations, off by default.
+    _attr_entity_registry_enabled_default = False
     _attr_icon = "mdi:calendar-clock"
     _attr_native_max = 255
 
@@ -121,6 +123,7 @@ class CulMaxWeekProfileDayText(TextEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._address}_week_profile_{self._day_key}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._address)},
+            via_device=(DOMAIN, coordinator.controller_identifier),
             name=device.name,
             manufacturer="eQ-3",
             model=coordinator.get_device_registry_model(device),
