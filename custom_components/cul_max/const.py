@@ -19,7 +19,12 @@ FRONTEND_MODULES = [
         "filename": "cul-max-week-profile-card.js",
         "version": INTEGRATION_VERSION,
         "legacy_paths": ["/local/cul-max-week-profile-card.js"],
-    }
+    },
+    {
+        "name": "CUL MAX Vacation Card",
+        "filename": "cul-max-vacation-card.js",
+        "version": INTEGRATION_VERSION,
+    },
 ]
 
 # TCP connection defaults (CULFW on MAX! Cube or CUNO)
@@ -128,11 +133,14 @@ CLIMATE_DEVICE_TYPES = {
 PLATFORMS: list[Platform] = [
     Platform.BUTTON,
     Platform.CLIMATE,
+    Platform.DATE,
     Platform.IMAGE,
     Platform.BINARY_SENSOR,
     Platform.NUMBER,
     Platform.SENSOR,
+    Platform.SWITCH,
     Platform.TEXT,
+    Platform.TIME,
 ]
 
 STALE_TIMEOUT_CLIMATE = timedelta(days=2)

@@ -12,6 +12,7 @@ from homeassistant.components.number import (
 )
 from homeassistant.const import EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -115,6 +116,9 @@ async def async_setup_entry(
             async_add_entities(new_entities)
 
     entry.async_on_unload(coordinator.add_global_listener(on_new_device))
+    entities.extend(
+        CulMaxVacationNumber(coordinator, key) for key in ("vacation_temperature", "vacation_preheat")
+    )
     async_add_entities(entities)
 
 
@@ -178,3 +182,55 @@ class CulMaxConfigNumber(NumberEntity):
         )
         self._sync_from_device()
         self.async_write_ha_state()
+
+
+class CulMaxVacationNumber(NumberEntity):
+    """Vacation temperature / preheat time on the CUL controller device."""
+
+    _attr_has_entity_name = True
+    _attr_mode = NumberMode.BOX
+
+    def __init__(self, coordinator: CulMaxCoordinator, key: str) -> None:
+        self._coordinator = coordinator
+        self._key = key
+        self._attr_translation_key = key
+        self._attr_unique_id = (
+            f"{DOMAIN}_{key}_{coordinator.host.replace('.', '_')}_{coordinator.port}"
+        )
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.controller_identifier)},
+        )
+        if key == "vacation_temperature":
+            self._attr_native_min_value = 4.5
+            self._attr_native_max_value = 30.5
+            self._attr_native_step = 0.5
+            self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+            self._attr_device_class = NumberDeviceClass.TEMPERATURE
+            self._attr_icon = "mdi:thermometer-low"
+        else:
+            self._attr_native_min_value = 0
+            self._attr_native_max_value = 24
+            self._attr_native_step = 0.5
+            self._attr_native_unit_of_measurement = "h"
+            self._attr_icon = "mdi:radiator"
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(self._coordinator.add_vacation_listener(self._on_update))
+
+    @callback
+    def _on_update(self) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> float:
+        status = self._coordinator.get_vacation_status()
+        return status["temperature"] if self._key == "vacation_temperature" else status["preheat_hours"]
+
+    async def async_set_native_value(self, value: float) -> None:
+        try:
+            if self._key == "vacation_temperature":
+                await self._coordinator.async_set_vacation_settings(temperature=value)
+            else:
+                await self._coordinator.async_set_vacation_settings(preheat_hours=value)
+        except ValueError as err:
+            raise HomeAssistantError(str(err)) from err

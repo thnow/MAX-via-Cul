@@ -292,7 +292,15 @@ class CulMaxWeekProfileCard extends HTMLElement {
       });
     }
     const scheduleOff = attrs.week_profile_source !== undefined || attrs.week_profile_monday !== undefined;
-    if (scheduleOff && mode && mode !== "auto") {
+    if (mode === "vacation") {
+      const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2})/.exec(attrs.until || "");
+      const until = m ? ` bis ${m[3]}.${m[2]}. ${m[4]}` : "";
+      items.push({
+        level: "info",
+        icon: "mdi:airplane",
+        text: `${who}Urlaub${until} – ${fmtTemp(attrs.temperature)}, danach wieder Wochenprogramm`,
+      });
+    } else if (scheduleOff && mode && mode !== "auto") {
       const label = stateObj.state === "off" ? "Aus" : MODE_LABELS[mode] || mode;
       const target = attrs.temperature != null && stateObj.state !== "off" ? ` ${fmtTemp(attrs.temperature)}` : "";
       items.push({

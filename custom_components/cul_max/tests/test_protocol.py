@@ -37,11 +37,14 @@ package.__path__ = [str(BASE_DIR)]
 class _Platform(StrEnum):
     BUTTON = "button"
     CLIMATE = "climate"
+    DATE = "date"
     IMAGE = "image"
     BINARY_SENSOR = "binary_sensor"
     NUMBER = "number"
     SENSOR = "sensor"
+    SWITCH = "switch"
     TEXT = "text"
+    TIME = "time"
 
 
 ha_module = sys.modules.setdefault("homeassistant", types.ModuleType("homeassistant"))
@@ -418,3 +421,26 @@ class WeekProfileSegmentStartTests(unittest.TestCase):
         profile = encode_week_profile(parse_week_profile_text("Wed 18,06:05,18,15:30,18"))
         when = datetime(2026, 11, 11, 16, 0, tzinfo=tz)
         self.assertEqual(protocol.get_week_profile_segment_start(profile, when).strftime("%H:%M"), "00:00")
+
+
+class VacationEncodingTests(unittest.TestCase):
+    def test_until_matches_fhem_layout(self) -> None:
+        # FHEM MAX_DateTime2Internal("31.12.2026 23:30") == 0xDF1A2F
+        self.assertEqual(protocol.encode_max_until_datetime(datetime(2026, 12, 31, 23, 30)), "DF1A2F")
+
+    def test_until_round_trip(self) -> None:
+        for when in (datetime(2026, 11, 13, 7, 0), datetime(2027, 1, 2, 16, 30), datetime(2026, 7, 31, 0, 30)):
+            raw = bytes.fromhex(protocol.encode_max_until_datetime(when))
+            self.assertEqual(protocol.decode_max_until_datetime(*raw), when.strftime("%Y-%m-%d %H:%M"))
+
+    def test_set_temperature_vacation_payload(self) -> None:
+        cmd = protocol.build_set_temperature(
+            0x10, 0x123456, 0xABCDEF, 16.0, protocol.MODE_VACATION,
+            until_hex=protocol.encode_max_until_datetime(datetime(2026, 12, 31, 23, 30)),
+        )
+        # mode 2 << 6 | 16.0 * 2 = 0xA0, followed by the until triplet
+        self.assertEqual(cmd, "Zs0E10004012345 6ABCDEF00A0DF1A2F\r\n".replace(" ", ""))
+        decoded = protocol.decode_set_temperature(protocol.parse_message(cmd[2:].strip() and "Z" + cmd[2:].strip()))
+        self.assertEqual(decoded["mode"], protocol.MODE_VACATION)
+        self.assertEqual(decoded["desired_temperature"], 16.0)
+        self.assertEqual(decoded["until"], "2026-12-31 23:30")

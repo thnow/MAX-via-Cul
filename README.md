@@ -26,6 +26,9 @@ protocol locally.
 - Optional external room sensor per radiator thermostat (virtual wall
   thermostat), e.g. a thermometer on the desk instead of the sensor behind the
   curtain
+- Vacation mode: whole flat (or selected rooms) to e.g. 16 °C until your
+  return; the thermostats switch back to their program on their own, with
+  optional preheating and restore of manual settings
 - Fast, confirmed commands: the CUL's real send budget, prioritized queue and
   device acknowledgements; detection of devices still paired with an old Cube
 
@@ -135,6 +138,16 @@ the devices keep cooperating even when Home Assistant is temporarily down.
 3. Call `cul_max.send_virtual_shutter_contact_state` from an automation when
    the external sensor opens or closes.
 
+### Lower the heating while you are away
+
+Add the bundled `custom:cul-max-vacation-card` to a dashboard, enter the
+return date and time, temperature and preheat and press "Urlaub starten"
+(start vacation). The same settings exist as entities on the CUL device
+("Vacation mode" switch and friends). Every thermostat
+confirms the command and returns to its week program at the return time by
+itself; switching it off ends the vacation early. For automations use
+`cul_max.start_vacation` / `cul_max.end_vacation`.
+
 ### Back up the MAX! topology
 
 Use `cul_max.export_topology` after pairing and room setup. Keep the JSON file
@@ -185,6 +198,8 @@ The integration exposes these Home Assistant services:
 - `cul_max.export_topology`
 - `cul_max.import_topology`
 - `cul_max.cleanup_superseded_devices`
+- `cul_max.start_vacation`
+- `cul_max.end_vacation`
 
 The Home Assistant service UI includes selectors and descriptions for all
 service fields.
@@ -261,6 +276,18 @@ Repository layout:
 - no generated Python caches committed
 
 ## Changelog
+
+### 0.5.0
+
+- Vacation mode using the thermostats' own vacation mode: switch, temperature,
+  return time and preheat on the CUL device, services `start_vacation` and
+  `end_vacation` (optionally per thermostat or area). Confirmed per device,
+  retried, survives restarts; manual thermostats are restored afterwards.
+- New Lovelace card `cul-max-vacation-card` to start, change and end the
+  vacation for the whole flat; the week profile card shows "Urlaub bis …".
+- Topology picture: notes wrap instead of being cut off; link brackets stay
+  inside the room box.
+- Dark-mode logo and a readable integration icon.
 
 ### 0.4.1
 

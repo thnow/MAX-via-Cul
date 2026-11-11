@@ -96,6 +96,12 @@
       },
       "window_open_duration": {
         "name": "Window open duration"
+      },
+      "vacation_temperature": {
+        "name": "Vacation: temperature"
+      },
+      "vacation_preheat": {
+        "name": "Vacation: preheat"
       }
     },
     "button": {
@@ -109,6 +115,21 @@
     "image": {
       "topology": {
         "name": "Topology"
+      }
+    },
+    "switch": {
+      "vacation": {
+        "name": "Vacation mode"
+      }
+    },
+    "date": {
+      "vacation_end_date": {
+        "name": "Vacation: return date"
+      }
+    },
+    "time": {
+      "vacation_end_time": {
+        "name": "Vacation: return time"
       }
     }
   }
