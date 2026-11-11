@@ -239,6 +239,16 @@ Repository layout:
 
 ## Changelog
 
+### 0.3.1
+
+- Virtual window contacts now behave like real ones: the state is sent
+  directly to each linked thermostat and must be acknowledged (with retries),
+  quick open/close sequences are delivered in order, and the state is
+  refreshed every 50 minutes and shortly after startup. Previously a single
+  lost "closed" telegram could keep a thermostat at its window-open
+  temperature indefinitely.
+- `send_virtual_shutter_contact_state` returns `confirmed`.
+
 ### 0.3.0
 
 - Requires Home Assistant 2026.11 or newer. Uses the native climate

@@ -134,6 +134,13 @@ PENDING_QUEUE_MAINTENANCE_INTERVAL = 60.0
 PENDING_QUEUE_RETRY_BASE_DELAY = 30.0
 PENDING_QUEUE_RETRY_MAX_DELAY = 300.0
 AUTO_MODE_TIME_SYNC_FOLLOWUP_DELAY = 12.0
+# Virtual window contacts behave like real ones: the state goes directly to
+# each linked thermostat, which ACKs it; it is repeated periodically
+# (real contacts report hourly) so a lost telegram cannot leave a thermostat
+# stuck at its window-open temperature.
+VIRTUAL_CONTACT_REFRESH_INTERVAL = 50 * 60.0
+VIRTUAL_CONTACT_RETRY_DELAY = 60.0
+VIRTUAL_CONTACT_STARTUP_DELAY = 120.0
 TIME_INFORMATION_ACK_TIMEOUT = 3.0
 TIME_INFORMATION_ACK_RETRIES = 2
 
@@ -469,6 +476,13 @@ class CulMaxCoordinator:
         self._cul_credit_last_report: tuple[float, float, float] | None = None
         self._cul_credit_reported_at: float = 0.0
         self._send_profile: SendProfile = SEND_PROFILE_STANDARD
+        # Virtual contacts: per-contact send lock, last delivery attempt
+        # (loop time) and whether every linked thermostat confirmed it.
+        self._virtual_contact_locks: dict[str, asyncio.Lock] = {}
+        self._virtual_contact_sent_at: dict[str, float] = {}
+        self._virtual_contact_confirmed: dict[str, bool] = {}
+        self._virtual_contact_failures: dict[str, int] = {}
+        self._virtual_contact_refresh_after: float = 0.0
         self._cul_status_listeners: list[Callable[[], None]] = []
 
         self._devices: dict[str, KnownDevice] = {}
@@ -1003,6 +1017,9 @@ class CulMaxCoordinator:
         await self._load_devices()
         await self._ensure_time_slots_assigned()
         if await self._connect():
+            self._virtual_contact_refresh_after = (
+                self.hass.loop.time() + VIRTUAL_CONTACT_STARTUP_DELAY
+            )
             self._schedule_startup_time_sync()
             self._resume_pending_config_processing()
             return True
@@ -2335,6 +2352,7 @@ class CulMaxCoordinator:
         """Retry due queued climate config in the background."""
         if self._writer is None:
             return
+        await self._refresh_virtual_contacts()
         if self.hass.loop.time() - self._cul_credit_reported_at >= CUL_CREDIT_POLL_INTERVAL:
             # Keeps the budget sensor current and feeds the recovery-rate
             # measurement; "X" does not use the radio.
@@ -2463,69 +2481,183 @@ class CulMaxCoordinator:
         await self._save_devices()
         _LOGGER.info("Deleted virtual device %s", self._format_device_identity(address))
 
+    def _virtual_contact_targets(self, device: KnownDevice) -> list[KnownDevice]:
+        """Return the linked thermostats a virtual contact reports to."""
+        targets: list[KnownDevice] = []
+        for partner_address in device.linked_partners:
+            partner = self.get_device(partner_address)
+            if partner is not None and partner.device_type in CLIMATE_DEVICE_TYPES:
+                targets.append(partner)
+        return targets
+
     async def async_send_virtual_shutter_contact_state(
         self,
         address: str,
         is_open: bool,
-    ) -> None:
-        """Send a virtual ShutterContactState telegram using the stored group ID."""
-        device = self.get_device(address)
+        *,
+        reason: str = "state change",
+    ) -> bool:
+        """Report a virtual window contact's state like a real MAX! contact.
+
+        The ShutterContactState goes directly to every linked thermostat (with
+        the thermostat's group, like FHEM's fakeSC) and must be ACKed by it.
+        The ACK carries the thermostat's new state, so the result is visible
+        at once. Without linked thermostats the old broadcast to the central
+        is used. Returns True when every target confirmed.
+        """
+        normalized = address.upper()
+        device = self.get_device(normalized)
         if device is None:
             raise ValueError(f"Unbekannte Geraeteadresse {address}")
         if not device.is_virtual or device.device_type != DEVICE_SHUTTER_CONTACT:
             raise ValueError(f"Geraet {address} ist kein virtueller Fensterkontakt.")
 
+        lock = self._virtual_contact_locks.setdefault(normalized, asyncio.Lock())
+        async with lock:
+            # Keep the contact entity in step with the requested state at once.
+            await self._update_device_state(
+                normalized,
+                {"is_open": is_open, "battery_low": False, "rf_error": False},
+            )
+            await self._touch_device(normalized)
+            state_text = "open" if is_open else "closed"
+            await self._set_last_command(normalized, f"VirtualShutterContactState {state_text}")
+            self._dispatch_virtual_contact_state(device, is_open)
+
+            targets = self._virtual_contact_targets(device)
+            if not targets:
+                return await self._broadcast_virtual_contact_state(device, is_open)
+
+            confirmed = True
+            for target in targets:
+                counter = self._next_counter()
+                cmd = build_shutter_contact_state(
+                    counter,
+                    int(normalized, 16),
+                    int(target.address, 16),
+                    is_open,
+                    target.group_id,
+                )
+                description = (
+                    f"VirtualShutterContactState {state_text} "
+                    f"{self.format_device_label(normalized)} -> {self.format_device_label(target.address)}"
+                )
+                _LOGGER.info("%s (%s)", description, reason)
+                try:
+                    await self._send_command(
+                        cmd,
+                        expected_src=target.address,
+                        device_address=normalized,
+                        counter=counter,
+                        description=description,
+                        retries=self._send_profile.set_temperature_retries,
+                        timeout=self._send_profile.set_temperature_timeout,
+                        priority=COMMAND_PRIORITY_HIGH,
+                    )
+                except Exception as err:  # noqa: BLE001 - retried in background
+                    confirmed = False
+                    _LOGGER.warning(
+                        "%s not confirmed (%s); will retry in the background",
+                        description,
+                        err,
+                    )
+            self._virtual_contact_sent_at[normalized] = self.hass.loop.time()
+            self._virtual_contact_confirmed[normalized] = confirmed
+            if confirmed:
+                self._virtual_contact_failures.pop(normalized, None)
+            else:
+                self._virtual_contact_failures[normalized] = (
+                    self._virtual_contact_failures.get(normalized, 0) + 1
+                )
+            return confirmed
+
+    async def _broadcast_virtual_contact_state(self, device: KnownDevice, is_open: bool) -> bool:
+        """Legacy path for virtual contacts without linked thermostats."""
         counter = self._next_counter()
-        label = self.format_device_label(address)
         cmd = build_shutter_contact_state(
             counter,
-            int(address, 16),
+            int(device.address, 16),
             self.own_address,
             is_open,
             device.group_id,
         )
         _LOGGER.info(
-            "VirtualShutterContactState → %s: is_open=%s group_id=%d",
-            label,
+            "VirtualShutterContactState broadcast → %s: is_open=%s group_id=%d (no linked thermostat)",
+            self.format_device_label(device.address),
             is_open,
             device.group_id,
         )
-        await self._set_last_command(address, f"VirtualShutterContactState {'open' if is_open else 'closed'}")
-        # Virtual contacts should react promptly even if long-running config
-        # queues are active. Send them immediately without waiting in the
-        # serialized command backlog. Use the priority raw-send path so they
-        # do not sit behind long pacing waits from unrelated configuration
-        # traffic.
         try:
             await self._send_raw(cmd, priority=True)
-            await self._mark_command_success(address, retries=0, ack_at=None)
+            await self._mark_command_success(device.address, retries=0, ack_at=None)
         except Exception as err:
-            await self._mark_command_error(address, str(err), retries=0)
+            await self._mark_command_error(device.address, str(err), retries=0)
             raise
-        await self._update_device_state(
-            address.upper(),
-            {"is_open": is_open, "battery_low": False, "rf_error": False},
-        )
-        await self._touch_device(address.upper())
+        self._virtual_contact_sent_at[device.address] = self.hass.loop.time()
+        self._virtual_contact_confirmed[device.address] = True
+        return True
+
+    def _dispatch_virtual_contact_state(self, device: KnownDevice, is_open: bool) -> None:
+        """Notify the virtual contact's entities about its new state."""
         self._dispatch(
             MaxMessage(
-                raw=cmd.strip(),
+                raw="",
                 length=11,
-                counter=counter,
+                counter=0,
                 flags=0x06,
                 msg_type=0x30,
-                src=int(address, 16),
+                src=int(device.address, 16),
                 dst=self.own_address,
                 group=device.group_id,
                 payload=bytes.fromhex("12" if is_open else "10"),
             ),
             ShutterContactState(
-                address=address.upper(),
+                address=device.address.upper(),
                 is_open=is_open,
                 battery_low=False,
                 rf_error=False,
             ),
         )
+
+    async def _refresh_virtual_contacts(self) -> None:
+        """Re-send virtual contact states that are due (heartbeat / retry)."""
+        now = self.hass.loop.time()
+        if now < self._virtual_contact_refresh_after:
+            return
+        for device in self.get_all_devices():
+            if not device.is_virtual or device.device_type != DEVICE_SHUTTER_CONTACT:
+                continue
+            if not self._virtual_contact_targets(device):
+                continue
+            is_open = (device.last_state or {}).get("is_open")
+            if is_open is None:
+                continue
+            sent_at = self._virtual_contact_sent_at.get(device.address)
+            confirmed = self._virtual_contact_confirmed.get(device.address, False)
+            if sent_at is not None:
+                age = now - sent_at
+                if confirmed and age < VIRTUAL_CONTACT_REFRESH_INTERVAL:
+                    continue
+                failures = max(1, self._virtual_contact_failures.get(device.address, 1))
+                retry_delay = min(
+                    VIRTUAL_CONTACT_REFRESH_INTERVAL,
+                    VIRTUAL_CONTACT_RETRY_DELAY * (2 ** (failures - 1)),
+                )
+                if not confirmed and age < retry_delay:
+                    continue
+            lock = self._virtual_contact_locks.get(device.address)
+            if lock is not None and lock.locked():
+                continue
+            reason = "retry" if sent_at is not None and not confirmed else "refresh"
+            try:
+                await self.async_send_virtual_shutter_contact_state(
+                    device.address, bool(is_open), reason=reason
+                )
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception(
+                    "Virtual contact refresh for %s failed",
+                    self._format_device_identity(device.address),
+                )
 
     async def async_set_group_id(self, address: str, group_id: int) -> None:
         """Assign a MAX! group ID to one device."""

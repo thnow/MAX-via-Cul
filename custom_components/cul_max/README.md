@@ -449,6 +449,24 @@ mehr aus.
 - `cul_max.delete_virtual_device`
 - `cul_max.send_virtual_shutter_contact_state`
 
+Ein virtueller Kontakt verhaelt sich wie ein echter MAX!-Fensterkontakt:
+
+- Der Zustand geht direkt an jedes verknuepfte Thermostat (mit dessen
+  Gruppen-ID, wie bei FHEMs `fakeSC`) und muss von ihm bestaetigt werden.
+  Fehlt das ACK, wird wiederholt. Das ACK enthaelt den neuen Zustand des
+  Thermostats, die Climate-Entitaet zeigt also sofort, ob es die
+  Fenster-offen-Temperatur uebernommen oder verlassen hat.
+- Schnelles Auf/Zu wird der Reihe nach zugestellt und jeweils bestaetigt.
+- Der aktuelle Zustand wird alle 50 Minuten erneut gesendet (echte Kontakte
+  melden sich stuendlich) und einmal etwa 2 Minuten nach dem Start. Ein
+  verlorenes Telegramm kann ein Thermostat so nicht dauerhaft in der
+  Fenster-offen-Temperatur festhalten. Unbestaetigte Zustellungen werden mit
+  wachsendem Abstand (60 s bis 50 min) wiederholt.
+- Der Dienst liefert `confirmed: true`, wenn alle verknuepften Thermostate
+  bestaetigt haben.
+- Ohne verknuepftes Thermostat wird wie bisher einmalig an die Zentrale
+  gesendet.
+
 ### Komfortdienste fuer ganze Raeume
 
 - `cul_max.create_room_association`
