@@ -285,18 +285,14 @@ Repository layout:
   retried, survives restarts; manual thermostats are restored afterwards.
 - New Lovelace card `cul-max-vacation-card` to start, change and end the
   vacation for the whole flat; the week profile card shows "Urlaub bis …".
-- Topology picture: notes wrap instead of being cut off; link brackets stay
-  inside the room box.
 - Dark-mode logo and a readable integration icon.
-
-### 0.4.1
-
 - Device pages: every MAX! device is "connected via" the CUL device; entity
   names translated (de/en), pairing state values translated.
 - Legacy per-day text editors and save/discard buttons disabled by default
   (once in existing installs); comfort/eco/window values apply automatically.
 - Time-sync sensor only for thermostats.
-- New image entity "Topology" with rooms, devices, links and problems.
+- New image entity "Topology" on the CUL device: rooms, devices, links and
+  problems (e.g. a device in the wrong area) at a glance.
 - Diagnostics download for the integration and each device.
 
 ### 0.4.0
