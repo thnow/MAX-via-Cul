@@ -200,6 +200,8 @@ too high and regulates poorly. Instead of an offset it can regulate on any
 temperature sensor in Home Assistant. This is **per thermostat and off by
 default**.
 
+![Choosing a room sensor](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/room-sensor.png)
+
 Enable it in the week profile card ("Regelung nach" → *ändern* → choose a
 sensor; sensors in the same area are listed first) or with the service:
 
@@ -458,11 +460,15 @@ entities:
   - climate.kitchen_right
 ```
 
+![Shared card for two thermostats](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/shared-room-card.png)
+
 Each thermostat gets a status line (the shared part of the names is dropped,
 e.g. "left"/"right"). Days with identical profiles show one timeline; days that
 differ are marked "≠" and show one timeline per thermostat. An edited day is
 uploaded to all thermostats of the card, one after the other. The visual editor
 offers "Weitere Thermostate im selben Raum" for this.
+
+![Week profile card](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/week-profile-card.png)
 
 The card shows:
 
@@ -478,6 +484,8 @@ The card shows:
   command was not confirmed.
 
 Editing:
+
+![Editing a day](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/week-profile-editor.png)
 
 - Tap a day to open the editor: change switching times (`hh:mm`, 5-minute
   steps) and temperatures (4.5–30.5 °C, 4.5 = off), add or remove points (at

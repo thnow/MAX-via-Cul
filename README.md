@@ -21,7 +21,23 @@ protocol locally.
 - Virtual MAX! shutter contacts for external sensors such as Zigbee, Matter or IKEA
 - Services for room association, topology export/import and repair workflows
 - Diagnostics for last seen, last ACK, retries, stale state, pending config and profile validation
-- Optional Lovelace card for compact week-profile editing
+- Lovelace week profile card: coloured timeline per day, status, inline editing,
+  one card for several thermostats of a room
+- Optional external room sensor per radiator thermostat (virtual wall
+  thermostat), e.g. a thermometer on the desk instead of the sensor behind the
+  curtain
+- Fast, confirmed commands: the CUL's real send budget, prioritized queue and
+  device acknowledgements; detection of devices still paired with an old Cube
+
+## Screenshots
+
+| Week profile card | Editing a day |
+|---|---|
+| ![Week profile card with timeline, status and room sensor](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/week-profile-card.png) | ![Inline day editor with copy to other days](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/week-profile-editor.png) |
+
+| Room sensor instead of the radiator sensor | One card for a room with two thermostats |
+|---|---|
+| ![Choosing an external room sensor](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/room-sensor.png) | ![Shared card for two radiator thermostats](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/shared-room-card.png) |
 
 ## Supported Devices
 
@@ -242,7 +258,7 @@ Repository layout:
 
 ## Changelog
 
-### 0.3.1
+### 0.4.0
 
 - Virtual window contacts now behave like real ones: the state is sent
   directly to each linked thermostat and must be acknowledged (with retries),

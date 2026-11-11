@@ -234,6 +234,8 @@ nach einem beliebigen Temperatursensor in Home Assistant regeln, z. B. einem
 Thermometer auf dem Schreibtisch. Das ist **pro Thermostat waehlbar und
 standardmaessig aus**.
 
+![Raumfuehler waehlen](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/room-sensor.png)
+
 Einschalten in der Wochenprogramm-Karte: Zeile „Regelung nach“ → *aendern* →
 Sensor waehlen (Sensoren im selben Bereich stehen oben) → *Uebernehmen*. Oder
 per Dienst:
@@ -669,12 +671,16 @@ entities:
   - climate.thermostat_kuche_rechts
 ```
 
+![Gemeinsame Karte fuer zwei Thermostate](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/shared-room-card.png)
+
 Je Thermostat erscheint eine Statuszeile (der gemeinsame Namensteil wird
 weggelassen, z. B. „links“/„rechts“). Haben alle Thermostate an einem Tag
 dasselbe Profil, gibt es eine Zeitleiste; sonst ist der Tag mit „≠“
 markiert und zeigt je Thermostat eine eigene Leiste. Ein bearbeiteter Tag wird
 nacheinander an alle Thermostate der Karte uebertragen. Im visuellen Editor
 gibt es dafuer „Weitere Thermostate im selben Raum“.
+
+![Wochenprogramm-Karte](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/week-profile-card.png)
 
 Was die Karte zeigt:
 
@@ -691,6 +697,8 @@ Was die Karte zeigt:
   Fehler) oder ein Befehl nicht bestaetigt wurde
 
 Bearbeiten:
+
+![Tag bearbeiten](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/week-profile-editor.png)
 
 - Einen Tag antippen oeffnet den Editor: Schaltzeiten (`hh:mm`, 5-Minuten-
   Schritte) und Temperaturen (4,5–30,5 °C, 4,5 = Aus) aendern, Schaltpunkte
