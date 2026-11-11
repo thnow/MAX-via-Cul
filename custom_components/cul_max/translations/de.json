@@ -3,16 +3,34 @@
     "step": {
       "user": {
         "title": "MAX! via CUL einrichten",
-        "description": "Verbindung zu einem CULFW-Gerät (MAX! Cube mit CULFW-Firmware, CUNO, etc.) über TCP.",
+        "description": "Wie ist der CUL angeschlossen?",
+        "menu_options": {
+          "network": "Netzwerk (MAX! Cube mit a-culfw, CUNO, ser2net …)",
+          "serial": "USB-Stick / seriell (z. B. CUL, nanoCUL)"
+        }
+      },
+      "network": {
+        "title": "MAX! via CUL einrichten",
+        "description": "Verbindung zu einem CULFW-Gerät über TCP.",
         "data": {
           "host": "IP-Adresse oder Hostname des CULFW-Geräts",
           "port": "TCP-Port (Standard: 2323)",
           "own_address": "Eigene CUL-Adresse (6-stellig hex, Standard: 123456)"
         }
+      },
+      "serial": {
+        "title": "MAX! via CUL einrichten",
+        "description": "CUL-Stick am USB-Port. Am besten den stabilen Namen unter /dev/serial/by-id/ wählen.",
+        "data": {
+          "device": "Serielles Gerät",
+          "baudrate": "Baudrate (CUL: 38400)",
+          "own_address": "Eigene CUL-Adresse (6-stellig hex, Standard: 123456)"
+        }
       }
     },
     "error": {
-      "cannot_connect": "Verbindung fehlgeschlagen. Prüfe IP-Adresse, Port und ob das Gerät erreichbar ist."
+      "cannot_connect": "Verbindung fehlgeschlagen. Prüfe IP-Adresse, Port und ob das Gerät erreichbar ist.",
+      "cannot_connect_serial": "Kein CULFW an diesem Port gefunden. Prüfe Gerät, Baudrate und ob der Port frei ist."
     },
     "abort": {
       "already_configured": "Dieses Gerät ist bereits konfiguriert."
@@ -26,6 +44,10 @@
         "duration": {
           "name": "Dauer",
           "description": "Pairing-Fenster in Sekunden, Standard 60"
+        },
+        "gateway": {
+          "name": "Gateway",
+          "description": "Nur bei mehreren CULs nötig – welches Gateway gemeint ist"
         }
       }
     },
@@ -53,7 +75,13 @@
     },
     "wake_thermostats": {
       "name": "Thermostate wecken",
-      "description": "Sendet WakeUp-Befehle manuell an alle bekannten Thermostate, um sofortige State-Updates oder Konfigurationsschritte zu triggern. Nicht fuer den Dauerbetrieb gedacht, da haeufiges Wecken Batterielaufzeit und Funklast erhoeht."
+      "description": "Sendet WakeUp-Befehle manuell an alle bekannten Thermostate, um sofortige State-Updates oder Konfigurationsschritte zu triggern. Nicht fuer den Dauerbetrieb gedacht, da haeufiges Wecken Batterielaufzeit und Funklast erhoeht.",
+      "fields": {
+        "gateway": {
+          "name": "Gateway",
+          "description": "Nur bei mehreren CULs nötig – welches Gateway gemeint ist"
+        }
+      }
     },
     "sync_time": {
       "name": "Uhrzeit synchronisieren",
@@ -82,6 +110,10 @@
         "device_names": {
           "name": "Geraetenamen",
           "description": "Alternativ mehrere gespeicherte MAX!-Geraetenamen angeben"
+        },
+        "gateway": {
+          "name": "Gateway",
+          "description": "Nur bei mehreren CULs nötig – welches Gateway gemeint ist"
         }
       }
     },
@@ -700,6 +732,10 @@
         "path": {
           "name": "Dateipfad",
           "description": "Optionaler JSON-Zielpfad. Relative Pfade werden unterhalb des Home-Assistant-Konfigurationsverzeichnisses gespeichert."
+        },
+        "gateway": {
+          "name": "Gateway",
+          "description": "Nur bei mehreren CULs nötig – welches Gateway gemeint ist"
         }
       }
     },
@@ -734,6 +770,10 @@
         "apply_week_profiles": {
           "name": "Wochenprofile anwenden",
           "description": "Spielt gespeicherte Wochenprofile fuer Klima-Geraete wieder ein"
+        },
+        "gateway": {
+          "name": "Gateway",
+          "description": "Nur bei mehreren CULs nötig – welches Gateway gemeint ist"
         }
       }
     },
@@ -752,6 +792,10 @@
         "remove_discovered_devices": {
           "name": "Entdeckte Geraete entfernen",
           "description": "Entfernt auch als entdeckt markierte, nicht gekoppelte Altgeraete"
+        },
+        "gateway": {
+          "name": "Gateway",
+          "description": "Nur bei mehreren CULs nötig – welches Gateway gemeint ist"
         }
       }
     },
@@ -778,12 +822,22 @@
         "areas": {
           "name": "Bereiche",
           "description": "Nur Thermostate in diesen Bereichen (leer = alle)"
+        },
+        "gateway": {
+          "name": "Gateway",
+          "description": "Nur bei mehreren CULs nötig – welches Gateway gemeint ist"
         }
       }
     },
     "end_vacation": {
       "name": "Urlaubsmodus beenden",
-      "description": "Beendet den Urlaub vorzeitig: Thermostate gehen sofort zurück in ihr Wochenprogramm bzw. in ihren vorherigen manuellen Zustand."
+      "description": "Beendet den Urlaub vorzeitig: Thermostate gehen sofort zurück in ihr Wochenprogramm bzw. in ihren vorherigen manuellen Zustand.",
+      "fields": {
+        "gateway": {
+          "name": "Gateway",
+          "description": "Nur bei mehreren CULs nötig – welches Gateway gemeint ist"
+        }
+      }
     }
   },
   "issues": {
@@ -850,6 +904,9 @@
       },
       "week_profile_validation": {
         "name": "Wochenprofil-Prüfung"
+      },
+      "valve_position": {
+        "name": "Ventilöffnung"
       }
     },
     "number": {
@@ -878,6 +935,9 @@
       },
       "discard_draft": {
         "name": "Entwurf verwerfen"
+      },
+      "start_pairing": {
+        "name": "Anlernen starten"
       }
     },
     "image": {

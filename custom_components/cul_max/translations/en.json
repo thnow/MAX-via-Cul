@@ -3,16 +3,34 @@
     "step": {
       "user": {
         "title": "Set up MAX! via CUL",
-        "description": "Connect to a CULFW device (MAX! Cube with CULFW firmware, CUNO, etc.) via TCP.",
+        "description": "How is the CUL connected?",
+        "menu_options": {
+          "network": "Network (MAX! Cube with a-culfw, CUNO, ser2net …)",
+          "serial": "USB stick / serial (e.g. CUL, nanoCUL)"
+        }
+      },
+      "network": {
+        "title": "Set up MAX! via CUL",
+        "description": "Connect to a CULFW device via TCP.",
         "data": {
           "host": "IP address or host name of the CULFW device",
           "port": "TCP port (default: 2323)",
           "own_address": "Own CUL address (6 hex digits, default: 123456)"
         }
+      },
+      "serial": {
+        "title": "Set up MAX! via CUL",
+        "description": "CUL stick on a USB port. Prefer the stable name below /dev/serial/by-id/.",
+        "data": {
+          "device": "Serial device",
+          "baudrate": "Baud rate (CUL: 38400)",
+          "own_address": "Own CUL address (6 hex digits, default: 123456)"
+        }
       }
     },
     "error": {
-      "cannot_connect": "Connection failed. Check IP address, port and whether the device is reachable."
+      "cannot_connect": "Connection failed. Check IP address, port and whether the device is reachable.",
+      "cannot_connect_serial": "No CULFW found on this port. Check the device, baud rate and that the port is not in use."
     },
     "abort": {
       "already_configured": "This device is already configured."
@@ -82,6 +100,9 @@
       },
       "week_profile_validation": {
         "name": "Week profile validation"
+      },
+      "valve_position": {
+        "name": "Valve opening"
       }
     },
     "number": {
@@ -110,6 +131,9 @@
       },
       "discard_draft": {
         "name": "Discard draft"
+      },
+      "start_pairing": {
+        "name": "Start pairing"
       }
     },
     "image": {

@@ -57,9 +57,11 @@ protocol locally.
 ## Requirements
 
 - Home Assistant 2026.11 or newer
-- A CUL or CUNO flashed with CULFW
-- TCP access to the CUL/CUNO, commonly port `2323`
+- A CUL or CUNO flashed with CULFW (also a MAX! Cube flashed with a-culfw)
+- Connected via TCP (commonly port `2323`) or as a USB stick (e.g. CUL,
+  nanoCUL; typically 38400 baud)
 - CULFW support for MAX!/MORITZ mode
+- Several CULs are supported, each as its own integration entry
 
 Before installing the integration, make sure Home Assistant can reach the
 CUL/CUNO host and port from inside your Home Assistant environment.
@@ -278,6 +280,13 @@ Repository layout:
 ## Changelog
 
 ### 0.5.1
+
+- USB/serial CUL sticks: choose "USB stick / serial" when adding the
+  integration (#1).
+- Several CULs: every service is routed to the gateway that owns the device;
+  `start_pairing` and the other installation-wide services accept a
+  `gateway`, and each CUL device has a "Start pairing" button (#3).
+- New sensor "Valve opening" (%) for every radiator thermostat (#3).
 
 - Week profile card: rooms whose program was set elsewhere (e.g. with the old
   Cube) can be edited now. MAX! devices cannot report their program, so such
