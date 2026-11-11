@@ -755,5 +755,11 @@
         }
       }
     }
+  },
+  "issues": {
+    "paired_elsewhere": {
+      "title": "{name} ist noch an einer anderen Zentrale angemeldet",
+      "description": "Das Gerät {name} ({address}) meldet sich bei der Adresse {central} statt bei dieser Zentrale ({own_address}). Meist ist das ein alter MAX! Cube, an dem das Gerät noch angemeldet ist.\n\nSolange das so bleibt, nimmt das Gerät keine Konfiguration von Home Assistant an und wiederholt jede Meldung, weil die alte Zentrale nicht antwortet (mehr Funkverkehr, kürzere Batterielaufzeit). Verknüpfte Thermostate reagieren meist trotzdem.\n\nAbhilfe: das Gerät auf Werkseinstellungen zurücksetzen und mit `cul_max.start_pairing` neu anlernen. Name und gespeicherte Daten bleiben in Home Assistant erhalten. Der Hinweis verschwindet automatisch, sobald sich das Gerät bei dieser Zentrale meldet."
+    }
   }
 }

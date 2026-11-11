@@ -261,9 +261,14 @@ Repository layout:
   card (one timeline when profiles match, per-thermostat timelines for
   differing days, edits go to all); notice when the weekly program is not
   active.
-- `remove_link_partner` accepts `partner_type` to remove a stale link to a
-  device the integration does not know (e.g. a window contact still reporting
-  to a replaced thermostat).
+- `remove_link_partner` accepts `partner_type` to remove a link to a device
+  the integration does not know.
+- Detects devices still paired with another controller (e.g. an old MAX!
+  Cube): repair issue, pairing state `paired_elsewhere`, notice in the week
+  profile card. Such devices need a factory reset before pairing.
+- Re-pairing a known device keeps its links, group, schedule and stored
+  configuration (previously the record was replaced).
+- Translations (de/en) for repair issues and the config flow.
 
 ### 0.3.0
 

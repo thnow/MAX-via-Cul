@@ -1,0 +1,27 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up MAX! via CUL",
+        "description": "Connect to a CULFW device (MAX! Cube with CULFW firmware, CUNO, etc.) via TCP.",
+        "data": {
+          "host": "IP address or host name of the CULFW device",
+          "port": "TCP port (default: 2323)",
+          "own_address": "Own CUL address (6 hex digits, default: 123456)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Connection failed. Check IP address, port and whether the device is reachable."
+    },
+    "abort": {
+      "already_configured": "This device is already configured."
+    }
+  },
+  "issues": {
+    "paired_elsewhere": {
+      "title": "{name} is still paired with another controller",
+      "description": "The device {name} ({address}) reports to address {central} instead of this controller ({own_address}). Usually this is an old MAX! Cube the device is still paired with.\n\nAs long as this persists, the device ignores configuration from Home Assistant and repeats every message because the old controller does not answer (more radio traffic, shorter battery life). Linked thermostats usually still react.\n\nFix: factory reset the device and pair it again with `cul_max.start_pairing`. Its name and stored data are kept in Home Assistant. This notice disappears automatically once the device reports to this controller."
+    }
+  }
+}

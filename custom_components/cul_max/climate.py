@@ -256,6 +256,7 @@ class CulMaxClimate(ClimateEntity):
             "firmware_version": self._device.firmware_version or None,
             "is_paired": self._coordinator.is_device_paired(self._address),
             "pairing_state": self._coordinator.get_pairing_state(self._address),
+            "paired_elsewhere_central": self._device.foreign_central or None,
             "device_label": (
                 f"{self._device.serial_number} / {self._address}"
                 if self._device.serial_number

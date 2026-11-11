@@ -281,6 +281,15 @@ class CulMaxWeekProfileCard extends HTMLElement {
         )}`,
       });
     }
+    if (attrs.pairing_state === "paired_elsewhere") {
+      items.push({
+        level: "error",
+        icon: "mdi:link-off",
+        text: `${who}Noch an einer anderen Zentrale angemeldet (${esc(
+          attrs.paired_elsewhere_central || "?"
+        )}) – Gerät zurücksetzen und neu anlernen`,
+      });
+    }
     const scheduleOff = attrs.week_profile_source !== undefined || attrs.week_profile_monday !== undefined;
     if (scheduleOff && mode && mode !== "auto") {
       const label = stateObj.state === "off" ? "Aus" : MODE_LABELS[mode] || mode;
