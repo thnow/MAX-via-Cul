@@ -26,7 +26,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up diagnostic sensor entities for all known devices."""
     coordinator: CulMaxCoordinator = entry.runtime_data
-    entities: list[SensorEntity] = []
+    entities: list[SensorEntity] = [CulMaxSendBudgetSensor(coordinator)]
     known_ids: set[str] = set()
 
     for device in coordinator.get_all_devices():
@@ -49,6 +49,63 @@ async def async_setup_entry(
 
     entry.async_on_unload(coordinator.add_global_listener(on_new_device))
     async_add_entities(entities)
+
+
+class CulMaxSendBudgetSensor(SensorEntity):
+    """Remaining CUL send credit (culfw credit_10ms) and the active send profile."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Send Budget"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:radio-tower"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "credit_10ms"
+
+    def __init__(self, coordinator: CulMaxCoordinator) -> None:
+        self._coordinator = coordinator
+        self._attr_unique_id = (
+            f"{DOMAIN}_send_budget_{coordinator.host.replace('.', '_')}_{coordinator.port}"
+        )
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"controller_{coordinator.host}:{coordinator.port}")},
+            name=f"MAX! CUL ({coordinator.host}:{coordinator.port})",
+            manufacturer="eQ-3 / CULFW",
+            model="MAX! via CUL",
+        )
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(self._coordinator.add_cul_status_listener(self._on_update))
+        self.async_on_remove(
+            async_track_time_interval(self.hass, self._on_timer, timedelta(seconds=60))
+        )
+
+    @callback
+    def _on_update(self) -> None:
+        self.async_write_ha_state()
+
+    @callback
+    def _on_timer(self, now) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> int | None:
+        status = self._coordinator.get_cul_credit_status()
+        return status["credit_10ms"] if status["credit_known"] else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        status = self._coordinator.get_cul_credit_status()
+        profile = self._coordinator.send_profile
+        return {
+            "credit_max": status["credit_max"],
+            "budget_seconds": round(status["credit_max"] / 100, 1),
+            "recovery_per_second": status["recovery_per_second"],
+            "recovery_measured": status["recovery_measured"],
+            "send_profile": profile.name,
+            "set_temperature_ack_timeout": profile.set_temperature_timeout,
+            "set_temperature_retries": profile.set_temperature_retries,
+            "queued_commands": status["queued_commands"],
+        }
 
 
 class CulMaxLastSeenSensor(SensorEntity):

@@ -64,7 +64,7 @@ Its main components are:
 
 You need a CUL/CUNO running CULFW with MAX!/MORITZ support, TCP access
 (typically port `2323`) and the `cul_max` custom integration installed in
-Home Assistant.
+Home Assistant 2026.11 or newer.
 
 The configuration flow asks for the CUL host name or IP address, TCP port and
 the integration's own MAX! radio address. The default address is `123456`.
@@ -576,6 +576,33 @@ known topology rather than performing an exact replacement of all state.
   to the central and the devices do not repeat them.
 - Other programs connected to the same CUL at the same time (for example FHEM
   or ioBroker) share this budget.
+
+### Increased send budget (modified firmware)
+
+> **Legal notice:** MAX! transmits on 868.3 MHz in an SRD band where a device
+> may transmit at most 1 % of the time (EU rules for short range devices,
+> ETSI EN 300 220; in Germany the general assignment by the Bundesnetzagentur).
+> A CULFW that allows more airtime does not respect this limit. Operating it is
+> **not legal** and can disturb other radio users. The integration does not
+> modify firmware, unlocks nothing and never sends more than the firmware
+> itself permits.
+
+The integration adapts to the budget reported by the CUL:
+
+| Profile | Active when | Behaviour |
+|---|---|---|
+| `standard` | up to 1350 `credit_10ms` and recovery up to 1.5/s (stock a-culfw: 900, 1/s) | SetTemperature: 5 s ACK timeout, 4 retries; reserve for 1 interactive packet |
+| `extended` | clearly larger budget or faster recovery | SetTemperature: 3 s ACK timeout, 6 retries; configuration and weekly schedule 2 more retries each; pending configuration retried after 10 s instead of 30 s (max. 120 s instead of 300 s); faster startup time sync; reserve for one interactive command including all retries |
+
+The budget is queried with `X` on connect, when needed and every 5 minutes
+(this does not use the radio). From consecutive values the integration
+measures how fast the CUL regains budget. The diagnostic sensor `Send Budget`
+on the `MAX! CUL` device shows the current credit and, as attributes, the
+maximum, recovery rate, active profile and queue length.
+
+The extended profile mainly speeds up recovery from lost packets. Each packet
+to a sleeping thermostat still needs its 1 s wake-up preamble, so weekly
+schedules are not transferred much faster.
 
 MAX! radio messages can be missed or acknowledged late. Initial setup,
 pairing and bulk configuration may therefore take longer than expected.

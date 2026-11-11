@@ -71,7 +71,7 @@ Aktuell ausgelegt fuer:
 
 - ein mit CULFW geflashter CUL/CUNO
 - aktivierter TCP-Zugriff auf den CUL, typischerweise Port `2323`
-- Home Assistant mit installiertem Custom Component `cul_max`
+- Home Assistant 2026.11 oder neuer mit installiertem Custom Component `cul_max`
 
 ### Konfiguration
 
@@ -798,6 +798,35 @@ Fuer einen stabilen Betrieb sind ein paar Punkte wichtig:
   nicht mehrfach.
 - Andere Programme, die gleichzeitig mit demselben CUL verbunden sind (etwa
   FHEM oder ioBroker), teilen sich dieses Budget.
+
+### Erhoehtes Sendebudget (veraenderte Firmware)
+
+> **Rechtlicher Hinweis:** MAX! funkt auf 868,3 MHz in einem SRD-Band, in dem
+> ein Geraet hoechstens 1 % der Zeit senden darf (EU-Regeln fuer
+> Funkanwendungen mit geringer Reichweite, ETSI EN 300 220; in Deutschland die
+> Allgemeinzuteilung der Bundesnetzagentur). Eine CULFW, die mehr Sendezeit
+> erlaubt, haelt diese Grenze nicht ein. Ihr Betrieb ist **nicht zulaessig** und
+> kann andere Funkteilnehmer stoeren. Die Integration veraendert keine Firmware,
+> schaltet nichts frei und sendet nie mehr, als die Firmware selbst zulaesst.
+
+Die Integration stellt ihr Verhalten selbst auf das Budget ein, das der CUL
+meldet:
+
+| Profil | aktiv bei | Verhalten |
+|---|---|---|
+| `standard` | bis 1350 `credit_10ms` und Erholung bis 1,5/s (normale a-culfw: 900, 1/s) | SetTemperature: 5 s ACK-Timeout, 4 Wiederholungen; Reserve fuer 1 interaktives Paket |
+| `extended` | deutlich groesseres Budget oder schnellere Erholung | SetTemperature: 3 s ACK-Timeout, 6 Wiederholungen; Konfiguration und Wochenprofil je 2 Wiederholungen mehr; ausstehende Konfiguration wird nach 10 s statt 30 s erneut versucht (max. 120 s statt 300 s); Zeitsync beim Start schneller; Reserve fuer einen interaktiven Befehl inklusive aller Wiederholungen |
+
+Das Budget wird beim Verbinden, bei Bedarf und alle 5 Minuten per `X`
+abgefragt (das benutzt keinen Funk). Aus aufeinanderfolgenden Werten misst die
+Integration, wie schnell der CUL Budget zurueckgewinnt. Der Diagnose-Sensor
+`Send Budget` am Geraet `MAX! CUL` zeigt den aktuellen Kredit sowie als
+Attribute Maximum, Erholungsrate, aktives Profil und Warteschlangenlaenge.
+
+Das erweiterte Profil beschleunigt vor allem die Fehlerbehandlung bei
+verlorenen Paketen. Die 1-s-Weckpraeambel pro Paket an ein schlafendes
+Thermostat bleibt, deshalb wird ein Wochenprofil dadurch nicht wesentlich
+schneller uebertragen.
 
 ## Tests
 
