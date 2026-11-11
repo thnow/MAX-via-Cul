@@ -171,7 +171,11 @@ EXTERNAL_TEMP_MIN_CHANGE = 0.2
 VACATION_DEFAULT_TEMPERATURE = 16.0
 VACATION_SEND_ROUNDS = 4
 VACATION_RETRY_DELAY = 120.0
-EXTERNAL_TEMP_SENSOR_MAX_AGE = timedelta(minutes=30)
+# Many sensors (e.g. ZHA/Zigbee thermometers) only report on change, so a
+# steady room can stay silent for hours. Rely on the sensor's integration to
+# mark it unavailable (ZHA: 6 h for battery devices) and only treat values
+# older than this as stale.
+EXTERNAL_TEMP_SENSOR_MAX_AGE = timedelta(hours=8)
 EXTERNAL_TEMP_RETRY_DELAY = 60.0
 EXTERNAL_TEMP_HEARTBEAT = {"standard": 20 * 60.0, "extended": 8 * 60.0}
 EXTERNAL_TEMP_MIN_INTERVAL = {"standard": 5 * 60.0, "extended": 90.0}

@@ -364,8 +364,11 @@ So funktioniert es:
   laut Profil, ausser er wurde seit dem letzten Schaltpunkt geaendert (in Home
   Assistant oder am Drehrad). Bei offenem Fenster wird nie die
   Fenster-offen-Temperatur als Sollwert gesendet.
-- Ist der Sensor nicht verfuegbar oder aelter als 30 Minuten, wird nichts
-  gesendet; das Thermostat regelt dann wieder nach seinem eigenen Fuehler.
+- Ist der Sensor nicht verfuegbar oder sein Wert aelter als 8 Stunden, wird
+  nichts gesendet; das Thermostat regelt dann wieder nach seinem eigenen
+  Fuehler. (Viele Sensoren, z. B. Zigbee-Thermometer, melden sich nur bei
+  Aenderungen – bei gleichbleibender Raumtemperatur bleibt der letzte Wert
+  gueltig.)
 - Die Climate-Entitaet zeigt `external_temperature_sensor`,
   `external_temperature`, `external_temperature_status` (`active`, `waiting`,
   `unconfirmed`, `sensor_stale`, ...) und den Zeitpunkt der letzten Bestaetigung.
