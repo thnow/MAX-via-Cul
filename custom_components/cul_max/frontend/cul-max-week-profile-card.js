@@ -884,17 +884,26 @@ class CulMaxWeekProfileCard extends HTMLElement {
     );
     editor.querySelector(".ed-add")?.addEventListener("click", () => {
       this._readEditorInputs();
-      // split the longest segment in the middle (rounded to 5 minutes)
-      let longest = 0;
-      ed.segments.forEach((seg, idx) => {
-        const a = ed.segments[longest];
-        if (seg.until - seg.from > a.until - a.from) longest = idx;
-      });
-      const seg = ed.segments[longest];
-      const mid = Math.round((seg.from + seg.until) / 2 / 5) * 5;
-      if (mid <= seg.from || mid >= seg.until) return;
-      ed.segments.splice(longest + 1, 0, { from: mid, until: seg.until, temp: seg.temp });
-      seg.until = mid;
+      // Append: split the last segment (… – 24:00) so every time the user
+      // already entered stays as it is. Only if that segment is too short,
+      // fall back to the longest one.
+      const splitAt = (idx) => {
+        const seg = ed.segments[idx];
+        const mid = Math.round((seg.from + seg.until) / 2 / 5) * 5;
+        if (mid <= seg.from || mid >= seg.until) return false;
+        ed.segments.splice(idx + 1, 0, { from: mid, until: seg.until, temp: seg.temp });
+        seg.until = mid;
+        return true;
+      };
+      let target = ed.segments.length - 1;
+      if (ed.segments[target].until - ed.segments[target].from < 10) {
+        target = 0;
+        ed.segments.forEach((seg, idx) => {
+          const a = ed.segments[target];
+          if (seg.until - seg.from > a.until - a.from) target = idx;
+        });
+      }
+      if (!splitAt(target)) return;
       this._render();
     });
     editor.querySelectorAll("[data-copy]").forEach((box) =>
