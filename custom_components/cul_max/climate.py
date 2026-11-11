@@ -296,13 +296,20 @@ class CulMaxClimate(ClimateEntity):
         attrs.update(self._coordinator.get_pending_queue_details(self._address))
         attrs.update(self._coordinator.get_external_temperature_status(self._address))
         if effective_week_profile:
-            attrs["week_profile_lines"] = format_week_profile_lines(effective_week_profile)
+            known = self._coordinator.get_week_profile_known_days(self._address)
+            lines = format_week_profile_lines(effective_week_profile)
+            attrs["week_profile_lines"] = [line for idx, line in enumerate(lines) if idx in known]
             attrs.update(
                 {
                     f"week_profile_{day}": value
-                    for day, value in format_week_profile_by_day(effective_week_profile).items()
+                    for idx, (day, value) in enumerate(format_week_profile_by_day(effective_week_profile).items())
+                    if idx in known  # dict order: saturday (0) … friday (6)
                 }
             )
+            if len(known) < 7:
+                attrs["week_profile_unknown_days"] = [
+                    day for idx, day in enumerate(format_week_profile_by_day(effective_week_profile)) if idx not in known
+                ]
             if effective_week_profile != self._device.week_profile:
                 attrs["week_profile_source"] = "linked_partner"
         if self._state and hasattr(self._state, 'valve_position'):

@@ -95,6 +95,7 @@ from .protocol import (
     format_week_profile_by_day,
     format_week_profile_lines,
     get_expected_week_profile_temperature,
+    local_datetime_to_max_day,
     get_week_profile_segment_start,
     normalize_week_profile_hex,
     parse_time_information_payload,
@@ -262,6 +263,11 @@ class KnownDevice:
     # thermostat; empty = thermostat regulates on its own sensor.
     external_sensor: str = ""
     last_target_change_at: str = ""
+    # MAX! days (0=Sat … 6=Fri) of week_profile that were really written to
+    # the device. Empty = all seven (profiles from before this field or
+    # complete uploads). Devices cannot report their program, so days that
+    # were programmed elsewhere (old Cube) stay unknown.
+    week_profile_days: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -848,7 +854,10 @@ class CulMaxCoordinator:
         profile_hex = self.get_effective_week_profile(address)
         if not profile_hex:
             return None
-        return get_expected_week_profile_temperature(profile_hex, dt_util.now())
+        now = dt_util.now()
+        if local_datetime_to_max_day(now) not in self.get_week_profile_known_days(address):
+            return None  # today's program was never written from here
+        return get_expected_week_profile_temperature(profile_hex, now)
 
     def get_open_window_partner_addresses(self, address: str) -> list[str]:
         """Return linked shutter contacts that currently report open."""
@@ -971,13 +980,18 @@ class CulMaxCoordinator:
         a stored profile so UI and diagnostics still reflect the active room
         schedule.
         """
+        source = self._effective_week_profile_source(address)
+        return source.week_profile if source is not None else ""
+
+    def _effective_week_profile_source(self, address: str) -> KnownDevice | None:
+        """The device whose stored profile is shown for ``address``."""
         device = self.get_device(address)
         if device is None:
-            return ""
+            return None
         if device.week_profile:
-            return device.week_profile
+            return device
         if device.device_type != DEVICE_WALL_THERMOSTAT:
-            return ""
+            return None
         for partner_address in device.linked_partners:
             partner = self.get_device(partner_address)
             if (
@@ -985,15 +999,22 @@ class CulMaxCoordinator:
                 and partner.device_type in (DEVICE_HEATING_THERMOSTAT, DEVICE_HEATING_THERMOSTAT_PLUS)
                 and partner.week_profile
             ):
-                return partner.week_profile
+                return partner
         for partner in self._devices.values():
             if (
                 partner.device_type in (DEVICE_HEATING_THERMOSTAT, DEVICE_HEATING_THERMOSTAT_PLUS)
                 and address.upper() in partner.linked_partners
                 and partner.week_profile
             ):
-                return partner.week_profile
-        return ""
+                return partner
+        return None
+
+    def get_week_profile_known_days(self, address: str) -> set[int]:
+        """MAX! days (0=Sat … 6=Fri) of the effective profile that are known."""
+        source = self._effective_week_profile_source(address)
+        if source is None or not source.week_profile:
+            return set()
+        return set(source.week_profile_days) if source.week_profile_days else set(range(7))
 
     def get_local_week_profile(self, address: str) -> str:
         """Return the device's own stored week profile without peer fallback.
@@ -1784,7 +1805,7 @@ class CulMaxCoordinator:
         if mode == MODE_AUTO:
             now = dt_util.now()
             profile = self.get_effective_week_profile(device.address)
-            expected = get_expected_week_profile_temperature(profile, now) if profile else None
+            expected = self.get_expected_week_profile_temperature(device.address)
             if window_open:
                 return remembered if remembered is not None else expected
             if expected is None:
@@ -4609,7 +4630,13 @@ class CulMaxCoordinator:
         self._require_paired_for_write(address)
 
         updates = parse_week_profile_text(profile_text)
-        merged_profile = encode_week_profile(updates, self.get_local_week_profile(address))
+        base_profile = self.get_local_week_profile(address)
+        merged_profile = encode_week_profile(updates, base_profile)
+        if base_profile:
+            known_days = set(device.week_profile_days) if device.week_profile_days else set(range(7))
+        else:
+            known_days = set()  # the device's other days were programmed elsewhere
+        known_days |= set(updates)
         pending_commands: list[PendingClimateCommand] = []
         for day in sorted(updates):
             for part, chunk_hex in split_week_profile_for_send(merged_profile, day):
@@ -4642,6 +4669,7 @@ class CulMaxCoordinator:
             _LOGGER.info("Week profile for %s uploaded successfully", self._format_device_identity(address))
 
         device.week_profile = merged_profile
+        device.week_profile_days = [] if len(known_days) == 7 else sorted(known_days)
         await self._save_devices()
         self._notify_week_profile_updated(address)
         await self._sync_pending_config_reading(address)
@@ -5971,6 +5999,9 @@ class CulMaxCoordinator:
                 last_central_contact_at=str(d.get("last_central_contact_at", "") or ""),
                 external_sensor=str(d.get("external_sensor", "") or ""),
                 last_target_change_at=str(d.get("last_target_change_at", "") or ""),
+                week_profile_days=[
+                    int(x) for x in (d.get("week_profile_days") or []) if str(x).isdigit() and 0 <= int(x) <= 6
+                ],
             )
         for addr, commands in data.get("pending_shutter_config", {}).items():
             normalized = addr.upper()
@@ -6069,6 +6100,7 @@ class CulMaxCoordinator:
                     "last_central_contact_at": d.last_central_contact_at,
                     "external_sensor": d.external_sensor,
                     "last_target_change_at": d.last_target_change_at,
+                    "week_profile_days": d.week_profile_days,
                 }
                 for addr, d in self._devices.items()
             },

@@ -733,6 +733,12 @@ Wichtiger Praxis-Hinweis fuer Raeume mit Wandthermostat:
 
 ### Lovelace-Karte fuer Wochenprofile
 
+MAX!-Geraete koennen ihr Wochenprogramm nicht melden. Wurde ein Programm
+ausserhalb von Home Assistant eingestellt (z. B. mit dem alten Cube), zeigt die
+Karte die Tage als „unbekannt“. Ein Tipp auf den Tag oeffnet trotzdem den
+Editor (Startwert: Absenk-/Komforttemperatur), mit „Auch uebernehmen fuer“
+lassen sich gleich mehrere Tage setzen.
+
 Zusaetzlich zur Bearbeitung ueber die `text`-Entitaeten liegt eine kleine
 Custom-Lovelace-Karte fuer Wochenprofile bei.
 

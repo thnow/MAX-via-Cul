@@ -246,6 +246,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
     for (let offset = 0; offset < 7; offset += 1) {
       const [key, , longLabel] = DAYS[(todayIndex + offset) % 7];
       const segments = this._daySegments(attrs, key);
+      if (!segments.length) return null; // unknown day: no reliable prediction
       for (const seg of segments) {
         if (seg.from === 0) continue;
         if (offset === 0 && seg.from <= minutes) continue;
@@ -380,7 +381,10 @@ class CulMaxWeekProfileCard extends HTMLElement {
     const allAttrs = stateObjs.map((st) => st.attributes || {});
     const hasProfile = allAttrs.every((a) => DAYS.some(([key]) => a[`week_profile_${key}`]));
     const fromPartner = allAttrs.some((a) => a.week_profile_source === "linked_partner");
-    const editable = this._config.editable !== false && hasProfile && !fromPartner;
+    // Unknown days (program written elsewhere, e.g. by the old Cube – MAX!
+    // devices cannot report it) can be set here as well.
+    const editable = this._config.editable !== false && !fromPartner;
+    const unknownDays = DAYS.filter(([key]) => allAttrs.some((a) => !a[`week_profile_${key}`]));
     this._editableTargets = ids;
 
     const chipsFor = (st) => {
@@ -421,6 +425,19 @@ class CulMaxWeekProfileCard extends HTMLElement {
 
     const next = hasProfile ? this._nextSwitch(attrs, now) : null;
     const statusItems = stateObjs.flatMap((st, idx) => this._statusItems(st, multi ? shortNames[idx] : ""));
+    if (unknownDays.length) {
+      const which =
+        unknownDays.length === DAYS.length
+          ? "Wochenprogramm unbekannt"
+          : `Programm unbekannt für ${unknownDays.map(([, short]) => short).join(", ")}`;
+      statusItems.push({
+        level: "info",
+        icon: "mdi:help-circle-outline",
+        text: `${which} – MAX!-Geräte können ihr Programm nicht melden (z. B. wenn es mit dem Cube eingestellt wurde). ${
+          editable ? "Tag antippen, um ihn hier festzulegen; mit „Auch übernehmen für“ gleich für mehrere Tage." : ""
+        }`,
+      });
+    }
     if (multi && differingDays.length) {
       statusItems.push({
         level: "info",
@@ -451,7 +468,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
                 </div>`;
             })
             .join("")
-        : `<div class="empty">kein Profil</div>`;
+        : `<div class="empty">unbekannt</div>`;
       const marker = isToday ? `<div class="now" style="left:${(nowMinutes / 1440) * 100}%"></div>` : "";
       // switching times below the bar; labels that would overlap the previous
       // one on the same line move to a second line
@@ -717,12 +734,23 @@ class CulMaxWeekProfileCard extends HTMLElement {
     const segments = parseDay(attrs[`week_profile_${dayKey}`]).map((s) => ({ ...s }));
     this._editing = {
       day: dayKey,
-      segments: segments.length ? segments : [{ from: 0, until: 1440, temp: 20 }],
+      segments: segments.length ? segments : this._defaultDay(attrs),
       copyTo: new Set(),
       busy: false,
       error: null,
     };
     this._render();
+  }
+
+  /** Starting point for a day whose program is unknown: eco – comfort 06–22 – eco. */
+  _defaultDay(attrs) {
+    const eco = Number(attrs.eco_temperature) || 17;
+    const comfort = Number(attrs.comfort_temperature) || 21;
+    return [
+      { from: 0, until: 360, temp: eco },
+      { from: 360, until: 1320, temp: comfort },
+      { from: 1320, until: 1440, temp: eco },
+    ];
   }
 
   _closeEditor() {
