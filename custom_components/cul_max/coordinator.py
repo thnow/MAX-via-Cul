@@ -38,6 +38,7 @@ from .const import (
     MODE_BOOST,
     MSG_PAIR_PING,
     MSG_ACK,
+    MSG_SET_TEMPERATURE,
     MSG_TIME_INFORMATION,
     PAIRING_DURATION,
     STORAGE_KEY,
@@ -60,7 +61,13 @@ from .protocol import (
     build_set_temperature,
     build_shutter_contact_state,
     build_wake_up,
+    decode_ack_state,
+    decode_set_temperature,
     decode_wall_thermostat_control,
+    is_ack_nack,
+    parse_credit_report,
+    thermostat_state_from_dict,
+    WALL_CONTROL_STATE_FIELDS,
     decode_shutter_contact_state,
     decode_thermostat_state,
     encode_week_profile,
@@ -91,10 +98,27 @@ WEEK_PROFILE_ACK_RETRIES = 5
 WEEK_PROFILE_PART_DELAY = 0.35
 WEEK_PROFILE_DAY_DELAY = 0.75
 RECONNECT_WAIT_TIMEOUT = 12.0
-CUL_CREDIT_MAX = 180.0
+# a-culfw keeps a 1% duty-cycle budget in credit_10ms (rf_send.h: MAX_CREDIT
+# 900, +1 per second in clock.c). A "Zs" send with its 1 s wake-up preamble
+# costs 100 + bits/10. Packets sent without enough credit are dropped with
+# "LOVF". The real value is queried with "X"; the estimate only bridges the
+# time between queries. Custom firmware may allow more, so the cap is learned
+# from the reported values.
+CUL_CREDIT_DEFAULT_MAX = 900.0
 CUL_CREDIT_RECOVERY_PER_SECOND = 1.0
 CUL_CREDIT_PREAMBLE_COST = 100.0
-CUL_CREDIT_FALLBACK_WAIT = 5.0
+CUL_CREDIT_QUERY_TIMEOUT = 2.0
+CUL_CREDIT_QUERY_MIN_INTERVAL = 3.0
+CUL_CREDIT_MAX_WAIT_SLICE = 5.0
+CUL_CREDIT_UNKNOWN_WAIT = 5.0
+# Background and bulk traffic leaves this much credit untouched so that an
+# interactive SetTemperature can always be sent immediately.
+CUL_CREDIT_INTERACTIVE_RESERVE = 115.0
+CUL_LOVF_MAX_RESENDS = 3
+COMMAND_PRIORITY_HIGH = 0     # interactive: SetTemperature
+COMMAND_PRIORITY_NORMAL = 1   # user-initiated config writes
+COMMAND_PRIORITY_LOW = 2      # background: time sync, retries
+STORAGE_SAVE_DELAY = 10.0
 PERIODIC_TIME_SYNC_INTERVAL = 3600.0
 PERIODIC_TIME_SYNC_MIN_AGE = timedelta(minutes=55)
 STARTUP_TIME_SYNC_INITIAL_DELAY = 90.0
@@ -103,8 +127,8 @@ PENDING_QUEUE_MAINTENANCE_INTERVAL = 60.0
 PENDING_QUEUE_RETRY_BASE_DELAY = 30.0
 PENDING_QUEUE_RETRY_MAX_DELAY = 300.0
 AUTO_MODE_TIME_SYNC_FOLLOWUP_DELAY = 12.0
-TIME_INFORMATION_BURST_COUNT = 3
-TIME_INFORMATION_BURST_DELAY = 0.75
+TIME_INFORMATION_ACK_TIMEOUT = 3.0
+TIME_INFORMATION_ACK_RETRIES = 2
 
 
 def _sanitize_serial_number(raw: str) -> str:
@@ -190,6 +214,15 @@ class CommandRequest:
     retries: int
     timeout: float
     future: asyncio.Future[MaxMessage | None]
+    priority: int = COMMAND_PRIORITY_NORMAL
+
+
+class CulCreditError(ConnectionError):
+    """The CUL rejected a send because its duty-cycle credit ran out (LOVF)."""
+
+
+class DeviceNackError(ConnectionError):
+    """The device answered with 'invalid command/argument' (NACK)."""
 
 
 @dataclass
@@ -357,7 +390,12 @@ class CulMaxCoordinator:
         self._startup_time_sync_task: asyncio.Task | None = None
         self._pending_queue_task: asyncio.Task | None = None
         self._auto_mode_time_sync_tasks: dict[str, asyncio.Task] = {}
-        self._command_queue: asyncio.Queue[CommandRequest] = asyncio.Queue()
+        self._command_queue: asyncio.PriorityQueue[tuple[int, int, CommandRequest]] = (
+            asyncio.PriorityQueue()
+        )
+        self._command_seq: int = 0
+        self._queued_priority_counts: dict[int, int] = {}
+        self._command_enqueued = asyncio.Event()
         self._command_worker_task: asyncio.Task | None = None
         self._send_lock = asyncio.Lock()
         self._cul_credit_lock = asyncio.Lock()
@@ -367,8 +405,13 @@ class CulMaxCoordinator:
         self._pending_climate_config: dict[str, list[PendingClimateCommand]] = {}
         self._pending_climate_tasks: dict[str, asyncio.Task] = {}
         self._config_drafts: dict[str, dict[str, Any]] = {}
-        self._cul_credit_estimate: float = CUL_CREDIT_MAX
+        self._cul_credit_estimate: float = CUL_CREDIT_DEFAULT_MAX / 2
         self._cul_credit_updated_at: float = 0.0
+        self._cul_credit_max: float = CUL_CREDIT_DEFAULT_MAX
+        self._cul_credit_known: bool = False
+        self._cul_credit_queried_at: float = 0.0
+        self._cul_credit_future: asyncio.Future[int] | None = None
+        self._last_tx_at: float = 0.0
 
         self._devices: dict[str, KnownDevice] = {}
         self._store: Store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
@@ -954,7 +997,7 @@ class CulMaxCoordinator:
                 pass
         self._pending_climate_tasks.clear()
         while not self._command_queue.empty():
-            request = self._command_queue.get_nowait()
+            _prio, _seq, request = self._command_queue.get_nowait()
             if not request.future.done():
                 request.future.cancel()
             self._command_queue.task_done()
@@ -965,6 +1008,7 @@ class CulMaxCoordinator:
             except asyncio.CancelledError:
                 pass
         await self._close_connection()
+        await self._save_devices_now()
         _LOGGER.info("CUL TCP connection to %s:%d closed", self.host, self.port)
 
     # ------------------------------------------------------------------
@@ -980,8 +1024,11 @@ class CulMaxCoordinator:
                 timeout=10.0,
             )
             self._reconnect_delay = RECONNECT_DELAY_MIN
-            self._cul_credit_estimate = CUL_CREDIT_MAX
+            # Unknown until the first "X" answer; a-culfw boots with MAX/2.
+            self._cul_credit_estimate = self._cul_credit_max / 2
             self._cul_credit_updated_at = self.hass.loop.time()
+            self._cul_credit_known = False
+            self._cul_credit_queried_at = 0.0
             _LOGGER.info("Connected to CULFW at %s:%d", self.host, self.port)
         except (OSError, asyncio.TimeoutError) as e:
             _LOGGER.error("Cannot connect to CULFW at %s:%d — %s", self.host, self.port, e)
@@ -994,12 +1041,22 @@ class CulMaxCoordinator:
             _LOGGER.info("CUL TX: %s", CULFW_CMD_MORITZ_RX.strip())
             await self._send_raw(CULFW_CMD_MORITZ_RX)
             await asyncio.sleep(0.1)
+            # Let culfw ACK ShutterContactState / SetTemperature / PushButton
+            # telegrams addressed to us right in firmware (20 ms, no preamble),
+            # like FHEM does. Without it wall thermostats repeat each
+            # SetTemperature to the central three times and contacts never get
+            # their ACK.
+            auto_ack = f"Za{self.own_address:06X}\n"
+            _LOGGER.info("CUL TX: %s", auto_ack.strip())
+            await self._send_raw(auto_ack)
+            await asyncio.sleep(0.1)
         except (ConnectionError, OSError) as e:
             _LOGGER.warning("CULFW init sequence failed at %s:%d: %s", self.host, self.port, e)
             await self._close_connection()
             return False
 
         self._read_task = self.hass.loop.create_task(self._read_loop())
+        self.hass.loop.create_task(self._query_cul_credit(force=True))
         return True
 
     async def _close_connection(self) -> None:
@@ -1078,12 +1135,59 @@ class CulMaxCoordinator:
                 f"not connected to CULFW at {self.host}:{self.port}"
             )
 
+    def _has_more_urgent_command(self, priority: int) -> bool:
+        """Return whether a command with higher priority is waiting."""
+        return any(
+            count > 0
+            for queued_priority, count in self._queued_priority_counts.items()
+            if queued_priority < priority
+        )
+
+    def _enqueue_command_request(self, request: CommandRequest) -> None:
+        """Put one request into the priority queue (FIFO within a priority)."""
+        self._command_seq += 1
+        self._queued_priority_counts[request.priority] = (
+            self._queued_priority_counts.get(request.priority, 0) + 1
+        )
+        self._command_queue.put_nowait((request.priority, self._command_seq, request))
+        self._command_enqueued.set()
+
+    def _credit_reserve_for(self, priority: int) -> float:
+        """Credit that lower-priority traffic must leave for interactive commands."""
+        if priority <= COMMAND_PRIORITY_HIGH:
+            return 0.0
+        return CUL_CREDIT_INTERACTIVE_RESERVE
+
     async def _command_worker(self) -> None:
-        """Process queued MAX! write operations strictly sequentially."""
+        """Process queued MAX! write operations strictly sequentially.
+
+        Commands are taken by priority. While a command waits for CUL credit,
+        a newly queued more urgent command (e.g. SetTemperature) preempts it,
+        so interactive changes never sit behind background time syncs.
+        """
         try:
             while True:
-                request = await self._command_queue.get()
+                priority, seq, request = await self._command_queue.get()
+                self._queued_priority_counts[priority] = max(
+                    0, self._queued_priority_counts.get(priority, 0) - 1
+                )
                 try:
+                    if request.future.done():
+                        continue
+                    ready = await self._wait_for_cul_credit(
+                        self._estimate_cul_credit_cost(request.cmd),
+                        reserve=self._credit_reserve_for(priority),
+                        preempt_priority=priority,
+                    )
+                    if not ready:
+                        _LOGGER.debug(
+                            "Deferring %s for a more urgent command", request.description
+                        )
+                        self._queued_priority_counts[priority] = (
+                            self._queued_priority_counts.get(priority, 0) + 1
+                        )
+                        self._command_queue.put_nowait((priority, seq, request))
+                        continue
                     result = await self._execute_command_request(request)
                     if not request.future.done():
                         request.future.set_result(result)
@@ -1121,7 +1225,10 @@ class CulMaxCoordinator:
                 raise
 
         last_error: Exception | None = None
-        for attempt in range(1, request.retries + 2):
+        lovf_resends = 0
+        attempt = 0
+        while attempt < request.retries + 1:
+            attempt += 1
             future: asyncio.Future[MaxMessage] = self.hass.loop.create_future()
             self._pending_ack = PendingAck(
                 counter=request.counter,
@@ -1130,7 +1237,9 @@ class CulMaxCoordinator:
                 description=request.description,
             )
             try:
-                await self._send_raw(request.cmd)
+                await self._send_raw(
+                    request.cmd, reserve=self._credit_reserve_for(request.priority)
+                )
                 ack = await asyncio.wait_for(future, timeout=request.timeout)
                 self._pending_ack = None
                 if request.device_address:
@@ -1152,6 +1261,25 @@ class CulMaxCoordinator:
                     attempt,
                     request.retries + 1,
                 )
+            except CulCreditError as err:
+                last_error = err
+                self._pending_ack = None
+                lovf_resends += 1
+                _LOGGER.warning(
+                    "CUL dropped %s (LOVF, out of send credit); resending when credit is available",
+                    request.description,
+                )
+                if lovf_resends <= CUL_LOVF_MAX_RESENDS:
+                    attempt -= 1  # the packet never went on air
+                continue
+            except DeviceNackError as err:
+                self._pending_ack = None
+                _LOGGER.warning("Device rejected %s: %s", request.description, err)
+                if request.device_address:
+                    await self._mark_command_error(
+                        request.device_address, str(err), retries=attempt - 1
+                    )
+                raise
             except Exception as err:
                 last_error = err
                 if not future.done():
@@ -1193,6 +1321,17 @@ class CulMaxCoordinator:
             _LOGGER.info("CULFW version: %s", line)
             return
 
+        if line == "LOVF":
+            _LOGGER.warning("CUL reports LOVF: send credit exhausted, packet dropped")
+            self._handle_lovf()
+            return
+
+        credit = parse_credit_report(line)
+        if credit is not None:
+            _LOGGER.debug("CUL credit_10ms: %d", credit)
+            self._handle_credit_report(credit)
+            return
+
         if not line.startswith("Z"):
             _LOGGER.debug("Non-MAX line ignored: %s", line)
             return
@@ -1200,10 +1339,18 @@ class CulMaxCoordinator:
         msg = parse_message(line)
         if msg is None:
             return
+        if msg.src == self.own_address:
+            # Echo of an ACK that culfw sent on its own (auto-ACK via "Za").
+            _LOGGER.debug("CUL auto-ACK sent to %s (counter=%d)", msg.dst_hex, msg.counter)
+            self._consume_cul_credit(self._estimate_cul_credit_cost("Zf" + line[1:].split(" ")[0]))
+            return
         await self._touch_device(msg.src_hex)
         source_device = self.get_device(msg.src_hex)
 
         decoded: ThermostatState | ShutterContactState | None = None
+        is_climate_source = (
+            source_device is not None and source_device.device_type in CLIMATE_DEVICE_TYPES
+        )
 
         if msg.msg_type == MSG_PAIR_PING:
             if self._pairing_mode:
@@ -1219,19 +1366,34 @@ class CulMaxCoordinator:
             decoded = decode_thermostat_state(msg)
             if decoded:
                 await self._update_device_group(msg.src_hex, msg.group)
-                # _LOGGER.info("Decoded thermostat state for %s: desired=%.1f°C, measured=%.1f°C, mode=%d, valve=%d%%",
-                #            msg.src_hex, decoded.desired_temperature, decoded.measured_temperature or -1, decoded.mode, decoded.valve_position)
-                await self._update_device_state(msg.src_hex, decoded.__dict__)
+                decoded = await self._merge_thermostat_state(
+                    msg.src_hex, decoded.__dict__, keep_missing_measurement=True
+                )
             else:
                 _LOGGER.warning("Failed to decode thermostat state from %s", line)
 
         elif msg.msg_type == 0x42:  # WallThermostatControl
-            decoded = decode_wall_thermostat_control(msg)
-            if decoded:
+            control = decode_wall_thermostat_control(msg)
+            if control:
                 await self._update_device_group(msg.src_hex, msg.group)
-                await self._update_device_state(msg.src_hex, decoded.__dict__)
+                # 0x42 only carries desired + measured temperature. Do not
+                # let it overwrite mode/flags of the wall thermostat.
+                decoded = await self._merge_thermostat_state(
+                    msg.src_hex,
+                    {key: getattr(control, key) for key in WALL_CONTROL_STATE_FIELDS},
+                    keep_missing_measurement=True,
+                )
             else:
                 _LOGGER.warning("Failed to decode wall thermostat control from %s", line)
+
+        elif msg.msg_type == MSG_SET_TEMPERATURE and is_climate_source:
+            # A wall thermostat announcing a new target/mode (knob, mode
+            # button or its week program) to its thermostats and the central.
+            set_state = decode_set_temperature(msg)
+            if set_state:
+                decoded = await self._merge_thermostat_state(
+                    msg.src_hex, set_state, keep_missing_measurement=True
+                )
 
         elif msg.msg_type == 0x30:  # ShutterContactState
             decoded = decode_shutter_contact_state(msg)
@@ -1244,6 +1406,14 @@ class CulMaxCoordinator:
 
         elif msg.msg_type == MSG_ACK:
             self._handle_ack(msg)
+            if is_climate_source and source_device is not None:
+                ack_state = decode_ack_state(
+                    msg, is_wall=source_device.device_type == DEVICE_WALL_THERMOSTAT
+                )
+                if ack_state is not None:
+                    decoded = await self._merge_thermostat_state(
+                        msg.src_hex, ack_state, keep_missing_measurement=True
+                    )
 
         self._log_decoded_message(msg, decoded)
 
@@ -1286,7 +1456,7 @@ class CulMaxCoordinator:
                 "TimeInformation request from %s without payload; sending current local time",
                 self._format_device_identity(msg.src_hex),
             )
-            await self.async_send_time_information(msg.src_hex)
+            self._reply_time_information(msg.src_hex)
             return
 
         if parsed is None:
@@ -1294,7 +1464,7 @@ class CulMaxCoordinator:
                 "TimeInformation from %s has invalid payload; sending corrected time",
                 self._format_device_identity(msg.src_hex),
             )
-            await self.async_send_time_information(msg.src_hex)
+            self._reply_time_information(msg.src_hex)
             return
 
         if abs(offset_seconds) > 5:
@@ -1303,7 +1473,22 @@ class CulMaxCoordinator:
                 self._format_device_identity(msg.src_hex),
                 offset_seconds,
             )
-            await self.async_send_time_information(msg.src_hex)
+            self._reply_time_information(msg.src_hex)
+
+    def _reply_time_information(self, address: str) -> None:
+        """Answer a device's time request without blocking the read loop."""
+
+        async def _send() -> None:
+            try:
+                await self.async_send_time_information(address, priority=COMMAND_PRIORITY_NORMAL)
+            except Exception as err:  # noqa: BLE001 - background task
+                _LOGGER.warning(
+                    "TimeInformation reply to %s failed: %s",
+                    self._format_device_identity(address),
+                    err,
+                )
+
+        self.hass.async_create_task(_send())
 
     def _dispatch(self, msg: MaxMessage, decoded: Any) -> None:
         """Call all registered listeners for this message."""
@@ -1321,6 +1506,14 @@ class CulMaxCoordinator:
         if pending.counter != msg.counter:
             return
         if pending.expected_src and pending.expected_src != msg.src_hex:
+            return
+        if is_ack_nack(msg):
+            pending.future.set_exception(
+                DeviceNackError(
+                    f"{pending.description}: device answered 'invalid command/argument' "
+                    f"(0x{msg.payload[0]:02X})"
+                )
+            )
             return
         pending.future.set_result(msg)
 
@@ -1530,6 +1723,7 @@ class CulMaxCoordinator:
             description=f"SetTemperature {label}",
             retries=SET_TEMPERATURE_ACK_RETRIES,
             timeout=SET_TEMPERATURE_ACK_TIMEOUT,
+            priority=COMMAND_PRIORITY_HIGH,
         )
         if effective_mode == MODE_AUTO and temperature <= 0 and until is None:
             self._schedule_auto_mode_time_sync_followup(normalized)
@@ -3350,8 +3544,19 @@ class CulMaxCoordinator:
                 reason,
             )
 
-    async def async_send_time_information(self, address: str) -> None:
-        """Send current local time to one thermostat/wall thermostat."""
+    async def async_send_time_information(
+        self,
+        address: str,
+        *,
+        priority: int = COMMAND_PRIORITY_LOW,
+    ) -> None:
+        """Send current local time to one thermostat/wall thermostat.
+
+        Thermostats and wall thermostats ACK TimeInformation (verified on real
+        devices, ~1.1 s after the 1 s preamble). One acknowledged packet with
+        retries is therefore enough; FHEM does the same. Each unacknowledged
+        repeat would cost a full 1 s of the CUL's 1 % duty-cycle budget.
+        """
         normalized = address.upper()
         device = self.get_device(normalized)
         if device is None:
@@ -3360,28 +3565,20 @@ class CulMaxCoordinator:
             raise ValueError(f"Geraet {normalized} unterstuetzt keine Zeitsynchronisation.")
         self._require_paired_for_write(normalized)
 
-        _LOGGER.info(
-            "Sending TimeInformation burst (%d packets) to %s",
-            TIME_INFORMATION_BURST_COUNT,
-            self._format_device_identity(normalized),
-        )
+        _LOGGER.info("Sending TimeInformation to %s", self._format_device_identity(normalized))
         await self._set_last_command(normalized, "TimeInformation")
-        for burst_index in range(TIME_INFORMATION_BURST_COUNT):
-            counter = self._next_counter()
-            cmd = build_time_information(counter, self.own_address, int(normalized, 16))
-            await self._send_command(
-                cmd,
-                expected_src=None,
-                device_address=normalized,
-                counter=None,
-                description=(
-                    f"TimeInformation {self.format_device_label(normalized)}"
-                    if burst_index == 0
-                    else f"TimeInformation {self.format_device_label(normalized)} #{burst_index + 1}"
-                ),
-            )
-            if burst_index + 1 < TIME_INFORMATION_BURST_COUNT:
-                await asyncio.sleep(TIME_INFORMATION_BURST_DELAY)
+        counter = self._next_counter()
+        cmd = build_time_information(counter, self.own_address, int(normalized, 16))
+        await self._send_command(
+            cmd,
+            expected_src=normalized,
+            device_address=normalized,
+            counter=counter,
+            description=f"TimeInformation {self.format_device_label(normalized)}",
+            retries=TIME_INFORMATION_ACK_RETRIES,
+            timeout=TIME_INFORMATION_ACK_TIMEOUT,
+            priority=priority,
+        )
         await self._mark_time_sync_sent(normalized)
 
     async def async_sync_time(self, addresses: list[str] | None = None) -> list[str]:
@@ -3497,10 +3694,11 @@ class CulMaxCoordinator:
         description: str,
         retries: int = ACK_RETRIES,
         timeout: float = ACK_TIMEOUT,
+        priority: int = COMMAND_PRIORITY_NORMAL,
     ) -> MaxMessage | None:
         """Queue one MAX! command for serialized execution."""
         future: asyncio.Future[MaxMessage | None] = self.hass.loop.create_future()
-        await self._command_queue.put(
+        self._enqueue_command_request(
             CommandRequest(
                 cmd=cmd,
                 expected_src=expected_src,
@@ -3510,17 +3708,26 @@ class CulMaxCoordinator:
                 retries=retries,
                 timeout=timeout,
                 future=future,
+                priority=priority,
             )
         )
         return await future
 
-    async def _send_raw(self, cmd: str, *, priority: bool = False) -> None:
+    async def _send_raw(
+        self,
+        cmd: str,
+        *,
+        priority: bool = False,
+        reserve: float = 0.0,
+    ) -> None:
         """Write a raw CULFW command string over TCP."""
         if self._writer is None:
             _LOGGER.warning("Cannot send immediately because CULFW is disconnected, waiting for reconnect")
             await self._ensure_connected()
+        cost = self._estimate_cul_credit_cost(cmd)
+        if cost > 0 and not priority:
+            await self._wait_for_cul_credit(cost, reserve=reserve)
         cmd = self._refresh_time_information_command(cmd)
-        await self._reserve_cul_credit_for_command(cmd, priority=priority)
         async with self._send_lock:
             if self._writer is None:
                 _LOGGER.warning("CULFW disconnected while waiting to send, reconnecting")
@@ -3528,8 +3735,11 @@ class CulMaxCoordinator:
             if not cmd.endswith("\n"):
                 cmd += "\n"
             _LOGGER.debug("CUL TX: %s", cmd.strip())
+            if cost > 0:
+                self._consume_cul_credit(cost)
             try:
                 self._writer.write(cmd.encode("ascii"))
+                self._last_tx_at = self.hass.loop.time()
                 await self._writer.drain()
             except (BrokenPipeError, ConnectionResetError, OSError) as e:
                 _LOGGER.warning("CULFW send failed: %s", e)
@@ -3542,6 +3752,8 @@ class CulMaxCoordinator:
         line = cmd.strip()
         if line.startswith(("Zs", "Zf")) and len(line) > 2:
             return line[2:]
+        if line.startswith(("Za", "Zw", "Zr", "Zx")):
+            return None  # culfw control commands (auto-ACK, fake WT, RX on/off)
         if line.startswith("Z") and len(line) > 1 and line[1] in "0123456789ABCDEFabcdef":
             return line[1:]
         return None
@@ -3575,47 +3787,149 @@ class CulMaxCoordinator:
             return
         elapsed = max(0.0, now - self._cul_credit_updated_at)
         self._cul_credit_estimate = min(
-            CUL_CREDIT_MAX,
+            self._cul_credit_max,
             self._cul_credit_estimate + elapsed * CUL_CREDIT_RECOVERY_PER_SECOND,
         )
         self._cul_credit_updated_at = now
 
+    def _consume_cul_credit(self, cost: float) -> None:
+        """Book one send against the local credit estimate."""
+        self._refresh_cul_credit_estimate()
+        self._cul_credit_estimate = max(0.0, self._cul_credit_estimate - cost)
+
+    def _handle_credit_report(self, credit: int) -> None:
+        """Adopt a credit_10ms value reported by culfw ("X" command)."""
+        now = self.hass.loop.time()
+        self._cul_credit_estimate = float(credit)
+        self._cul_credit_updated_at = now
+        self._cul_credit_known = True
+        if credit > self._cul_credit_max:
+            _LOGGER.info(
+                "CUL reports %d credit_10ms, more than the assumed maximum %.0f; adopting it",
+                credit,
+                self._cul_credit_max,
+            )
+            self._cul_credit_max = float(credit)
+        future = self._cul_credit_future
+        if future is not None and not future.done():
+            future.set_result(credit)
+
+    def _handle_lovf(self) -> None:
+        """culfw dropped a packet because its duty-cycle credit was exhausted."""
+        self._cul_credit_estimate = 0.0
+        self._cul_credit_updated_at = self.hass.loop.time()
+        self._cul_credit_queried_at = 0.0  # allow an immediate re-query
+        pending = self._pending_ack
+        # Only blame our in-flight packet if we just sent it; another client on
+        # the same CUL could cause LOVF lines as well.
+        if (
+            pending is not None
+            and not pending.future.done()
+            and self.hass.loop.time() - self._last_tx_at < 1.5
+        ):
+            pending.future.set_exception(CulCreditError("CUL out of send credit (LOVF)"))
+
+    def get_cul_credit_status(self) -> dict[str, Any]:
+        """Return the current credit view for diagnostics."""
+        self._refresh_cul_credit_estimate()
+        return {
+            "credit_10ms": round(self._cul_credit_estimate),
+            "credit_max": round(self._cul_credit_max),
+            "credit_known": self._cul_credit_known,
+            "queued_commands": self._command_queue.qsize(),
+        }
+
+    async def _query_cul_credit(self, *, force: bool = False) -> float | None:
+        """Ask culfw for its real credit_10ms ("X"), rate limited."""
+        if self._writer is None:
+            return None
+        now = self.hass.loop.time()
+        if not force and now - self._cul_credit_queried_at < CUL_CREDIT_QUERY_MIN_INTERVAL:
+            return self._cul_credit_estimate if self._cul_credit_known else None
+        if self._cul_credit_future is not None and not self._cul_credit_future.done():
+            future = self._cul_credit_future
+        else:
+            future = self.hass.loop.create_future()
+            self._cul_credit_future = future
+            self._cul_credit_queried_at = now
+            try:
+                async with self._send_lock:
+                    if self._writer is None:
+                        return None
+                    self._writer.write(b"X\n")
+                    await self._writer.drain()
+            except (BrokenPipeError, ConnectionResetError, OSError) as err:
+                _LOGGER.debug("CUL credit query failed: %s", err)
+                return None
+        try:
+            credit = await asyncio.wait_for(asyncio.shield(future), timeout=CUL_CREDIT_QUERY_TIMEOUT)
+        except asyncio.TimeoutError:
+            _LOGGER.debug("CUL did not answer credit query in time")
+            return None
+        return float(credit)
+
     def _estimate_cul_credit_cost(self, cmd: str) -> float:
-        """Estimate the CUL send cost using the same rough model FHEM uses."""
+        """Return the culfw credit cost (rf_moritz.c: moritz_sendraw)."""
         packet_hex = self._extract_culfw_packet_hex(cmd)
         if not packet_hex:
             return 0.0
-        bit_cost = (len(packet_hex) * 4 + 9) // 10
-        return CUL_CREDIT_PREAMBLE_COST + float(bit_cost)
+        bit_cost = (len(packet_hex) * 4) // 10
+        preamble = CUL_CREDIT_PREAMBLE_COST if cmd.strip().startswith("Zs") else 0.0
+        return preamble + float(bit_cost)
 
-    async def _reserve_cul_credit_for_command(self, cmd: str, *, priority: bool = False) -> None:
-        """Conservatively pace outgoing writes to avoid overwhelming the CUL."""
-        cost = self._estimate_cul_credit_cost(cmd)
+    async def _wait_for_cul_credit(
+        self,
+        cost: float,
+        *,
+        reserve: float = 0.0,
+        preempt_priority: int | None = None,
+    ) -> bool:
+        """Wait until the CUL can send a packet of the given cost.
+
+        Returns False (without waiting further) if a more urgent command was
+        queued while waiting and preempt_priority was given.
+        """
         if cost <= 0:
-            return
+            return True
+        # Never demand more than the CUL can ever hold.
+        reserve = max(0.0, min(reserve, self._cul_credit_max - cost))
+        needed = cost + reserve
+        logged = False
         while True:
-            async with self._cul_credit_lock:
-                self._refresh_cul_credit_estimate()
-                if priority:
-                    self._cul_credit_estimate = max(0.0, self._cul_credit_estimate - cost)
-                    return
-                if self._cul_credit_estimate >= cost:
-                    self._cul_credit_estimate = max(0.0, self._cul_credit_estimate - cost)
-                    return
-                wait_time = max(
-                    CUL_CREDIT_FALLBACK_WAIT,
-                    (cost - self._cul_credit_estimate) + 1.0,
+            if preempt_priority is not None and self._has_more_urgent_command(preempt_priority):
+                return False
+            self._refresh_cul_credit_estimate()
+            if self._cul_credit_estimate >= needed:
+                return True
+            # The estimate is conservative; ask the CUL for the real value.
+            await self._query_cul_credit()
+            self._refresh_cul_credit_estimate()
+            if self._cul_credit_estimate >= needed:
+                return True
+            if self._cul_credit_known:
+                wait_time = min(
+                    CUL_CREDIT_MAX_WAIT_SLICE,
+                    (needed - self._cul_credit_estimate) / CUL_CREDIT_RECOVERY_PER_SECOND + 0.5,
                 )
-                if priority:
-                    wait_time = min(wait_time, 0.5)
+            else:
+                wait_time = CUL_CREDIT_UNKNOWN_WAIT
+            if not logged:
                 _LOGGER.info(
-                    "CUL credit pacing delays send by %.1fs (need %.1f, have %.1f)%s",
-                    wait_time,
-                    cost,
+                    "CUL credit pacing: need %.0f (incl. reserve %.0f), have %.0f%s; waiting",
+                    needed,
+                    reserve,
                     self._cul_credit_estimate,
-                    " [priority]" if priority else "",
+                    "" if self._cul_credit_known else " (estimated)",
                 )
-            await asyncio.sleep(wait_time)
+                logged = True
+            if preempt_priority is None:
+                await asyncio.sleep(wait_time)
+                continue
+            self._command_enqueued.clear()
+            try:
+                await asyncio.wait_for(self._command_enqueued.wait(), timeout=wait_time)
+            except asyncio.TimeoutError:
+                pass
 
     # ------------------------------------------------------------------
     # Device registry
@@ -4024,6 +4338,32 @@ class CulMaxCoordinator:
             "skipped_devices": sorted(dict.fromkeys(skipped_devices)),
         }
 
+    async def _merge_thermostat_state(
+        self,
+        address: str,
+        partial: dict[str, Any],
+        *,
+        keep_missing_measurement: bool,
+    ) -> ThermostatState:
+        """Merge a (partial) thermostat state into last_state; return the full state."""
+        update = dict(partial)
+        update.pop("address", None)
+        if keep_missing_measurement:
+            for key in ("measured_temperature", "heater_temperature"):
+                if update.get(key) is None:
+                    update.pop(key, None)
+        mode = update.get("mode")
+        if mode is not None:
+            if mode != MODE_VACATION:
+                update.setdefault("until", None)
+            if mode != MODE_BOOST:
+                update.setdefault("boost_duration", None)
+        device = self._devices.get(address)
+        if device is None:
+            return thermostat_state_from_dict(address, update)
+        await self._update_device_state(address, update)
+        return thermostat_state_from_dict(address, device.last_state)
+
     async def _update_device_state(self, address: str, state: dict) -> None:
         if address in self._devices:
             self._devices[address].last_state = {
@@ -4317,6 +4657,20 @@ class CulMaxCoordinator:
             await self._save_devices()
 
     async def _save_devices(self) -> None:
+        """Schedule a debounced write of the device store.
+
+        Called on nearly every received telegram (last_seen, state, ACK
+        diagnostics). Writing synchronously each time stalled the RX loop on
+        slow storage; HA's delayed save coalesces writes and flushes on stop.
+        """
+        self._store.async_delay_save(self._build_storage_data, STORAGE_SAVE_DELAY)
+
+    async def _save_devices_now(self) -> None:
+        """Write the device store immediately."""
+        await self._store.async_save(self._build_storage_data())
+
+    def _build_storage_data(self) -> dict[str, Any]:
+        """Return the serialized device store."""
         data = {
             "schema_version": STORAGE_SCHEMA_VERSION,
             "devices": {
@@ -4373,4 +4727,4 @@ class CulMaxCoordinator:
                 if commands
             },
         }
-        await self._store.async_save(data)
+        return data

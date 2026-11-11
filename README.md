@@ -187,6 +187,16 @@ MAX! devices are battery powered and do not all report continuously. The
 integration exposes `last_seen`, `stale`, `last_ack`, retry and pending-config
 diagnostics to make this visible.
 
+### Commands take long to apply
+
+Every packet to a sleeping thermostat uses a 1 s wake-up preamble, and the CUL
+may only transmit 1 % of the time. The integration reads the real budget from
+culfw, prioritizes target-temperature changes over background traffic and
+shows progress in the climate attribute `command_status`
+(`sending`/`confirmed`/`failed`). Log lines starting with `CUL credit pacing`
+show when the budget is exhausted. Make sure no other program (FHEM, ioBroker)
+is sending through the same CUL.
+
 ### Week profile seems shifted
 
 Use `cul_max.sync_time` for thermostats and wall thermostats. Then verify the
@@ -226,6 +236,25 @@ Repository layout:
 - `custom_components/cul_max/manifest.json` with `config_flow: true`
 - integration code below `custom_components/cul_max`
 - no generated Python caches committed
+
+## Changelog
+
+### 0.2.0
+
+- Read the CUL send budget from culfw (`X`) instead of a too conservative
+  estimate; handle `LOVF`; detect firmware with a larger budget.
+- Prioritized command queue: interactive changes overtake background traffic.
+- Time synchronization uses one acknowledged packet instead of three blind ones.
+- Enable culfw auto-ACK (`Za`) so wall thermostats and window contacts no
+  longer repeat telegrams to the central.
+- Apply the state carried in thermostat ACKs and wall-thermostat
+  `SetTemperature` telegrams for fresher values; fix wall thermostats shown as
+  `manual` while in `auto`.
+- Climate entities: immediate display with `command_status`,
+  `command_requested` and `command_error`, rollback on failure, `off` for
+  manual 4.5 °C, preset `none` to leave boost.
+- Debounced storage writes; time-information replies no longer block the
+  receive loop.
 
 ## License
 

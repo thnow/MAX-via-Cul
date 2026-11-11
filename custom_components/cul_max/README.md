@@ -37,6 +37,18 @@ Wichtige Eigenschaften:
 - lokale Kommunikation ohne Cloud
 - zentrale serielle Command-Queue fuer Schreiboperationen
 - ACK-basierte Wiederholungen bei Konfigurations- und Steuerbefehlen
+- priorisierte Queue: interaktive Befehle (Solltemperatur, Modus) ueberholen
+  Hintergrundverkehr wie Zeitsynchronisation
+- Sendekredit (1 %-Duty-Cycle) wird per `X` direkt vom CULFW gelesen statt
+  geschaetzt; `LOVF` wird erkannt und das Paket erneut gesendet. Firmware mit
+  mehr Sendezeit wird automatisch erkannt
+- die Statusdaten in ACKs (Modus, Ventil, Solltemperatur) werden ausgewertet;
+  die Climate-Entitaet zeigt einen Sollwert sofort an und meldet ueber
+  `command_status` (`sending`/`confirmed`/`failed`), ob das Geraet ihn
+  bestaetigt hat. Bei Fehlschlag wird auf den bestaetigten Wert zurueckgesetzt
+- Auto-ACK im CULFW (`Za<eigene Adresse>`, wie FHEM): an die Zentrale
+  adressierte Telegramme von Fensterkontakten und Wandthermostaten werden
+  sofort bestaetigt; Aenderungen am Wandthermostat werden direkt uebernommen
 - Pending-Config-Zustellung fuer schlafende MAX!-Fensterkontakte nach FHEM-/Homegear-Muster
 - Persistenz aller bekannten Geraete und ihrer wichtigsten Topologie-Daten
 - echte On-Device-Assoziationen statt reiner HA-in-the-loop-Automation
@@ -172,6 +184,23 @@ Hinweis zur Sollwert-Semantik:
   `mode_detail` und `mode_is_temporary` zur Verfuegung. Damit laesst sich
   besser erkennen, ob ein Thermostat gerade wirklich im normalen
   Wochenprogramm laeuft oder in einem temporaeren Geraetezustand steckt.
+
+Rueckmeldung und Anzeige:
+
+- Ein neuer Sollwert oder Modus wird sofort angezeigt. Das Attribut
+  `command_status` zeigt dann `sending`, nach der Bestaetigung durch das Geraet
+  `confirmed`. Die angezeigten Werte stammen dann aus dem ACK des Thermostats
+  (Modus, Ventil, Solltemperatur), also aus dem tatsaechlichen Geraetezustand.
+- Bleibt die Bestaetigung aus, steht `command_status` auf `failed`,
+  `command_error` nennt den Grund, die Anzeige springt auf den letzten
+  bestaetigten Wert zurueck und Home Assistant meldet einen Fehler.
+  `command_requested` beschreibt den zuletzt gesendeten Befehl.
+- `manual` mit 4,5 °C wird als HVAC-Modus `off` angezeigt. Beim Wechsel auf
+  `heat` aus `off` wird die Komforttemperatur verwendet.
+- Presets: `boost` startet den Boost, `none` beendet ihn und kehrt ins
+  Wochenprogramm zurueck.
+- Aenderungen am Wandthermostat (Drehrad, Modustaste) werden direkt aus dessen
+  `SetTemperature`-Telegramm uebernommen.
 
 ### Fensterkontakte
 
@@ -750,6 +779,25 @@ Fuer einen stabilen Betrieb sind ein paar Punkte wichtig:
 - Nicht zwei Cubes mit derselben Funk-Identitaet parallel betreiben
 - Bei vielen Schreiboperationen die serielle Abarbeitung der Integration nutzen
 - `Last Seen`, `Stale` und Kommunikationssensoren fuer Ueberwachung verwenden
+
+### Funkbudget und Sendereihenfolge
+
+- Der CUL darf nur 1 % der Zeit senden (`credit_10ms`, bei a-culfw maximal
+  900 = 9 s, +1 pro Sekunde). Jedes Paket an ein schlafendes Thermostat braucht
+  eine 1-s-Weckpraeambel und kostet etwa 113 Einheiten. Die Integration liest
+  den echten Wert per `X` vom CULFW, wartet bei Bedarf und sendet nach einem
+  `LOVF` erneut. Firmware mit groesserem Budget wird automatisch erkannt.
+- Befehle werden priorisiert: Solltemperatur und Modus vor
+  Konfigurationsschritten, beides vor Zeitsynchronisation. Hintergrundverkehr
+  laesst immer genug Budget fuer einen interaktiven Befehl uebrig.
+- Die Zeitsynchronisation sendet ein Paket und wartet auf das ACK, statt
+  mehrere Pakete blind zu wiederholen.
+- Beim Verbinden wird das Auto-ACK des CULFW (`Za<eigene Adresse>`) aktiviert.
+  Damit bestaetigt der CUL Telegramme von Fensterkontakten und
+  Wandthermostaten an die Zentrale sofort, und die Geraete wiederholen sie
+  nicht mehrfach.
+- Andere Programme, die gleichzeitig mit demselben CUL verbunden sind (etwa
+  FHEM oder ioBroker), teilen sich dieses Budget.
 
 ## Tests
 
