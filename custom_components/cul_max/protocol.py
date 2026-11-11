@@ -33,9 +33,11 @@ from .const import (
     MODE_BOOST,
     MODE_MANUAL,
     MODE_NAMES,
+    MODE_VACATION,
     MSG_ACK,
     MSG_PAIR_PING,
     MSG_TIME_INFORMATION,
+    MSG_SET_TEMPERATURE,
     MSG_SHUTTER_CONTACT_STATE,
     MSG_THERMOSTAT_STATE,
     MSG_WALL_THERMOSTAT_CONTROL,
@@ -685,6 +687,128 @@ def decode_wall_thermostat_control(msg: MaxMessage) -> ThermostatState | None:
     except (IndexError, ValueError) as e:
         _LOGGER.warning("Failed to decode wall thermostat control from '%s': %s", msg.raw, e)
         return None
+
+
+ACK_STATUS_NACK_BIT = 0x80
+
+_CREDIT_REPORT_RE = re.compile(r"^([0-9A-Fa-f]{2})( *\d{1,5})$")
+
+
+def parse_credit_report(line: str) -> int | None:
+    """Parse the culfw answer to 'X' and return credit_10ms.
+
+    a-culfw (rf_receive.c) prints DH2(TX_REPORT) followed by DU(credit_10ms, 5),
+    i.e. two hex digits and a number right-aligned to five characters:
+    '21  900', or without any separator for five-digit values: '0014400'.
+    """
+    line = line.strip("\r\n")
+    match = _CREDIT_REPORT_RE.match(line)
+    if match is None or len(match.group(2)) != 5:
+        return None
+    return int(match.group(2))
+
+# Fields that a partial state (ACK, WallThermostatControl) may carry reliably.
+ACK_STATE_FIELDS_HEATING = (
+    "mode",
+    "battery_low",
+    "rf_error",
+    "panel_locked",
+    "gateway_known",
+    "dst_active",
+    "valve_position",
+    "desired_temperature",
+)
+ACK_STATE_FIELDS_WALL = (
+    "mode",
+    "battery_low",
+    "rf_error",
+    "panel_locked",
+    "gateway_known",
+    "dst_active",
+    "display_actual_temperature",
+    "desired_temperature",
+)
+WALL_CONTROL_STATE_FIELDS = ("desired_temperature", "measured_temperature")
+
+
+def is_ack_nack(msg: MaxMessage) -> bool:
+    """Return whether an ACK telegram reports 'invalid command/argument'."""
+    return bool(msg.payload) and bool(msg.payload[0] & ACK_STATUS_NACK_BIT)
+
+
+def decode_ack_state(msg: MaxMessage, *, is_wall: bool) -> dict[str, Any] | None:
+    """Decode the state block piggybacked on an ACK from a climate device.
+
+    FHEM (10_MAX.pm) documents the ACK payload as one status byte (0x01 = ok,
+    0x81 = invalid command) followed by the first bytes of a regular
+    ThermostatState / WallThermostatState broadcast. For HeatingThermostats
+    that is flags, valve position and desired temperature (no measured
+    temperature). Thermostats ACK every packet they receive, including the
+    WallThermostatControl telegrams of a linked wall thermostat, so this is
+    a frequent and fresh source of the real device state.
+
+    Returns only the reliably present fields, or None if there is no state.
+    """
+    if msg.msg_type != MSG_ACK or len(msg.payload) < 4 or is_ack_nack(msg):
+        return None
+    state_msg = MaxMessage(
+        raw=msg.raw,
+        length=msg.length,
+        counter=msg.counter,
+        flags=msg.flags,
+        msg_type=MSG_WALL_THERMOSTAT_STATE if is_wall else MSG_THERMOSTAT_STATE,
+        src=msg.src,
+        dst=msg.dst,
+        group=msg.group,
+        payload=msg.payload[1:],
+    )
+    decoded = decode_thermostat_state(state_msg)
+    if decoded is None:
+        return None
+    fields = ACK_STATE_FIELDS_WALL if is_wall else ACK_STATE_FIELDS_HEATING
+    return {key: getattr(decoded, key) for key in fields}
+
+
+def decode_set_temperature(msg: MaxMessage) -> dict[str, Any] | None:
+    """Decode a received SetTemperature (0x40), e.g. sent by a wall thermostat.
+
+    Wall thermostats send it to their heating thermostats and to the central
+    whenever the target changes (knob, mode button, week program). Payload:
+    bits 7-6 mode, bits 5-0 temperature * 2, optional 3-byte until (vacation).
+    """
+    if msg.msg_type != MSG_SET_TEMPERATURE or not msg.payload:
+        return None
+    raw = msg.payload[0]
+    mode = (raw >> 6) & 0x03
+    state: dict[str, Any] = {"mode": mode}
+    temp_half = raw & 0x3F
+    if temp_half:
+        state["desired_temperature"] = max(TEMP_MIN, min(TEMP_MAX, temp_half / 2.0))
+    if mode == MODE_VACATION and len(msg.payload) >= 4:
+        state["until"] = decode_max_until_datetime(
+            msg.payload[1], msg.payload[2], msg.payload[3]
+        )
+    return state
+
+
+def thermostat_state_from_dict(address: str, state: dict[str, Any]) -> ThermostatState:
+    """Build a ThermostatState from a (merged) stored state dict."""
+    return ThermostatState(
+        address=address,
+        mode=int(state.get("mode", MODE_MANUAL)),
+        battery_low=bool(state.get("battery_low", False)),
+        rf_error=bool(state.get("rf_error", False)),
+        panel_locked=bool(state.get("panel_locked", False)),
+        gateway_known=bool(state.get("gateway_known", False)),
+        dst_active=bool(state.get("dst_active", False)),
+        valve_position=int(state.get("valve_position", 0) or 0),
+        desired_temperature=float(state.get("desired_temperature", TEMP_MIN)),
+        measured_temperature=state.get("measured_temperature"),
+        boost_duration=state.get("boost_duration"),
+        display_actual_temperature=state.get("display_actual_temperature"),
+        heater_temperature=state.get("heater_temperature"),
+        until=state.get("until"),
+    )
 
 
 def decode_shutter_contact_state(msg: MaxMessage) -> ShutterContactState | None:

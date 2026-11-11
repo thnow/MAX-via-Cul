@@ -12,6 +12,7 @@ from homeassistant.components.climate import (
 )
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import DeviceInfo
 
@@ -28,6 +29,7 @@ from .const import (
     MODE_NAMES,
     TEMP_MAX,
     TEMP_MIN,
+    TEMP_OFF,
     CLIMATE_DEVICE_TYPES,
 )
 from .coordinator import CulMaxCoordinator, KnownDevice
@@ -99,7 +101,7 @@ class CulMaxClimate(ClimateEntity):
         ClimateEntityFeature.TARGET_TEMPERATURE
         | ClimateEntityFeature.PRESET_MODE
     )
-    _attr_preset_modes = ["boost"]
+    _attr_preset_modes = ["none", "boost"]
 
     def __init__(self, coordinator: CulMaxCoordinator, device: KnownDevice) -> None:
         self._coordinator = coordinator
@@ -120,8 +122,12 @@ class CulMaxClimate(ClimateEntity):
         self._attr_target_temperature = None
         self._attr_current_temperature = None
         self._attr_hvac_action = HVACAction.IDLE
-        self._attr_preset_mode = "manual"
+        self._attr_preset_mode = "none"
         self._attr_available = False
+        # Feedback for the last write: idle / sending / confirmed / failed
+        self._command_status = "idle"
+        self._command_error: str | None = None
+        self._command_requested: str | None = None
 
     def _raw_mode(self) -> int:
         """Return the last raw MAX! mode, defaulting conservatively to manual."""
@@ -168,10 +174,12 @@ class CulMaxClimate(ClimateEntity):
     def _apply_state_dict(self, state: dict) -> None:
         """Apply state dict (from ThermostatState or stored last_state)."""
         self._attr_target_temperature = state.get("desired_temperature")
-        self._attr_current_temperature = state.get("measured_temperature")
+        measured = state.get("measured_temperature")
+        if measured is not None:
+            self._attr_current_temperature = measured
         mode = state.get("mode", MODE_MANUAL)
-        self._attr_hvac_mode = HVAC_MODE_MAP.get(mode, HVACMode.HEAT)
-        self._attr_preset_mode = "boost" if mode == MODE_BOOST else None
+        self._attr_hvac_mode = self._hvac_mode_for(mode, self._attr_target_temperature)
+        self._attr_preset_mode = "boost" if mode == MODE_BOOST else "none"
 
         valve = state.get("valve_position", 0)
         if self._attr_hvac_mode == HVACMode.OFF:
@@ -181,10 +189,64 @@ class CulMaxClimate(ClimateEntity):
         else:
             self._attr_hvac_action = HVACAction.IDLE
 
+    @staticmethod
+    def _hvac_mode_for(mode: int, target: float | None) -> HVACMode:
+        """Map MAX! mode + target to HA; manual at 4.5 °C is the MAX! 'off'."""
+        if mode == MODE_MANUAL and target is not None and target <= TEMP_OFF:
+            return HVACMode.OFF
+        return HVAC_MODE_MAP.get(mode, HVACMode.HEAT)
+
+    def _restore_confirmed_state(self) -> None:
+        """Drop optimistic values and show the last state reported by the device."""
+        last = self._device.last_state
+        if last:
+            self._apply_state_dict(last)
+
+    async def _async_write_with_feedback(
+        self,
+        *,
+        description: str,
+        temperature: float,
+        mode: int,
+        optimistic_target: float | None,
+        optimistic_hvac: HVACMode,
+        optimistic_preset: str = "none",
+    ) -> None:
+        """Show the requested value at once, then confirm or roll back on ACK.
+
+        The thermostat's ACK carries its new mode and target, which the
+        coordinator applies to this entity before the call returns, so after
+        success the displayed values are the device-confirmed ones.
+        """
+        self._attr_target_temperature = optimistic_target
+        self._attr_hvac_mode = optimistic_hvac
+        self._attr_preset_mode = optimistic_preset
+        self._command_status = "sending"
+        self._command_error = None
+        self._command_requested = description
+        self.async_write_ha_state()
+        try:
+            await self._coordinator.async_set_temperature(
+                self._address, temperature, mode=mode
+            )
+        except Exception as err:
+            self._command_status = "failed"
+            self._command_error = str(err)
+            self._restore_confirmed_state()
+            self.async_write_ha_state()
+            raise HomeAssistantError(
+                f"{self._device.name}: {description} wurde nicht bestätigt ({err})"
+            ) from err
+        self._command_status = "confirmed"
+        self.async_write_ha_state()
+
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         effective_week_profile = self._coordinator.get_effective_week_profile(self._address)
         attrs: dict[str, Any] = {
+            "command_status": self._command_status,
+            "command_requested": self._command_requested,
+            "command_error": self._command_error,
             "address": self._address,
             "serial_number": self._device.serial_number or None,
             "firmware_version": self._device.firmware_version or None,
@@ -253,36 +315,63 @@ class CulMaxClimate(ClimateEntity):
         temperature = kwargs.get(ATTR_TEMPERATURE)
         if temperature is None:
             return
+        temperature = float(temperature)
         mode = self._temperature_write_mode()
-        await self._coordinator.async_set_temperature(
-            self._address, temperature, mode=mode
+        await self._async_write_with_feedback(
+            description=f"Solltemperatur {temperature:.1f} °C",
+            temperature=temperature,
+            mode=mode,
+            optimistic_target=temperature,
+            optimistic_hvac=self._hvac_mode_for(mode, temperature),
         )
-        self._attr_target_temperature = temperature
-        self._attr_hvac_mode = HVAC_MODE_MAP.get(mode, HVACMode.HEAT)
-        self.async_write_ha_state()
+
+    def _heat_target(self) -> float:
+        """Target used when switching to HEAT (never the 4.5 °C 'off' value)."""
+        current = self._attr_target_temperature
+        if current is not None and current > TEMP_OFF:
+            return current
+        return self._device.comfort_temperature or 20.0
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         if hvac_mode == HVACMode.OFF:
-            await self._coordinator.async_set_temperature(
-                self._address, TEMP_MIN, mode=MODE_MANUAL
+            await self._async_write_with_feedback(
+                description="Aus",
+                temperature=TEMP_MIN,
+                mode=MODE_MANUAL,
+                optimistic_target=TEMP_MIN,
+                optimistic_hvac=HVACMode.OFF,
             )
         elif hvac_mode == HVACMode.AUTO:
-            await self._coordinator.async_set_temperature(
-                self._address,
-                0.0,
+            expected = self._coordinator.get_expected_week_profile_temperature(self._address)
+            await self._async_write_with_feedback(
+                description="Automatik (Wochenprogramm)",
+                temperature=0.0,
                 mode=MODE_AUTO,
+                optimistic_target=expected if expected is not None else self._attr_target_temperature,
+                optimistic_hvac=HVACMode.AUTO,
             )
         else:
-            await self._coordinator.async_set_temperature(
-                self._address,
-                self._attr_target_temperature or 20.0,
+            target = self._heat_target()
+            await self._async_write_with_feedback(
+                description=f"Manuell {target:.1f} °C",
+                temperature=target,
                 mode=MODE_MANUAL,
+                optimistic_target=target,
+                optimistic_hvac=HVACMode.HEAT,
             )
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
-        mode = MODE_BOOST if preset_mode == "boost" else self._temperature_write_mode()
-        await self._coordinator.async_set_temperature(
-            self._address,
-            self._attr_target_temperature or 20.0,
-            mode=mode,
-        )
+        if preset_mode == "boost":
+            await self._async_write_with_feedback(
+                description="Boost",
+                temperature=self._attr_target_temperature or 20.0,
+                mode=MODE_BOOST,
+                optimistic_target=self._attr_target_temperature,
+                optimistic_hvac=HVACMode.HEAT,
+                optimistic_preset="boost",
+            )
+            return
+        if self._raw_mode() != MODE_BOOST:
+            return
+        # Leaving boost: return to the week program.
+        await self.async_set_hvac_mode(HVACMode.AUTO)

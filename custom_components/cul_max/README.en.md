@@ -34,6 +34,18 @@ Its main components are:
 
 - A serial command queue for write operations.
 - Acknowledgement-based retries for configuration and control commands.
+- A prioritized queue: interactive commands (target temperature, mode) overtake
+  background traffic such as time synchronization.
+- The CUL's send credit (1 % duty cycle) is read from culfw with `X` instead of
+  being estimated; `LOVF` is detected and the packet resent. Firmware with a
+  larger budget is picked up automatically.
+- State carried in ACKs (mode, valve, target) is applied. Climate entities show
+  a new target immediately and report via `command_status`
+  (`sending`/`confirmed`/`failed`) whether the device confirmed it; on failure
+  they fall back to the confirmed value.
+- culfw auto-ACK (`Za<own address>`, like FHEM): telegrams from window
+  contacts and wall thermostats addressed to the central are acknowledged at
+  once, and wall-thermostat changes are applied immediately.
 - Pending configuration delivery for sleeping window contacts, following
   patterns from FHEM and Homegear.
 - Persistent storage of known devices and their topology.
@@ -142,6 +154,23 @@ the target temperature in `auto` mode does not immediately force the device
 into `manual` mode. The climate attributes `mode_detail` and
 `mode_is_temporary` help distinguish normal weekly operation from temporary
 overrides.
+
+Feedback and display:
+
+- A new target or mode is shown immediately. The `command_status` attribute
+  reads `sending`, then `confirmed` once the device acknowledged it. The shown
+  values then come from the thermostat's ACK (mode, valve, target), i.e. the
+  real device state.
+- If no acknowledgement arrives, `command_status` becomes `failed`,
+  `command_error` gives the reason, the entity falls back to the last confirmed
+  values and Home Assistant reports an error. `command_requested` describes the
+  last command sent.
+- `manual` at 4.5 °C is shown as HVAC mode `off`. Switching from `off` to
+  `heat` uses the comfort temperature.
+- Presets: `boost` starts boost, `none` ends it and returns to the weekly
+  program.
+- Changes made on a wall thermostat (knob, mode button) are applied directly
+  from its `SetTemperature` telegram.
 
 Changes to the schedule and configuration entities are stored as drafts.
 Press **Save Configuration** to send them to the device, or **Discard Draft**
@@ -529,6 +558,24 @@ known topology rather than performing an exact replacement of all state.
 - Do not operate two controllers with the same radio identity simultaneously.
 - Let the serial command queue handle batches of writes.
 - Monitor `Last Seen`, `Stale` and communication diagnostics.
+
+### Radio budget and send order
+
+- The CUL may only transmit 1 % of the time (`credit_10ms`, max. 900 = 9 s on
+  a-culfw, +1 per second). Every packet to a sleeping thermostat needs a 1 s
+  wake-up preamble and costs about 113 units. The integration reads the real
+  value from culfw with `X`, waits when needed and resends after `LOVF`.
+  Firmware with a larger budget is detected automatically.
+- Commands are prioritized: target temperature and mode before configuration,
+  both before time synchronization. Background traffic always leaves enough
+  budget for one interactive command.
+- Time synchronization sends one packet and waits for its ACK instead of
+  blindly repeating several packets.
+- On connect, culfw auto-ACK (`Za<own address>`) is enabled, so the CUL
+  immediately acknowledges telegrams from window contacts and wall thermostats
+  to the central and the devices do not repeat them.
+- Other programs connected to the same CUL at the same time (for example FHEM
+  or ioBroker) share this budget.
 
 MAX! radio messages can be missed or acknowledged late. Initial setup,
 pairing and bulk configuration may therefore take longer than expected.

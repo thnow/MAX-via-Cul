@@ -310,3 +310,73 @@ class WeekProfileParserTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AckAndCreditTests(unittest.TestCase):
+    """ACK piggyback state and culfw credit reports (telegrams from a real setup)."""
+
+    def test_heating_thermostat_ack_carries_mode_valve_and_target(self) -> None:
+        msg = protocol.parse_message("Z0EB6020207404F0583450001380022")
+        self.assertFalse(protocol.is_ack_nack(msg))
+        state = protocol.decode_ack_state(msg, is_wall=False)
+        self.assertEqual(state["mode"], MODE_AUTO)
+        self.assertEqual(state["valve_position"], 0)
+        self.assertEqual(state["desired_temperature"], 17.0)
+        self.assertNotIn("measured_temperature", state)
+
+    def test_wall_thermostat_ack_carries_target(self) -> None:
+        msg = protocol.parse_message("Z0E0D020202B6DA1234560001180124")
+        state = protocol.decode_ack_state(msg, is_wall=True)
+        self.assertEqual(state["mode"], MODE_AUTO)
+        self.assertEqual(state["desired_temperature"], 18.0)
+        self.assertNotIn("valve_position", state)
+
+    def test_nack_is_detected_and_has_no_state(self) -> None:
+        msg = protocol.parse_message("Z0E0D020207404F1234560081380022")
+        self.assertTrue(protocol.is_ack_nack(msg))
+        self.assertIsNone(protocol.decode_ack_state(msg, is_wall=False))
+
+    def test_bare_ack_has_no_state(self) -> None:
+        msg = protocol.parse_message("Z0B0D020207404F1234560001")
+        self.assertIsNone(protocol.decode_ack_state(msg, is_wall=False))
+
+    def test_parse_credit_report(self) -> None:
+        self.assertEqual(protocol.parse_credit_report("21  900"), 900)
+        self.assertEqual(protocol.parse_credit_report("00    7"), 7)
+        # five-digit credit fills the field, no separator (real CUBe answer)
+        self.assertEqual(protocol.parse_credit_report("0014400"), 14400)
+        self.assertIsNone(protocol.parse_credit_report("21 900"))
+        self.assertIsNone(protocol.parse_credit_report("V 1.26.08 a-culfw"))
+        self.assertIsNone(protocol.parse_credit_report("LOVF"))
+
+    def test_state_from_dict_round_trip(self) -> None:
+        state = protocol.thermostat_state_from_dict(
+            "07404F",
+            {"mode": MODE_MANUAL, "desired_temperature": 4.5, "measured_temperature": 19.7},
+        )
+        self.assertEqual(state.mode, MODE_MANUAL)
+        self.assertEqual(state.measured_temperature, 19.7)
+        self.assertEqual(state.valve_position, 0)
+
+
+class SetTemperatureRxTests(unittest.TestCase):
+    """SetTemperature telegrams sent by wall thermostats (real captures)."""
+
+    def test_wall_thermostat_auto_target(self) -> None:
+        msg = protocol.parse_message("Z0BF505400583451234560018")
+        state = protocol.decode_set_temperature(msg)
+        self.assertEqual(state, {"mode": MODE_AUTO, "desired_temperature": 12.0})
+
+    def test_wall_thermostat_manual_target(self) -> None:
+        msg = protocol.parse_message("Z0B6B054002B6DA1234560064")
+        state = protocol.decode_set_temperature(msg)
+        self.assertEqual(state["mode"], MODE_MANUAL)
+        self.assertEqual(state["desired_temperature"], 18.0)
+
+    def test_round_trip_with_builder(self) -> None:
+        cmd = build_set_temperature(1, 0x123456, 0x07404F, 21.5, MODE_MANUAL)
+        msg = protocol.parse_message("Z" + cmd.strip()[2:])
+        self.assertEqual(
+            protocol.decode_set_temperature(msg),
+            {"mode": MODE_MANUAL, "desired_temperature": 21.5},
+        )
