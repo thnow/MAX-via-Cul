@@ -163,7 +163,8 @@ class CulMaxWeekProfileCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config || !config.entity) {
+    const hasList = Array.isArray(config?.entities) && config.entities.length > 0;
+    if (!config || (!config.entity && !hasList)) {
       throw new Error("Entity required");
     }
     this._config = {
@@ -172,18 +173,45 @@ class CulMaxWeekProfileCard extends HTMLElement {
       editable: true,
       ...config,
     };
-    this._lastStateObj = null;
+    this._lastStates = null;
     this._render();
   }
 
   set hass(hass) {
     this._hass = hass;
-    const stateObj = hass?.states?.[this._config?.entity];
-    // Only re-render when our entity changed; keeps an open editor intact.
-    if (stateObj !== this._lastStateObj) {
-      this._lastStateObj = stateObj;
+    const states = this._entityIds().map((id) => hass?.states?.[id]);
+    // Only re-render when one of our entities changed; keeps an open editor intact.
+    const changed =
+      !this._lastStates ||
+      states.length !== this._lastStates.length ||
+      states.some((st, idx) => st !== this._lastStates[idx]);
+    if (changed) {
+      this._lastStates = states;
       this._refresh();
     }
+  }
+
+  /** One or more thermostats (e.g. several radiators in a room). */
+  _entityIds() {
+    const cfg = this._config || {};
+    const list = Array.isArray(cfg.entities) && cfg.entities.length ? cfg.entities : [cfg.entity];
+    return [
+      ...new Set(
+        list
+          .map((item) => (typeof item === "string" ? item : item?.entity))
+          .filter(Boolean)
+      ),
+    ];
+  }
+
+  /** Short names: strip the words all thermostat names share. */
+  _shortNames(stateObjs) {
+    const names = stateObjs.map((st, idx) => st?.attributes?.friendly_name || this._entityIds()[idx]);
+    if (names.length < 2) return names;
+    const words = names.map((n) => n.split(/\s+/));
+    let common = 0;
+    while (words.every((w) => w.length > common + 1 && w[common] === words[0][common])) common += 1;
+    return words.map((w, idx) => w.slice(common).join(" ") || names[idx]);
   }
 
   connectedCallback() {
@@ -204,7 +232,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
   }
 
   _stateObj() {
-    return this._hass?.states?.[this._config.entity];
+    return this._hass?.states?.[this._entityIds()[0]];
   }
 
   _daySegments(attrs, key) {
@@ -227,16 +255,17 @@ class CulMaxWeekProfileCard extends HTMLElement {
     return null;
   }
 
-  _statusItems(stateObj) {
+  _statusItems(stateObj, prefix = "") {
     const attrs = stateObj.attributes || {};
     const items = [];
+    const who = prefix ? `${esc(prefix)}: ` : "";
     const mode = attrs.mode_detail;
     if (attrs.window_open_active) {
       const partners = (attrs.open_window_partner_names || []).join(", ");
       items.push({
         level: "warn",
         icon: "mdi:window-open-variant",
-        text: `Fenster offen${partners ? ` (${esc(partners)})` : ""} – Absenkung aktiv`,
+        text: `${who}Fenster offen${partners ? ` (${esc(partners)})` : ""} – Absenkung aktiv`,
       });
     } else if (
       mode === "auto" &&
@@ -247,9 +276,19 @@ class CulMaxWeekProfileCard extends HTMLElement {
       items.push({
         level: "warn",
         icon: "mdi:alert-outline",
-        text: `Weicht vom Plan ab: Thermostat ${fmtTemp(attrs.temperature)}, Plan ${fmtTemp(
+        text: `${who}Weicht vom Plan ab: Thermostat ${fmtTemp(attrs.temperature)}, Plan ${fmtTemp(
           attrs.expected_week_profile_temperature
         )}`,
+      });
+    }
+    const scheduleOff = attrs.week_profile_source !== undefined || attrs.week_profile_monday !== undefined;
+    if (scheduleOff && mode && mode !== "auto") {
+      const label = stateObj.state === "off" ? "Aus" : MODE_LABELS[mode] || mode;
+      const target = attrs.temperature != null && stateObj.state !== "off" ? ` ${fmtTemp(attrs.temperature)}` : "";
+      items.push({
+        level: "info",
+        icon: "mdi:pause-circle-outline",
+        text: `${who}Wochenprogramm nicht aktiv – Modus ${esc(label)}${target}`,
       });
     }
     if (attrs.pending_queue_type === "climate" && attrs.pending_queue_length > 0) {
@@ -257,18 +296,18 @@ class CulMaxWeekProfileCard extends HTMLElement {
       items.push({
         level: attrs.pending_queue_last_error ? "warn" : "info",
         icon: "mdi:upload-network-outline",
-        text: `Übertragung zum Thermostat: noch ${attrs.pending_queue_length} Paket(e)${
+        text: `${who}Übertragung zum Thermostat: noch ${attrs.pending_queue_length} Paket(e)${
           attrs.pending_queue_active ? " …" : ""
         }${error}`,
       });
     }
     if (attrs.command_status === "sending") {
-      items.push({ level: "info", icon: "mdi:radio-tower", text: `Sende: ${esc(attrs.command_requested)} …` });
+      items.push({ level: "info", icon: "mdi:radio-tower", text: `${who}Sende: ${esc(attrs.command_requested)} …` });
     } else if (attrs.command_status === "failed") {
       items.push({
         level: "error",
         icon: "mdi:alert-circle-outline",
-        text: `Nicht bestätigt: ${esc(attrs.command_requested)}${
+        text: `${who}Nicht bestätigt: ${esc(attrs.command_requested)}${
           attrs.command_error ? ` (${esc(attrs.command_error)})` : ""
         }`,
       });
@@ -277,7 +316,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
       items.push({
         level: "info",
         icon: "mdi:link-variant",
-        text: "Profil vom verknüpften Wandthermostat – dort bearbeiten",
+        text: `${who}Profil vom verknüpften Wandthermostat – dort bearbeiten`,
       });
     }
     return items;
@@ -295,55 +334,92 @@ class CulMaxWeekProfileCard extends HTMLElement {
   _render() {
     if (!this._hass || !this._config) return;
     const root = this.shadowRoot;
-    const stateObj = this._stateObj();
-    if (!stateObj) {
-      root.innerHTML = `<ha-card><div class="msg">Entität nicht gefunden: ${esc(this._config.entity)}</div></ha-card>${this._styles()}`;
+    const ids = this._entityIds();
+    const stateObjs = ids.map((id) => this._hass.states[id]);
+    const missing = ids.filter((id, idx) => !stateObjs[idx]);
+    if (missing.length) {
+      root.innerHTML = `<ha-card><div class="msg">Entität nicht gefunden: ${esc(missing.join(", "))}</div></ha-card>${this._styles()}`;
       return;
     }
-    if (!CulMaxWeekProfileCard._isCulMaxClimate(this._config.entity, stateObj)) {
+    const incompatible = ids.filter((id, idx) => !CulMaxWeekProfileCard._isCulMaxClimate(id, stateObjs[idx]));
+    if (incompatible.length) {
       root.innerHTML = `
         <ha-card><div class="msg">
           <b>Inkompatible Entität</b><br>
           Diese Karte funktioniert nur mit <code>cul_max</code>-Climate-Entitäten.<br>
-          Gewählt: <code>${esc(this._config.entity)}</code>
+          Gewählt: <code>${esc(incompatible.join(", "))}</code>
         </div></ha-card>${this._styles()}`;
       return;
     }
 
+    const stateObj = stateObjs[0];
     const attrs = stateObj.attributes || {};
+    const multi = stateObjs.length > 1;
+    const shortNames = this._shortNames(stateObjs);
     const now = new Date();
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
     const todayKey = JS_DAY_TO_KEY[now.getDay()];
-    const hasProfile = DAYS.some(([key]) => attrs[`week_profile_${key}`]);
-    const fromPartner = attrs.week_profile_source === "linked_partner";
+    const allAttrs = stateObjs.map((st) => st.attributes || {});
+    const hasProfile = allAttrs.every((a) => DAYS.some(([key]) => a[`week_profile_${key}`]));
+    const fromPartner = allAttrs.some((a) => a.week_profile_source === "linked_partner");
     const editable = this._config.editable !== false && hasProfile && !fromPartner;
+    this._editableTargets = ids;
 
-    const chips = [];
-    const modeLabel = stateObj.state === "off" ? "Aus" : MODE_LABELS[attrs.mode_detail] || stateObj.state;
-    chips.push(`<span class="chip mode">${esc(modeLabel)}</span>`);
-    if (attrs.temperature != null) {
-      chips.push(`<span class="chip"><ha-icon icon="mdi:target"></ha-icon>${fmtTemp(attrs.temperature)}</span>`);
-    }
-    if (this._config.show_current_temp && attrs.current_temperature != null) {
-      chips.push(
-        `<span class="chip"><ha-icon icon="mdi:thermometer"></ha-icon>${fmtTemp(attrs.current_temperature)}</span>`
-      );
-    }
-    if (attrs.valve_position != null && attrs.valve_position > 0) {
-      chips.push(`<span class="chip"><ha-icon icon="mdi:valve"></ha-icon>${attrs.valve_position} %</span>`);
-    }
+    const chipsFor = (st) => {
+      const a = st.attributes || {};
+      const chips = [];
+      const modeLabel = st.state === "off" ? "Aus" : MODE_LABELS[a.mode_detail] || st.state;
+      chips.push(`<span class="chip mode">${esc(modeLabel)}</span>`);
+      if (a.temperature != null) {
+        chips.push(`<span class="chip"><ha-icon icon="mdi:target"></ha-icon>${fmtTemp(a.temperature)}</span>`);
+      }
+      if (this._config.show_current_temp && a.current_temperature != null) {
+        chips.push(
+          `<span class="chip"><ha-icon icon="mdi:thermometer"></ha-icon>${fmtTemp(a.current_temperature)}</span>`
+        );
+      }
+      if (a.valve_position != null && a.valve_position > 0) {
+        chips.push(`<span class="chip"><ha-icon icon="mdi:valve"></ha-icon>${a.valve_position}\u202f%</span>`);
+      }
+      return chips.join("");
+    };
+    const chipsHtml = multi
+      ? stateObjs
+          .map(
+            (st, idx) =>
+              `<div class="chips"><span class="who">${esc(shortNames[idx])}</span>${chipsFor(st)}</div>`
+          )
+          .join("")
+      : `<div class="chips">${chipsFor(stateObj)}</div>`;
+
+    // per day: normalised profile of every thermostat
+    const dayProfiles = Object.fromEntries(
+      DAYS.map(([key]) => [key, allAttrs.map((a) => this._daySegments(a, key))])
+    );
+    const differingDays = DAYS.filter(([key]) => {
+      const strings = dayProfiles[key].map((segs) => serializeDay(segs));
+      return strings.some((str) => str !== strings[0]);
+    });
 
     const next = hasProfile ? this._nextSwitch(attrs, now) : null;
-    const status = this._statusItems(stateObj)
+    const statusItems = stateObjs.flatMap((st, idx) => this._statusItems(st, multi ? shortNames[idx] : ""));
+    if (multi && differingDays.length) {
+      statusItems.push({
+        level: "info",
+        icon: "mdi:call-split",
+        text: `Profile unterscheiden sich: ${differingDays
+          .map(([, short]) => short)
+          .join(", ")} – ein bearbeiteter Tag wird für alle Thermostate übernommen`,
+      });
+    }
+    const status = statusItems
       .map(
         (item) =>
           `<div class="status ${item.level}"><ha-icon icon="${item.icon}"></ha-icon><span>${item.text}</span></div>`
       )
       .join("");
 
-    const rows = DAYS.map(([key, short, long]) => {
-      const segments = this._daySegments(attrs, key);
-      const isToday = key === todayKey;
+    const barHtml = (segments, isToday, long, label = "") => {
       const bar = segments.length
         ? segments
             .map((seg) => {
@@ -352,7 +428,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
               const active = isToday && nowMinutes >= seg.from && nowMinutes < seg.until;
               return `<div class="seg${active ? " active" : ""}"
                   style="left:${left}%;width:${width}%;background:${tempColor(seg.temp)}"
-                  title="${long} ${toHHMM(seg.from)}–${toHHMM(seg.until)}: ${fmtTemp(seg.temp)}">
+                  title="${esc(label ? `${label}: ` : "")}${long} ${toHHMM(seg.from)}–${toHHMM(seg.until)}: ${fmtTemp(seg.temp)}">
                   ${width >= 9 ? `<span>${fmtTemp(seg.temp)}</span>` : ""}
                 </div>`;
             })
@@ -367,23 +443,31 @@ class CulMaxWeekProfileCard extends HTMLElement {
         .slice(1)
         .map((seg) => {
           const pos = (seg.from / 1440) * 100;
-          let line = pos - lastOnLine[0] >= 8 ? 0 : pos - lastOnLine[1] >= 8 ? 1 : 0;
+          const line = pos - lastOnLine[0] >= 8 ? 0 : pos - lastOnLine[1] >= 8 ? 1 : 0;
           lastOnLine[line] = pos;
           lines = Math.max(lines, line + 1);
           return `<span class="l${line}" style="left:${pos}%">${toHHMM(seg.from)}</span>`;
         })
         .join("");
+      return `${label ? `<div class="who-label">${esc(label)}</div>` : ""}
+        <div class="bar">${bar}${marker}</div>
+        <div class="times${lines > 1 ? " two" : ""}">${times}</div>`;
+    };
+
+    const rows = DAYS.map(([key, short, long]) => {
+      const isToday = key === todayKey;
+      const differs = differingDays.some(([k]) => k === key);
+      const track = differs
+        ? dayProfiles[key].map((segs, idx) => barHtml(segs, isToday, long, shortNames[idx])).join("")
+        : barHtml(dayProfiles[key][0], isToday, long);
       const editingThis = this._editing?.day === key;
       return `
         <div class="day-row${isToday ? " today" : ""}${editable ? " editable" : ""}${editingThis ? " editing" : ""}"
              data-day="${key}" ${editable ? `role="button" tabindex="0" aria-label="${long} bearbeiten"` : ""}>
-          <div class="label">${short}</div>
-          <div class="track">
-            <div class="bar">${bar}${marker}</div>
-            <div class="times${lines > 1 ? " two" : ""}">${times}</div>
-          </div>
+          <div class="label">${short}${differs ? `<span class="diff" title="Profile unterscheiden sich">≠</span>` : ""}</div>
+          <div class="track">${track}</div>
         </div>
-        ${editingThis ? this._editorHtml(key, long) : ""}`;
+        ${editingThis ? this._editorHtml(key, long, multi ? shortNames : null) : ""}`;
     }).join("");
 
     root.innerHTML = `
@@ -392,11 +476,13 @@ class CulMaxWeekProfileCard extends HTMLElement {
           <div class="header">
             <div class="titles">
               <div class="title">${esc(this._config.title)}</div>
-              <div class="subtitle">${esc(attrs.friendly_name || "")}</div>
+              <div class="subtitle">${esc(
+                multi ? stateObjs.map((st) => st.attributes.friendly_name).join(" · ") : attrs.friendly_name || ""
+              )}</div>
             </div>
             <ha-icon-button class="more" label="Details"><ha-icon icon="mdi:dots-vertical"></ha-icon></ha-icon-button>
           </div>
-          <div class="chips">${chips.join("")}</div>
+          ${chipsHtml}
           ${next ? `<div class="next"><ha-icon icon="mdi:clock-outline"></ha-icon>Nächster Wechsel: ${next}</div>` : ""}
           ${status}
           <div class="axis"><span>0</span><span>6</span><span>12</span><span>18</span><span>24</span></div>
@@ -409,7 +495,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
     this._bindEvents(editable);
   }
 
-  _editorHtml(dayKey, longLabel) {
+  _editorHtml(dayKey, longLabel, targetNames = null) {
     const ed = this._editing;
     const tempOptions = (selected) => {
       const options = [];
@@ -450,7 +536,9 @@ class CulMaxWeekProfileCard extends HTMLElement {
       .join("");
     return `
       <div class="editor">
-        <div class="ed-title">${longLabel} bearbeiten</div>
+        <div class="ed-title">${longLabel} bearbeiten${
+          targetNames ? `<span class="ed-targets">für ${esc(targetNames.join(" + "))}</span>` : ""
+        }</div>
         <div class="ed-list">${segRows}</div>
         <button class="text ed-add" ${ed.segments.length >= MAX_POINTS || ed.busy ? "disabled" : ""}>
           <ha-icon icon="mdi:plus"></ha-icon>Schaltpunkt
@@ -469,7 +557,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
         <div class="ed-actions">
           <button class="text ed-cancel" ${ed.busy ? "disabled" : ""}>Abbrechen</button>
           <button class="primary ed-save" ${ed.busy ? "disabled" : ""}>
-            ${ed.busy ? "Wird übertragen …" : "Übertragen"}
+            ${ed.busy ? `Wird übertragen${ed.progress ? ` (${ed.progress})` : ""} …` : "Übertragen"}
           </button>
         </div>
         <div class="ed-note">Jeder Tag braucht 1–2 Funkpakete. Thermostate übernehmen das Profil, sobald sie es empfangen haben; der Fortschritt erscheint oben.</div>
@@ -522,22 +610,30 @@ class CulMaxWeekProfileCard extends HTMLElement {
       return;
     }
     const value = serializeDay(ed.segments);
-    const data = { entity_id: this._config.entity, [ed.day]: value };
+    const days = { [ed.day]: value };
     ed.copyTo.forEach((key) => {
-      data[key] = value;
+      days[key] = value;
     });
+    const targets = this._entityIds();
     ed.busy = true;
     ed.error = null;
-    this._render();
-    try {
-      await this._hass.callService("cul_max", "set_week_profile_days", data);
-      this._editing = null;
+    for (let idx = 0; idx < targets.length; idx += 1) {
+      ed.progress = targets.length > 1 ? `${idx + 1}/${targets.length}` : "";
       this._render();
-    } catch (err) {
-      ed.busy = false;
-      ed.error = err?.message || String(err);
-      this._render();
+      try {
+        // one thermostat after the other: each upload waits for its ACKs
+        await this._hass.callService("cul_max", "set_week_profile_days", { entity_id: targets[idx], ...days });
+      } catch (err) {
+        const name = this._hass.states[targets[idx]]?.attributes?.friendly_name || targets[idx];
+        ed.busy = false;
+        ed.progress = "";
+        ed.error = `${targets.length > 1 ? `${name}: ` : ""}${err?.message || String(err)}`;
+        this._render();
+        return;
+      }
     }
+    this._editing = null;
+    this._render();
   }
 
   _bindEvents(editable) {
@@ -548,7 +644,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
         new CustomEvent("hass-more-info", {
           bubbles: true,
           composed: true,
-          detail: { entityId: this._config.entity },
+          detail: { entityId: this._entityIds()[0] },
         })
       );
     });
@@ -651,6 +747,11 @@ class CulMaxWeekProfileCard extends HTMLElement {
       }
       .chip ha-icon { --mdc-icon-size: 16px; color: var(--secondary-text-color); }
       .chip.mode { background: var(--primary-color); color: var(--text-primary-color, #fff); }
+      .chips .who { font-size: 0.85rem; font-weight: 600; min-width: 4.5em; align-self: center; }
+      .chips + .chips { margin-top: 0; }
+      .who-label { font-size: 0.7rem; color: var(--secondary-text-color); margin: 2px 0 1px; }
+      .label .diff { margin-left: 3px; color: var(--warning-color, #ffa600); }
+      .ed-targets { font-weight: 400; color: var(--secondary-text-color); margin-left: 6px; font-size: 0.85rem; }
       .next {
         display: flex; align-items: center; gap: 6px; margin-top: 6px;
         color: var(--secondary-text-color); font-size: 0.9rem;
@@ -743,8 +844,26 @@ if (!customElements.get("cul-max-week-profile-card")) {
 
 class CulMaxWeekProfileCardEditor extends HTMLElement {
   setConfig(config) {
-    this._config = { title: "Wochenprofil", show_current_temp: true, editable: true, ...config };
+    const cfg = { title: "Wochenprofil", show_current_temp: true, editable: true, ...config };
+    // normalise: first thermostat in "entity", further ones in "entities"
+    if (Array.isArray(cfg.entities) && cfg.entities.length) {
+      const ids = cfg.entities.map((e) => (typeof e === "string" ? e : e?.entity)).filter(Boolean);
+      cfg.entity = cfg.entity || ids[0];
+    }
+    this._config = cfg;
     this._render();
+  }
+
+  _extraIds() {
+    const ids = (this._config.entities || []).map((e) => (typeof e === "string" ? e : e?.entity));
+    return ids.filter((id) => id && id !== this._config.entity);
+  }
+
+  _withExtras(config, extras) {
+    const next = { ...config };
+    if (extras.length) next.entities = [next.entity, ...extras];
+    else delete next.entities;
+    return next;
   }
 
   set hass(hass) {
@@ -780,6 +899,16 @@ class CulMaxWeekProfileCardEditor extends HTMLElement {
         <label><span>Thermostat</span>
           <select data-field="entity"><option value="">Bitte wählen</option>${options}</select>
         </label>
+        <div class="extras"><span>Weitere Thermostate im selben Raum (gemeinsame Karte)</span>
+          ${this._availableEntities()
+            .filter((entry) => entry.entity_id !== this._config.entity)
+            .map(
+              (entry) => `<label class="checkbox"><input type="checkbox" data-extra="${esc(entry.entity_id)}" ${
+                this._extraIds().includes(entry.entity_id) ? "checked" : ""
+              }/><span>${esc(entry.label)}</span></label>`
+            )
+            .join("")}
+        </div>
         <label><span>Titel</span>
           <input data-field="title" type="text" value="${esc(this._config.title || "")}" />
         </label>
@@ -802,14 +931,25 @@ class CulMaxWeekProfileCardEditor extends HTMLElement {
         }
         .cmwp-editor .checkbox { display: flex; align-items: center; gap: 10px; }
         .cmwp-editor .checkbox > span { color: var(--primary-text-color); }
+        .cmwp-editor .extras { display: grid; gap: 4px; max-height: 180px; overflow: auto; }
+        .cmwp-editor .extras > span { color: var(--secondary-text-color); font-size: 0.9rem; }
       </style>`;
 
     const stop = (event) => event.stopPropagation();
     const root = this.querySelector(".cmwp-editor");
     ["click", "mousedown", "mouseup", "touchstart"].forEach((type) => root?.addEventListener(type, stop));
 
-    this.querySelector('[data-field="entity"]')?.addEventListener("change", (ev) =>
-      this._emitConfig({ ...this._config, entity: ev.target.value })
+    this.querySelector('[data-field="entity"]')?.addEventListener("change", (ev) => {
+      const entity = ev.target.value;
+      this._emitConfig(this._withExtras({ ...this._config, entity }, this._extraIds().filter((id) => id !== entity)));
+      this._render();
+    });
+    this.querySelectorAll("[data-extra]").forEach((box) =>
+      box.addEventListener("change", () => {
+        const extras = this._extraIds().filter((id) => id !== box.dataset.extra);
+        if (box.checked) extras.push(box.dataset.extra);
+        this._emitConfig(this._withExtras(this._config, extras));
+      })
     );
     this.querySelector('[data-field="title"]')?.addEventListener("input", (ev) =>
       this._emitConfig({ ...this._config, title: ev.target.value })

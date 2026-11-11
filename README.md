@@ -257,6 +257,13 @@ Repository layout:
   editor with copy-to-days that uploads via `set_week_profile_days`. Renders
   in a shadow root and only when its entity changes. New option `editable`.
 - Climate entities refresh their attributes on pending-queue progress.
+- Week profile card: `entities:` shows several thermostats of one room in one
+  card (one timeline when profiles match, per-thermostat timelines for
+  differing days, edits go to all); notice when the weekly program is not
+  active.
+- `remove_link_partner` accepts `partner_type` to remove a stale link to a
+  device the integration does not know (e.g. a window contact still reporting
+  to a replaced thermostat).
 
 ### 0.3.0
 

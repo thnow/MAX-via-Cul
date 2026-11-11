@@ -401,6 +401,23 @@ Reload the browser after initial registration or an update if necessary.
 
 Options: `show_current_temp` (default `true`) and `editable` (default `true`).
 
+Several radiator thermostats in a room without a wall thermostat can share one
+card:
+
+```yaml
+type: custom:cul-max-week-profile-card
+title: Kitchen weekly schedule
+entities:
+  - climate.kitchen_left
+  - climate.kitchen_right
+```
+
+Each thermostat gets a status line (the shared part of the names is dropped,
+e.g. "left"/"right"). Days with identical profiles show one timeline; days that
+differ are marked "≠" and show one timeline per thermostat. An edited day is
+uploaded to all thermostats of the card, one after the other. The visual editor
+offers "Weitere Thermostate im selben Raum" for this.
+
 The card shows:
 
 - A 24 h timeline per day, coloured by temperature (off grey, cool blue, eco
@@ -408,6 +425,8 @@ The card shows:
 - Today highlighted, a "now" marker and the active segment outlined.
 - Mode, target, current temperature and valve position, plus the next
   switching point (e.g. `morgen 06:05 → 22 °C`).
+- A notice when the weekly program is not active (manual, off, boost or
+  vacation).
 - Notices when a window is open, the thermostat deviates from the schedule, a
   schedule upload is still in progress (open packets and last error) or a
   command was not confirmed.
