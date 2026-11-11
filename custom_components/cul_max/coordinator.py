@@ -2028,6 +2028,17 @@ class CulMaxCoordinator:
                 if partner.upper() in keys and pair not in seen and len(pair) == 2:
                     seen.add(pair)
                     edges.append(TopologyEdge(device.address, partner.upper()))
+        by_key = {node.key: node for node in nodes}
+        for node in nodes:
+            if node.virtual and node.room == "Ohne Raum":
+                partner_rooms = {
+                    by_key[other].room
+                    for edge in edges
+                    for other in ((edge.b,) if edge.a == node.key else (edge.a,) if edge.b == node.key else ())
+                    if other in by_key and by_key[other].room != "Ohne Raum"
+                }
+                if len(partner_rooms) == 1:
+                    node.room = partner_rooms.pop()
         rooms = {node.room for node in nodes}
         title = f"MAX! Topologie · {len(nodes)} Geräte in {len(rooms)} Räumen"
         return render_topology_svg(nodes, edges, title=title)

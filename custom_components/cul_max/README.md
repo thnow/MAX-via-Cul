@@ -183,6 +183,35 @@ Anlernen:
    erfolgreichen Pairing aber auch automatisch vom Cube bzw. von der
    Integration.
 
+## Geraeteseiten und Topologie
+
+- Jedes MAX!-Geraet ist in Home Assistant „verbunden ueber“ das Geraet
+  *MAX! CUL*; dessen Seite listet alle Geraete mit Raum auf.
+- Alle Entitaeten haben deutsche bzw. englische Namen (je nach Sprache von
+  Home Assistant); die Entity-IDs bleiben unveraendert.
+- Komfort-, Absenk- und Fenster-offen-Werte werden nach kurzer Pause (5 s)
+  automatisch uebertragen, ohne Speichern-Knopf.
+- Die frueheren Text-Editoren pro Wochentag sowie „Konfiguration
+  uebertragen“/„Entwurf verwerfen“ sind standardmaessig deaktiviert (die
+  Wochenprogramm-Karte ersetzt sie). Bestehende Installationen deaktivieren sie
+  einmalig; sie lassen sich in den Entitaetseinstellungen wieder aktivieren.
+- *Diagnosedaten herunterladen* gibt es fuer die Integration und jedes Geraet
+  (Topologie, Sendebudget, Warteschlangen, Status).
+
+### Topologie-Bild
+
+Das Geraet *MAX! CUL* hat eine Bild-Entitaet **Topologie**: eine Uebersicht
+aller Raeume (Home-Assistant-Bereiche) mit Wandthermostaten, Heizkoerper-
+thermostaten und Fensterkontakten. Linien zeigen die Verknuepfungen auf den
+Geraeten, gestrichelte Rahmen virtuelle Geraete, gruen einen externen
+Raumfuehler. Rot markiert Handlungsbedarf: Verknuepfungen in einen anderen
+Raum (oft ein falsch zugeordneter Bereich), „an anderer Zentrale angemeldet“,
+keine Meldung, schwache Batterie oder ausstehende Konfiguration. Virtuelle
+Geraete ohne Bereich erscheinen im Raum ihres verknuepften Thermostats. Das
+Bild laesst sich wie jedes Bild in Dashboards verwenden (z. B. Bildkarte).
+
+![Topologie](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/topology.png)
+
 ## Entitaeten
 
 Je nach Geraetetyp stellt die Integration mehrere Entitaeten bereit.

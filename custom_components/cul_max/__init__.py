@@ -336,7 +336,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: CulMaxConfigEntry) -> bo
     return True
 
 
-LEGACY_EDITORS_HIDDEN = "legacy_editors_hidden"
+LEGACY_EDITORS_HIDDEN = "legacy_editors_hidden_v2"
 
 
 def _remove_orphaned_time_sync_sensors(
@@ -365,8 +365,9 @@ def _hide_legacy_week_profile_editors(hass: HomeAssistant, entry: ConfigEntry) -
     registry = er.async_get(hass)
     disabled = 0
     for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
-        legacy = reg_entry.domain == "text" or reg_entry.unique_id.endswith(
-            ("_save_configuration", "_discard_draft")
+        legacy = reg_entry.domain == "text" or (
+            reg_entry.domain == "button"
+            and reg_entry.unique_id.endswith(("_save_config", "_discard_config"))
         )
         if legacy and reg_entry.disabled_by is None:
             registry.async_update_entity(

@@ -90,8 +90,8 @@ def render_topology_svg(nodes: list[TopologyNode], edges: list[TopologyEdge], *,
         if a.room == b.room:
             local_edges.append(edge)
         else:
-            a.problems.append(f"verknüpft mit {_short(b.name, 18)} ({b.room})")
-            b.problems.append(f"verknüpft mit {_short(a.name, 18)} ({a.room})")
+            a.problems.append(f"↔ {b.room}: {b.name}")
+            b.problems.append(f"↔ {a.room}: {a.name}")
 
     # layout per room
     layout: dict[str, tuple[float, float]] = {}  # node key -> (x, y) relative to room

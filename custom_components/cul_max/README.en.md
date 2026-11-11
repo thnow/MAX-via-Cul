@@ -152,6 +152,31 @@ To pair:
 4. Following successful pairing, the integration normally sends the time
    and other basic configuration automatically.
 
+## Device pages and topology
+
+- Every MAX! device is "connected via" the *MAX! CUL* device, whose page lists
+  all devices with their area.
+- All entities have translated names (German/English); entity IDs are kept.
+- Comfort, eco and window-open values apply automatically after 5 seconds; no
+  save button needed.
+- The former per-day text editors and the save/discard buttons are disabled by
+  default (the week profile card replaces them); existing installations
+  disable them once and they can be re-enabled in the entity settings.
+- *Download diagnostics* is available for the integration and each device.
+
+### Topology picture
+
+The *MAX! CUL* device has an image entity **Topology**: all rooms (Home
+Assistant areas) with wall thermostats, radiator thermostats and window
+contacts. Lines show the links stored on the devices, dashed frames virtual
+devices, green an external room sensor. Red marks things to act on: links into
+another room (often a wrong area), "paired with another controller", no
+contact, low battery or pending configuration. Virtual devices without an area
+are shown in the room of their linked thermostat. Use the image in dashboards
+like any other image entity.
+
+![Topology](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/topology.png)
+
 ## Entities
 
 ### Thermostats
