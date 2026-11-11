@@ -462,6 +462,18 @@ remove_link_partner:
       description: Alternativ den gespeicherten Namen des Partnergeräts angeben
       selector:
         text:
+    partner_type:
+      name: Partner-Typ (nur fuer unbekannte Partner)
+      description: >
+        Nur noetig, um eine veraltete Verknuepfung zu einem Geraet zu entfernen,
+        das die Integration nicht kennt (z. B. ein ersetztes Thermostat).
+        1 = Heizkoerperthermostat, 2 = Heizkoerperthermostat+, 3 = Wandthermostat,
+        4 = Fensterkontakt, 5 = Taster.
+      selector:
+        number:
+          min: 1
+          max: 5
+          mode: box
 
 associate_devices:
   name: Geräte assoziieren

@@ -659,7 +659,12 @@ def _register_services(hass: HomeAssistant, coordinator: CulMaxCoordinator) -> N
             )
             return
 
-        await coordinator.async_remove_link_partner(address, resolved_partner)
+        partner_type = call.data.get("partner_type")
+        await coordinator.async_remove_link_partner(
+            address,
+            resolved_partner,
+            partner_type=int(partner_type) if partner_type is not None else None,
+        )
         return {
             "device": _device_payload(address),
             "partner": _device_payload(resolved_partner),
@@ -1243,6 +1248,7 @@ def _register_services(hass: HomeAssistant, coordinator: CulMaxCoordinator) -> N
             vol.Optional("partner_address"): cv.string,
             vol.Optional("partner_entity_id"): cv.entity_id,
             vol.Optional("partner_name"): cv.string,
+            vol.Optional("partner_type"): vol.All(vol.Coerce(int), vol.Range(min=1, max=5)),
         }),
         supports_response=SupportsResponse.OPTIONAL,
     )

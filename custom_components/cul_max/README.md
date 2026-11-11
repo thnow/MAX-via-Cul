@@ -467,6 +467,20 @@ Ein virtueller Kontakt verhaelt sich wie ein echter MAX!-Fensterkontakt:
 - Ohne verknuepftes Thermostat wird wie bisher einmalig an die Zentrale
   gesendet.
 
+`cul_max.remove_link_partner` kann mit `partner_type` auch eine veraltete
+Verknuepfung zu einem Geraet entfernen, das die Integration nicht kennt, etwa
+wenn ein Fensterkontakt noch an ein ersetztes Thermostat meldet (im Log als
+ShutterContactState an eine unbekannte Adresse mit wiederholten Sendungen
+sichtbar):
+
+```yaml
+action: cul_max.remove_link_partner
+data:
+  address: 049A02          # Fensterkontakt
+  partner_address: 0EA19C  # alte, unbekannte Adresse
+  partner_type: 1          # 1 = Heizkoerperthermostat
+```
+
 ### Komfortdienste fuer ganze Raeume
 
 - `cul_max.create_room_association`
@@ -579,6 +593,24 @@ show_current_temp: true   # Ist-Temperatur anzeigen (Standard)
 editable: true            # Bearbeiten in der Karte erlauben (Standard)
 ```
 
+Mehrere Heizkoerperthermostate in einem Raum ohne Wandthermostat lassen sich
+in einer gemeinsamen Karte zeigen:
+
+```yaml
+type: custom:cul-max-week-profile-card
+title: Kueche Wochenprofil
+entities:
+  - climate.thermostat_kuche_links
+  - climate.thermostat_kuche_rechts
+```
+
+Je Thermostat erscheint eine Statuszeile (der gemeinsame Namensteil wird
+weggelassen, z. B. „links“/„rechts“). Haben alle Thermostate an einem Tag
+dasselbe Profil, gibt es eine Zeitleiste; sonst ist der Tag mit „≠“
+markiert und zeigt je Thermostat eine eigene Leiste. Ein bearbeiteter Tag wird
+nacheinander an alle Thermostate der Karte uebertragen. Im visuellen Editor
+gibt es dafuer „Weitere Thermostate im selben Raum“.
+
 Was die Karte zeigt:
 
 - pro Tag eine 24-h-Zeitleiste, nach Temperatur eingefaerbt (Aus grau, kuehl
@@ -587,6 +619,8 @@ Was die Karte zeigt:
   Abschnitt umrandet
 - Modus, Soll-, Ist-Temperatur und Ventilstellung sowie den naechsten
   Schaltpunkt (z. B. `morgen 06:05 → 22 °C`)
+- einen Hinweis, wenn das Wochenprogramm nicht aktiv ist (Modus Manuell, Aus,
+  Boost oder Urlaub)
 - Hinweise, wenn ein Fenster offen ist, das Thermostat vom Plan abweicht, ein
   Wochenprofil noch uebertragen wird (mit Anzahl offener Pakete und letztem
   Fehler) oder ein Befehl nicht bestaetigt wurde

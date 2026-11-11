@@ -288,6 +288,7 @@ class PendingShutterCommand:
     description: str
     group_id: int | None = None
     partner_address: str | None = None
+    partner_type: int | None = None
     queued_at: str = ""
     last_attempt_at: str = ""
     next_attempt_at: str = ""
@@ -320,6 +321,7 @@ def _serialize_pending_shutter_command(command: PendingShutterCommand) -> dict[s
         "description": command.description,
         "group_id": command.group_id,
         "partner_address": command.partner_address,
+        "partner_type": command.partner_type,
         "queued_at": command.queued_at,
         "last_attempt_at": command.last_attempt_at,
         "next_attempt_at": command.next_attempt_at,
@@ -339,6 +341,9 @@ def _deserialize_pending_shutter_command(data: dict[str, Any]) -> PendingShutter
             str(data["partner_address"]).upper()
             if data.get("partner_address")
             else None
+        ),
+        partner_type=(
+            int(data["partner_type"]) if data.get("partner_type") is not None else None
         ),
         queued_at=str(data.get("queued_at", "")),
         last_attempt_at=str(data.get("last_attempt_at", "")),
@@ -2181,14 +2186,18 @@ class CulMaxCoordinator:
         elif command.op == "remove_link_partner":
             assert command.partner_address is not None
             partner = self.get_device(command.partner_address)
-            if partner is None:
+            if partner is not None:
+                partner_type = partner.device_type
+            elif command.partner_type is not None:
+                partner_type = command.partner_type  # stale link to an unknown device
+            else:
                 raise ValueError(f"Unbekannte Partneradresse {command.partner_address}")
             cmd = build_remove_link_partner(
                 counter,
                 self.own_address,
                 int(address, 16),
                 int(command.partner_address, 16),
-                partner.device_type,
+                partner_type,
             )
         else:
             raise ValueError(f"Unbekannte pending shutter command {command.op}")
@@ -2821,14 +2830,30 @@ class CulMaxCoordinator:
             device.linked_partners.sort()
             await self._save_devices()
 
-    async def async_remove_link_partner(self, address: str, partner_address: str) -> None:
-        """Remove an on-device link between two MAX! devices."""
+    async def async_remove_link_partner(
+        self,
+        address: str,
+        partner_address: str,
+        *,
+        partner_type: int | None = None,
+    ) -> None:
+        """Remove an on-device link between two MAX! devices.
+
+        partner_type allows removing a stale link to a device this integration
+        does not know (e.g. a replaced thermostat a window contact still
+        reports to).
+        """
         device = self.get_device(address)
         partner = self.get_device(partner_address)
         if device is None:
             raise ValueError(f"Unbekannte Geraeteadresse {address}")
         if partner is None:
-            raise ValueError(f"Unbekannte Partneradresse {partner_address}")
+            if partner_type is None:
+                raise ValueError(
+                    f"Unbekannte Partneradresse {partner_address}. "
+                    "Fuer eine veraltete Verknuepfung zu einem unbekannten Geraet bitte partner_type angeben."
+                )
+            return await self._remove_stale_link_partner(address, partner_address.upper(), partner_type)
         self._require_paired_for_write(address)
         self._require_paired_for_write(partner_address)
         self._validate_link_supported(address, partner_address)
@@ -2888,6 +2913,51 @@ class CulMaxCoordinator:
             timeout=CONFIG_ACK_TIMEOUT,
         )
 
+        if partner_address in device.linked_partners:
+            device.linked_partners.remove(partner_address)
+            await self._save_devices()
+
+    async def _remove_stale_link_partner(
+        self, address: str, partner_address: str, partner_type: int
+    ) -> None:
+        """Remove a link to an unknown device from a real MAX! device."""
+        device = self.get_device(address)
+        assert device is not None
+        self._require_paired_for_write(address)
+        if device.is_virtual:
+            raise ValueError("Virtuelle Geraete haben keine Verknuepfungen auf dem Geraet.")
+        if partner_type not in DEVICE_TYPE_NAMES:
+            raise ValueError(f"Unbekannter partner_type {partner_type}.")
+        description = (
+            f"RemoveLinkPartner {self.format_device_label(address)} -> {partner_address} "
+            f"(unbekannt, {DEVICE_TYPE_NAMES[partner_type]})"
+        )
+        if device.device_type == DEVICE_SHUTTER_CONTACT:
+            await self._enqueue_shutter_command(
+                address,
+                PendingShutterCommand(
+                    op="remove_link_partner",
+                    description=description,
+                    partner_address=partner_address,
+                    partner_type=partner_type,
+                ),
+            )
+            return
+        counter = self._next_counter()
+        cmd = build_remove_link_partner(
+            counter, self.own_address, int(address, 16), int(partner_address, 16), partner_type
+        )
+        _LOGGER.info("%s", description)
+        await self._set_last_command(address, description)
+        await self._send_command(
+            cmd,
+            expected_src=address,
+            device_address=address,
+            counter=counter,
+            description=description,
+            retries=self._send_profile.config_retries,
+            timeout=CONFIG_ACK_TIMEOUT,
+        )
         if partner_address in device.linked_partners:
             device.linked_partners.remove(partner_address)
             await self._save_devices()
