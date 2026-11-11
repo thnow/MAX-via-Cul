@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from html import escape
 
-ROOM_WIDTH = 380
+ROOM_WIDTH = 400
 ROOM_GAP = 16
 COLUMNS = 3
 NODE_WIDTH = 158
@@ -12,7 +12,11 @@ NODE_HEIGHT = 50
 NODE_GAP = 10
 ROOM_HEADER = 36
 LEFT_X = 14
-RIGHT_X = ROOM_WIDTH - NODE_WIDTH - 14
+BRACKET_SPACE = 36  # room for wall-thermostat brackets right of the devices
+RIGHT_X = ROOM_WIDTH - NODE_WIDTH - BRACKET_SPACE
+NOTE_CHARS = 25
+NOTE_MAX_LINES = 3
+LINE_HEIGHT = 14
 
 FONT = "-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
 COLORS = {
@@ -64,6 +68,41 @@ def _short(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
+def _wrap(text: str, width: int = NOTE_CHARS, max_lines: int = NOTE_MAX_LINES) -> list[str]:
+    """Word-wrap a note so it fits into a device box."""
+    lines: list[str] = []
+    current = ""
+    for word in str(text).split():
+        while len(word) > width:  # very long word: hard split
+            if current:
+                lines.append(current)
+                current = ""
+            lines.append(word[:width])
+            word = word[width:]
+        candidate = f"{current} {word}".strip()
+        if len(candidate) <= width:
+            current = candidate
+        else:
+            lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        lines[-1] = _short(lines[-1] + " …", width)
+    return lines or [""]
+
+
+def _note_lines(node: TopologyNode) -> list[tuple[str, str]]:
+    """All wrapped note/problem lines of a node as (text, colour)."""
+    out: list[tuple[str, str]] = []
+    for note in node.notes:
+        out.extend((line, COLORS["ok"]) for line in _wrap(note))
+    for problem in node.problems:
+        out.extend((line, COLORS["warn"]) for line in _wrap(problem))
+    return out
+
+
 def _strip_room(name: str, room: str) -> str:
     """'Thermostat Kinderzimmer' in room 'Kinderzimmer' → 'Thermostat'."""
     if room and room.lower() in name.lower() and name.lower() != room.lower():
@@ -105,9 +144,9 @@ def render_topology_svg(nodes: list[TopologyNode], edges: list[TopologyEdge], *,
         )
         for column, x in ((left, LEFT_X), (right, RIGHT_X)):
             for idx, node in enumerate(column):
-                extra = 14 * (len(node.problems) + len(node.notes))
+                extra = LINE_HEIGHT * len(_note_lines(node))
                 y = ROOM_HEADER + sum(
-                    NODE_HEIGHT + NODE_GAP + 14 * (len(n.problems) + len(n.notes))
+                    NODE_HEIGHT + NODE_GAP + LINE_HEIGHT * len(_note_lines(n))
                     for n in column[:idx]
                 )
                 layout[node.key] = (x, y)
@@ -150,7 +189,16 @@ def render_topology_svg(nodes: list[TopologyNode], edges: list[TopologyEdge], *,
         room_edges = [
             e for e in local_edges if by_key[e.a].room == room
         ]
-        bracket = 0
+        same_column = [
+            e for e in room_edges
+            if (by_key[e.a].kind == KIND_CONTACT) == (by_key[e.b].kind == KIND_CONTACT)
+        ]
+        right_brackets = sum(1 for e in same_column if by_key[e.a].kind != KIND_CONTACT)
+        left_brackets = len(same_column) - right_brackets
+        # keep every bracket inside the room box
+        right_step = min(5.0, (BRACKET_SPACE - 10) / max(right_brackets, 1))
+        left_step = min(5.0, (LEFT_X - 4) / max(left_brackets, 1))
+        right_n = left_n = 0
         for edge in room_edges:
             a, b = by_key[edge.a], by_key[edge.b]
             ax, ay = layout[a.key]
@@ -170,13 +218,13 @@ def render_topology_svg(nodes: list[TopologyNode], edges: list[TopologyEdge], *,
                 )
             else:
                 # both in the same column: bracket on the outer side
-                bracket += 1
-                outer = 6 + 5 * bracket
                 if a.kind == KIND_CONTACT:
-                    x = rx + LEFT_X - outer
+                    left_n += 1
+                    x = rx + LEFT_X - 2 - left_step * left_n
                     edge_x = rx + LEFT_X
                 else:
-                    x = rx + RIGHT_X + NODE_WIDTH + outer
+                    right_n += 1
+                    x = rx + RIGHT_X + NODE_WIDTH + 4 + right_step * right_n
                     edge_x = rx + RIGHT_X + NODE_WIDTH
                 out.append(
                     f'<path d="M{edge_x},{ay_mid} H{x} V{by_mid} H{edge_x}" fill="none" '
@@ -208,18 +256,12 @@ def render_topology_svg(nodes: list[TopologyNode], edges: list[TopologyEdge], *,
                     f'<text x="{x + 9}" y="{y0 + 35}" font-size="11.5" fill="{COLORS["muted"]}">'
                     f"{escape(_short(node.status, 26))}</text>"
                 )
-            line_y = y0 + 35 + 14
-            for note in node.notes:
+            line_y = y0 + 35 + LINE_HEIGHT
+            for text, colour in _note_lines(node):
                 out.append(
-                    f'<text x="{x + 9}" y="{line_y}" font-size="11" fill="{COLORS["ok"]}">'
-                    f"{escape(_short(note, 27))}</text>"
+                    f'<text x="{x + 9}" y="{line_y}" font-size="11" fill="{colour}">'
+                    f"{escape(text)}</text>"
                 )
-                line_y += 14
-            for problem in node.problems:
-                out.append(
-                    f'<text x="{x + 9}" y="{line_y}" font-size="11" fill="{COLORS["warn"]}">'
-                    f"{escape(_short(problem, 27))}</text>"
-                )
-                line_y += 14
+                line_y += LINE_HEIGHT
     out.append("</svg>")
     return "\n".join(out)
