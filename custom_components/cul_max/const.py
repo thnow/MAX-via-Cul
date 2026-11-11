@@ -1,6 +1,7 @@
 """Constants for the MAX! via CUL integration."""
 
 from datetime import timedelta
+import hashlib
 import json
 from pathlib import Path
 
@@ -13,17 +14,27 @@ _MANIFEST_PATH = Path(__file__).parent / "manifest.json"
 with _MANIFEST_PATH.open(encoding="utf-8") as manifest_file:
     INTEGRATION_VERSION = json.load(manifest_file).get("version", "0.0.0")
 
+def _frontend_version(filename: str) -> str:
+    """Integration version plus a content hash: the card files are served with
+    long-lived cache headers, so the URL must change whenever a file changes."""
+    try:
+        digest = hashlib.sha256((Path(__file__).parent / "frontend" / filename).read_bytes()).hexdigest()[:8]
+    except OSError:
+        return INTEGRATION_VERSION
+    return f"{INTEGRATION_VERSION}-{digest}"
+
+
 FRONTEND_MODULES = [
     {
         "name": "CUL MAX Week Profile Card",
         "filename": "cul-max-week-profile-card.js",
-        "version": INTEGRATION_VERSION,
+        "version": _frontend_version("cul-max-week-profile-card.js"),
         "legacy_paths": ["/local/cul-max-week-profile-card.js"],
     },
     {
         "name": "CUL MAX Vacation Card",
         "filename": "cul-max-vacation-card.js",
-        "version": INTEGRATION_VERSION,
+        "version": _frontend_version("cul-max-vacation-card.js"),
     },
 ]
 

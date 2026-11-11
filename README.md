@@ -285,6 +285,8 @@ Repository layout:
   Assistant; previously the card ignored all clicks in that case.
 - Week profile editor: "+ Schaltpunkt" appends a switching point instead of
   splitting the longest period, so times already entered no longer jump.
+- Card URLs carry a content hash, so browsers load updated cards right away
+  instead of using a cached copy.
 
 ### 0.5.0
 
