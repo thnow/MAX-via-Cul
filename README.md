@@ -283,6 +283,8 @@ Repository layout:
   Cube) can be edited now. MAX! devices cannot report their program, so such
   days are shown as "unbekannt" (unknown) until they are set from Home
   Assistant; previously the card ignored all clicks in that case.
+- Week profile editor: "+ Schaltpunkt" appends a switching point instead of
+  splitting the longest period, so times already entered no longer jump.
 
 ### 0.5.0
 
