@@ -12,6 +12,10 @@ Window contacts, wall thermostats and radiator thermostats can therefore
 continue cooperating while Home Assistant is offline. External sensors mapped
 through Home Assistant to virtual contacts still require Home Assistant.
 
+New to MAX! in Home Assistant? Start with the
+[quick start and the recommended dashboard](../../README.md#quick-start) in
+the main README.
+
 ## Features
 
 - Pair MAX! devices directly from Home Assistant.
@@ -105,8 +109,13 @@ at the same time.
 
 Before pairing any device:
 
-1. Call `cul_max.start_pairing` in Home Assistant.
+1. Open the pairing window – easiest with the [pairing card](#pairing-card),
+   otherwise with the "Pairing" switch on the CUL device page or
+   `cul_max.start_pairing`.
 2. Put the device into pairing mode.
+
+The card lists every device found right away and lets you set name, area and
+room links in one step.
 
 These procedures are a practical reference for common MAX! models. Wall
 thermostat behaviour can vary by firmware version.
@@ -449,19 +458,9 @@ Replace example entity IDs and device names with those from your installation.
 
 ### Start pairing from a phone
 
-Create a script:
-
-```yaml
-script:
-  cul_max_pairing_60s:
-    alias: MAX Pairing 60s
-    sequence:
-      - action: cul_max.start_pairing
-        data:
-          duration: 60
-```
-
-Call pairing directly from a dashboard button:
+Easiest with the [pairing card](#pairing-card) or the "Pairing" switch on the
+CUL device page (also usable as a dashboard tile). For automations or a
+button of your own:
 
 ```yaml
 type: button
@@ -472,21 +471,6 @@ tap_action:
   perform_action: cul_max.start_pairing
   data:
     duration: 60
-```
-
-Alternatively, set `perform_action` to `script.cul_max_pairing_60s` and omit
-the button's `data` field.
-
-A longer pairing window, such as 90 or 120 seconds, can be convenient when
-walking to a device. The window applies to the entire integration. Avoid
-leaving it open unnecessarily.
-
-To show its status:
-
-```yaml
-type: tile
-entity: binary_sensor.max_via_cul_pairing_mode
-name: MAX Pairing
 ```
 
 ### Check and synchronise device clocks
@@ -580,30 +564,6 @@ preview and then uploads all known days (identical days are skipped).
 **Several thermostats in one card:** "⋮" opens a chooser; tapping a
 thermostat's status row opens exactly that one.
 
-### Transmission queue card
-
-```yaml
-type: custom:cul-max-queue-card
-```
-
-Shows what is waiting for radio time: send budget and recovery per second,
-estimated time until everything is out, the queued commands in plain words
-and pending configuration per device. Single commands can be removed, pending
-configuration of a device discarded. Read-only towards the radio.
-
-### Pairing card
-
-```yaml
-type: custom:cul-max-pairing-card
-```
-
-Starts pairing (60 s, 2 or 5 min; gateway chooser with several CULs), shows a
-countdown and lists every device that answered in this session – new or
-already known – with a name suggested from type and area. Name, area and
-optionally "link with the MAX! devices in the area" (group and links, for the
-new device only) are saved in one step. Devices still belonging to another
-central are listed with the hint to reset them.
-
 In Lovelace storage mode, the integration registers its card resource
 automatically and makes it available in the visual card editor.
 
@@ -618,7 +578,8 @@ migrated to the embedded path in storage mode. In YAML mode, register
 `/cul-max/cul-max-week-profile-card.js` manually as a `module` resource.
 Reload the browser after initial registration or an update if necessary.
 
-Options: `show_current_temp` (default `true`) and `editable` (default `true`).
+Options: `entity` or `entities`, `title`, `show_current_temp` (default `true`),
+`editable` (default `true`) and `quick_change` (default `true`).
 
 Several radiator thermostats in a room without a wall thermostat can share one
 card:
@@ -667,7 +628,32 @@ Editing:
 - Schedules inherited from a linked wall thermostat are read-only here; edit
   them on the wall thermostat.
 
-The three-dot button opens the climate entity's more-info dialog.
+The three-dot button opens the climate entity's more-info dialog (with several
+thermostats a chooser first).
+
+### Transmission queue card
+
+```yaml
+type: custom:cul-max-queue-card
+```
+
+Shows what is waiting for radio time: send budget and recovery per second,
+estimated time until everything is out, the queued commands in plain words
+and pending configuration per device. Single commands can be removed, pending
+configuration of a device discarded. Read-only towards the radio.
+
+### Pairing card
+
+```yaml
+type: custom:cul-max-pairing-card
+```
+
+Starts pairing (60 s, 2 or 5 min; gateway chooser with several CULs), shows a
+countdown and lists every device that answered in this session – new or
+already known – with a name suggested from type and area. Name, area and
+optionally "link with the MAX! devices in the area" (group and links, for the
+new device only) are saved in one step. Devices still belonging to another
+central are listed with the hint to reset them.
 
 ### Set up a complete room
 

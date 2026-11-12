@@ -31,6 +31,9 @@ protocol locally.
   optional preheating and restore of manual settings
 - Fast, confirmed commands: the CUL's real send budget, prioritized queue and
   device acknowledgements; detection of devices still paired with an old Cube
+- Dashboard cards for pairing (name, area and room links in one step), the
+  vacation and the transmission queue
+- Presets `eco`/`comfort` for schedulers, `−`/`+` until the next switching point
 
 ## Screenshots
 
@@ -93,35 +96,77 @@ directly when your Home Assistant instance supports it.
 2. Restart Home Assistant.
 3. Add **MAX! via CUL** from **Settings > Devices & services > Add integration**.
 
+## Quick Start
+
+New to MAX! in Home Assistant? These steps get you from zero to a working
+heating dashboard. Each step links to the details further down.
+
+1. **Install** the integration through HACS (see [Installation](#installation))
+   and restart Home Assistant.
+2. **Add the integration:** *Settings > Devices & services > Add integration >
+   MAX! via CUL*. Choose network or USB and keep the proposed MAX! address
+   (see [First Setup](#first-setup)).
+3. **Add the cards to a dashboard.** The [recommended dashboard](#recommended-dashboard)
+   below is ready to paste: pairing, vacation, transmission queue and one week
+   program card per room.
+4. **Pair your devices** with the pairing card: press *Anlernen starten*, then
+   put the device into pairing mode (radiator thermostat: hold *Boost* for about
+   3 s). The device appears in the card – give it a name and an area, tick
+   *mit den MAX!-Geräten im Bereich verknüpfen* (link with the area's MAX!
+   devices) and press *Übernehmen*. Repeat for every device of the room.
+5. **Check the week program** in the week program card and adjust it if
+   needed. The program runs on the thermostat itself, also when Home Assistant
+   is down.
+6. Optional: let a radiator thermostat [regulate on a room thermometer](#regulate-on-a-room-thermometer),
+   and use the [vacation card](#lower-the-heating-while-you-are-away) when you leave.
+
+Devices that were paired with a MAX! Cube before must be **reset** first – they
+remember their old central. The reset steps per device type are in the
+[extended guide](custom_components/cul_max/README.en.md#reset-and-pairing).
+
+### Words used here
+
+| Term | Meaning |
+| --- | --- |
+| CUL / CUNO | A small 868 MHz radio stick or network box. With the CULFW firmware it speaks the MAX! radio protocol. A MAX! Cube flashed with a-culfw is one too. |
+| Central | The device the MAX! components are paired with – the old Cube, now this integration. |
+| Week program | The schedule stored on each thermostat (up to 13 switching points per day). |
+| Link / group | Direct radio relations between devices of one room: a window contact lowers the radiators, a wall thermostat controls them – without Home Assistant in between. |
+| Send budget | The CUL may only transmit 1 % of the time. Large changes (e.g. week programs for a whole flat) are queued and take a few minutes. |
+
 ## First Setup
 
-The config flow asks for three values:
+The config flow first asks how the CUL is connected:
 
-- **Host**: IP address or host name of the CUL/CUNO
-- **Port**: TCP port of the CUL/CUNO, usually `2323`
-- **Own MAX! address**: 6-digit hex address used by this integration, default `123456`
+- **Network:** host name or IP address and TCP port, usually `2323`
+- **USB stick / serial:** the serial device (prefer the stable name below
+  `/dev/serial/by-id/`) and the baud rate, usually `38400`. Running Home
+  Assistant OS in a VM (e.g. Proxmox)? Pass the stick through and reboot the VM
+  from the hypervisor, see the [extended guide](custom_components/cul_max/README.en.md#setup).
 
-If you are replacing an existing MAX! Cube setup, reuse the old radio identity
-where possible or pair the devices again cleanly. MAX! devices remember their
-paired controller, so moving between controllers can require a device reset.
+Then it asks for the **own MAX! address** of the integration (6-digit hex,
+default `123456`). Keep the proposal unless you run several CULs – each needs
+its own address, and setup proposes a free one.
 
-## Pairing Your First Device
+If you are replacing an existing MAX! Cube setup, reset the devices and pair
+them again cleanly. MAX! devices remember their paired controller.
 
-1. Add the integration and confirm it connects to the CUL/CUNO.
-2. In Home Assistant, call the service `cul_max.start_pairing`.
-3. Put the MAX! device into pairing mode.
-4. Wait for the device to appear in Home Assistant.
-5. Rename the device or assign groups/rooms as needed.
+## Pairing Devices
 
-Common pairing actions:
+The easiest way is the **pairing card** (`custom:cul-max-pairing-card`, see
+[Recommended dashboard](#recommended-dashboard)). Alternatively switch on
+*Anlernen* (pairing) on the CUL device page or call `cul_max.start_pairing`;
+then name the device and assign its area on its device page.
+
+Put the device into pairing mode while the window is open:
 
 - Heating thermostat: hold the Boost button for about 3 seconds.
 - Shutter contact: hold the button until the LED starts blinking.
 - Wall thermostat: reset or enter pairing mode from the device menu, depending on firmware.
 
-The detailed device reset notes live in
-[the extended English guide](custom_components/cul_max/README.en.md)
-or [the German guide](custom_components/cul_max/README.md).
+Detailed reset and pairing notes are in
+[the extended English guide](custom_components/cul_max/README.en.md#reset-and-pairing)
+and [the German guide](custom_components/cul_max/README.md#reset-und-anlernen).
 
 ## Common Workflows
 
@@ -139,6 +184,27 @@ the devices keep cooperating even when Home Assistant is temporarily down.
    `cul_max.associate_devices`.
 3. Call `cul_max.send_virtual_shutter_contact_state` from an automation when
    the external sensor opens or closes.
+
+### Regulate on a room thermometer
+
+A radiator thermostat measures right next to the hot radiator. It can instead
+regulate on any temperature sensor in Home Assistant (Zigbee, Matter, …): in
+the week program card tap *Regelung nach* → *ändern*, pick the sensor and press
+*Übernehmen* – or call `cul_max.set_external_temperature_sensor`. The
+integration then acts as a wall thermostat for that room. Details in the
+[extended guide](custom_components/cul_max/README.en.md#external-room-sensor-virtual-wall-thermostat).
+
+### A bit warmer for now
+
+In the week program card, `−`/`+` changes the temperature until the next
+switching point; afterwards the thermostat follows its program again.
+*Zurück zum Plan* undoes it at once.
+
+### Use a scheduler or timer
+
+Schedulers that can only switch presets can use the presets `eco` and
+`comfort` (manual at the thermostat's own eco/comfort temperature) and `none`
+(back to the week program).
 
 ### Lower the heating while you are away
 
@@ -158,64 +224,61 @@ and virtual contacts.
 
 Use `cul_max.import_topology` to restore that structure later.
 
-## Lovelace Card
+## Dashboard Cards
 
-The integration registers `cul-max-week-profile-card` as a frontend resource.
-It shows each day as a coloured 24 h timeline with a "now" marker, the next
-switching point and status notices (window open, deviation from the schedule,
-upload progress), and lets you edit a day directly in the card, including
-copying it to other days.
+The integration registers its cards automatically (Lovelace storage mode);
+they appear in the card picker. After an update reload the browser
+(Ctrl+F5 / pull down in the app) if a card still looks old.
 
-Example:
+| Card | Purpose | Options |
+| --- | --- | --- |
+| `custom:cul-max-week-profile-card` | Week program per room: coloured timeline, status, editing, `−`/`+`, copy from another room, room sensor | `entity` or `entities`, `title`, `show_current_temp`, `editable`, `quick_change` |
+| `custom:cul-max-vacation-card` | Vacation for the whole flat: return date/time, temperature, preheating | `title` |
+| `custom:cul-max-pairing-card` | Pairing with countdown, name suggestion, area and room links | `title` |
+| `custom:cul-max-queue-card` | What waits for radio time, send budget, estimated time; remove queued commands | `title` |
+
+### Recommended dashboard
+
+Paste this as a new view (*Edit dashboard > ⋮ > Raw configuration editor*) and
+replace the entity IDs with yours:
 
 ```yaml
-type: custom:cul-max-week-profile-card
-entity: climate.living_room_radiator
+title: Heizung
+cards:
+  - type: custom:cul-max-vacation-card
+  - type: custom:cul-max-week-profile-card
+    entity: climate.thermostat_living_room
+  - type: custom:cul-max-week-profile-card
+    title: Kitchen
+    entities:            # several thermostats of one room in one card
+      - climate.thermostat_kitchen_left
+      - climate.thermostat_kitchen_right
+  - type: custom:cul-max-queue-card
+  - type: custom:cul-max-pairing-card
 ```
 
-In auto mode the card also offers `−`/`+` for a change until the next
-switching point, and the day editor can copy the program of another room.
-
-Further bundled cards (registered automatically):
-
-- `custom:cul-max-vacation-card` – vacation for the whole flat
-- `custom:cul-max-queue-card` – what is waiting for radio time, with budget
-  and estimated time
-- `custom:cul-max-pairing-card` – pairing with countdown, found devices, name
-  suggestion, area and room links
+The week program card shows each day as a coloured 24 h timeline with a "now"
+marker, the next switching point and status notices (window open, deviation
+from the schedule, upload progress), and lets you edit a day directly in the
+card, including copying it to other days or from another room.
 
 ## Services
 
-The integration exposes these Home Assistant services:
+All services have descriptions and selectors in *Developer tools > Actions*.
+Most people only need the cards; the services are for automations and repairs.
 
-- `cul_max.start_pairing`
-- `cul_max.set_device_name`
-- `cul_max.wake_thermostats`
-- `cul_max.sync_time`
-- `cul_max.set_week_profile`
-- `cul_max.set_week_profile_days`
-- `cul_max.set_group_id`
-- `cul_max.set_temperature_config`
-- `cul_max.set_desired_temperature`
-- `cul_max.remove_group_id`
-- `cul_max.add_link_partner`
-- `cul_max.remove_link_partner`
-- `cul_max.associate_devices`
-- `cul_max.deassociate_devices`
-- `cul_max.create_virtual_shutter_contact`
-- `cul_max.delete_virtual_device`
-- `cul_max.send_virtual_shutter_contact_state`
-- `cul_max.create_room_association`
-- `cul_max.delete_room_association`
-- `cul_max.rebuild_room_association`
-- `cul_max.export_topology`
-- `cul_max.import_topology`
-- `cul_max.cleanup_superseded_devices`
-- `cul_max.start_vacation`
-- `cul_max.end_vacation`
+| Area | Services |
+| --- | --- |
+| Pairing and devices | `start_pairing`, `set_device_name`, `cleanup_superseded_devices` |
+| Temperature | `set_desired_temperature` (auto/manual/boost/until), `set_temperature_config` (comfort, eco, window open) |
+| Week program | `set_week_profile`, `set_week_profile_days` |
+| Rooms and links | `create_room_association`, `delete_room_association`, `rebuild_room_association`, `associate_devices`, `deassociate_devices`, `set_group_id`, `remove_group_id`, `add_link_partner`, `remove_link_partner` |
+| Room sensor | `set_external_temperature_sensor` |
+| Virtual window contacts | `create_virtual_shutter_contact`, `send_virtual_shutter_contact_state`, `delete_virtual_device` |
+| Vacation | `start_vacation`, `end_vacation` |
+| Maintenance | `sync_time`, `wake_thermostats`, `export_topology`, `import_topology` |
 
-The Home Assistant service UI includes selectors and descriptions for all
-service fields.
+All services live in the `cul_max` domain (e.g. `cul_max.start_vacation`).
 
 ## Troubleshooting
 
@@ -253,10 +316,30 @@ is sending through the same CUL.
 Use `cul_max.sync_time` for thermostats and wall thermostats. Then verify the
 profile again.
 
+### A device says it is still paired with another central
+
+The device still belongs to an old Cube or another controller and ignores this
+integration. Reset it (steps in the
+[extended guide](custom_components/cul_max/README.en.md#still-paired-with-another-controller))
+and pair it again.
+
+### A card is missing or looks old after an update
+
+Reload the browser without cache (Ctrl+F5, or pull down in the companion
+app). In Lovelace YAML mode, add the resources manually as `module`, e.g.
+`/cul-max/cul-max-week-profile-card.js`.
+
+### The card says "Weicht vom Plan ab" (deviates from the schedule)
+
+The thermostat runs a different temperature than its week program, e.g. after
+someone turned the knob. It returns to the program at the next switching
+point; *Zurück zum Plan* in the card does it right away.
+
 ## Known Limitations
 
 - This is a local custom integration, not an official Home Assistant core integration.
-- It is designed for direct CUL/CUNO TCP access.
+- It needs a CUL/CUNO (network or USB) with CULFW; the original MAX! Cube
+  firmware and the eQ-3 cloud are not supported.
 - It intentionally avoids aggressive wake-up polling to reduce radio traffic and battery drain.
 - MAX! radio is not perfectly reliable. Some radio messages can be missed or
   acknowledged late, and larger setup operations can take a while when many
