@@ -378,11 +378,18 @@ diagnostics are available in
 
 ## Development
 
-Run the protocol regression tests from the repository root:
+Run the tests from the repository root (Python 3.14):
 
 ```sh
-python3 -m unittest discover -s custom_components/cul_max/tests
+pip install -r requirements_test.txt
+python3 -m pytest
+uvx ruff check custom_components
 ```
+
+- `test_protocol.py`: packet encoding and decoding
+- `test_coordinator_queue.py`: the coordinator against a simulated CUL
+  (`fake_cul.py`): ACKs, retries, lost packets, LOVF, send budget,
+  priorities, superseded commands and reconnects
 
 Repository layout:
 
@@ -392,6 +399,15 @@ Repository layout:
 - no generated Python caches committed
 
 ## Changelog
+
+### Unreleased
+
+- Fix: after a reconnect (Cube reboot, network glitch) waiting commands were
+  sent before the CUL was back in MAX! receive mode. Their ACKs got lost and
+  every such command cost needless repeats from the send budget. Commands now
+  wait until the connection is fully initialised.
+- Coordinator tests against a simulated CUL, Ruff linting, CodeQL and
+  OpenSSF Scorecard in CI, security policy.
 
 ### 0.6.3
 
