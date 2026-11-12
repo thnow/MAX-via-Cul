@@ -1,5 +1,9 @@
 # MAX! via CUL
 
+[![Validate](https://github.com/thnow/MAX-via-Cul/actions/workflows/validate.yml/badge.svg)](https://github.com/thnow/MAX-via-Cul/actions/workflows/validate.yml)
+[![CodeQL](https://github.com/thnow/MAX-via-Cul/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/thnow/MAX-via-Cul/security/code-scanning)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/thnow/MAX-via-Cul/badge)](https://scorecard.dev/viewer/?uri=github.com/thnow/MAX-via-Cul)
+
 Home Assistant custom integration for eQ-3 MAX! devices connected through a
 CUL or CUNO running CULFW.
 
