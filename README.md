@@ -279,6 +279,12 @@ Repository layout:
 
 ## Changelog
 
+### 0.6.2
+
+- Week profile card with several thermostats: the "⋮" button opens a small
+  menu to choose the thermostat, and tapping a thermostat's status row opens
+  exactly that one (before, only the first thermostat could be opened).
+
 ### 0.6.1
 
 Thanks to [adampr1](https://github.com/adampr1/MAX-via-Cul) and

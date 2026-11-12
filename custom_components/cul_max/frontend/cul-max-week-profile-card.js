@@ -409,7 +409,10 @@ class CulMaxWeekProfileCard extends HTMLElement {
       ? stateObjs
           .map(
             (st, idx) =>
-              `<div class="chips"><span class="who">${esc(shortNames[idx])}</span>${chipsFor(st)}</div>`
+              `<div class="chips pick" role="button" tabindex="0" data-entity="${esc(st.entity_id)}"
+                    title="${esc(st.attributes.friendly_name || st.entity_id)} – Details"><span class="who">${esc(
+                shortNames[idx]
+              )}</span>${chipsFor(st)}</div>`
           )
           .join("")
       : `<div class="chips">${chipsFor(stateObj)}</div>`;
@@ -515,7 +518,21 @@ class CulMaxWeekProfileCard extends HTMLElement {
                 multi ? stateObjs.map((st) => st.attributes.friendly_name).join(" · ") : attrs.friendly_name || ""
               )}</div>
             </div>
-            <ha-icon-button class="more" label="Details"><ha-icon icon="mdi:dots-vertical"></ha-icon></ha-icon-button>
+            <div class="more-wrap">
+              <ha-icon-button class="more" label="Details"><ha-icon icon="mdi:dots-vertical"></ha-icon></ha-icon-button>
+              ${
+                multi
+                  ? `<div class="more-menu" hidden>${stateObjs
+                      .map(
+                        (st) =>
+                          `<button class="more-item" data-entity="${esc(st.entity_id)}">${esc(
+                            st.attributes.friendly_name || st.entity_id
+                          )}</button>`
+                      )
+                      .join("")}</div>`
+                  : ""
+              }
+            </div>
           </div>
           ${chipsHtml}
           ${next ? `<div class="next"><ha-icon icon="mdi:clock-outline"></ha-icon>Nächster Wechsel: ${next}</div>` : ""}
@@ -814,15 +831,39 @@ class CulMaxWeekProfileCard extends HTMLElement {
 
   _bindEvents(editable) {
     const root = this.shadowRoot;
+    const openMoreInfo = (entityId) =>
+      this.dispatchEvent(
+        new CustomEvent("hass-more-info", { bubbles: true, composed: true, detail: { entityId } })
+      );
+    const menu = root.querySelector(".more-menu");
     root.querySelector(".more")?.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      this.dispatchEvent(
-        new CustomEvent("hass-more-info", {
-          bubbles: true,
-          composed: true,
-          detail: { entityId: this._entityIds()[0] },
-        })
-      );
+      // several thermostats: let the user pick which one to open
+      if (menu) menu.hidden = !menu.hidden;
+      else openMoreInfo(this._entityIds()[0]);
+    });
+    root.querySelectorAll(".more-item").forEach((item) =>
+      item.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        menu.hidden = true;
+        openMoreInfo(item.dataset.entity);
+      })
+    );
+    if (menu) {
+      root.querySelector("ha-card")?.addEventListener("click", () => {
+        menu.hidden = true;
+      });
+    }
+    // tapping a thermostat's status row opens exactly that thermostat
+    root.querySelectorAll(".chips.pick").forEach((row) => {
+      const open = (ev) => {
+        ev.stopPropagation();
+        openMoreInfo(row.dataset.entity);
+      };
+      row.addEventListener("click", open);
+      row.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter" || ev.key === " ") open(ev);
+      });
     });
 
     if (editable) {
@@ -940,6 +981,22 @@ class CulMaxWeekProfileCard extends HTMLElement {
       .title { font-size: 1.1rem; font-weight: 600; line-height: 1.25; }
       .subtitle { color: var(--secondary-text-color); font-size: 0.9rem; margin-top: 2px; }
       .more { margin: -8px -8px 0 0; color: var(--secondary-text-color); }
+      .more-wrap { position: relative; }
+      .more-menu {
+        position: absolute; right: -4px; top: 32px; z-index: 5; min-width: 200px;
+        display: flex; flex-direction: column; padding: 4px 0; border-radius: 10px;
+        background: var(--card-background-color, #fff); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        border: 1px solid var(--divider-color);
+      }
+      .more-menu[hidden] { display: none; }
+      .more-item {
+        text-align: left; padding: 10px 14px; border: none; background: none; cursor: pointer;
+        font: inherit; color: var(--primary-text-color);
+      }
+      .more-item:hover { background: var(--secondary-background-color); }
+      .chips.pick { cursor: pointer; border-radius: 8px; margin-left: -4px; padding-left: 4px; }
+      .chips.pick:hover { background: var(--secondary-background-color); }
+      .chips.pick:focus-visible { outline: 2px solid var(--primary-color); }
       .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
       .chip {
         display: inline-flex; align-items: center; gap: 4px;
