@@ -769,6 +769,52 @@ Karte die Tage als „unbekannt“. Ein Tipp auf den Tag oeffnet trotzdem den
 Editor (Startwert: Absenk-/Komforttemperatur), mit „Auch uebernehmen fuer“
 lassen sich gleich mehrere Tage setzen.
 
+**Kurz waermer oder kuehler:** Laufen alle Thermostate der Karte im
+Wochenprogramm (Auto), zeigt die Karte unter den Chips `−`/`+` in
+0,5-°C-Schritten. Die Aenderung gilt bis zum naechsten Schaltpunkt („19,5 °C
+bis 22:00, danach 18 °C laut Plan“), danach folgt das Thermostat von selbst
+wieder dem Programm. Mehrere Tipps werden gesammelt und gehen als ein Befehl
+pro Thermostat raus; bei mehreren Thermostaten in der Karte (z. B. Kueche ohne
+Wandthermostat) gilt die Aenderung fuer alle. „Zurueck zum Plan“ hebt sie
+sofort auf. Abschalten mit `quick_change: false`.
+
+**Programm aus einem anderen Raum:** Im Tages-Editor oeffnet „Aus anderem Raum
+uebernehmen …“ eine Auswahl der anderen MAX!-Thermostate mit bekanntem
+Programm (nach Bereich sortiert). „Nur dieser Tag“ fuellt den Editor, man kann
+also noch anpassen; „ganze Woche“ zeigt eine Vorschau und uebertraegt danach
+alle bekannten Tage (gleiche Tage werden uebersprungen).
+
+**Mehrere Thermostate in einer Karte:** „⋮“ oeffnet eine Auswahl, ein Tipp auf
+die Statuszeile eines Thermostats oeffnet genau dieses.
+
+### Karte fuer die Funk-Warteschlange
+
+```yaml
+type: custom:cul-max-queue-card
+```
+
+Zeigt, was gerade auf Sendezeit wartet: Sendebudget mit Erholung pro Sekunde,
+geschaetzte Restzeit, die wartenden Befehle in Klartext (z. B. „Thermostat
+Kueche links: Wochenprogramm Mo (Teil 1)“, „wartet auf Sendezeit“, „wartet
+auf Bestaetigung · Versuch 2/3“) und ausstehende Konfiguration pro Geraet.
+Einzelne Befehle lassen sich entfernen, ausstehende Konfiguration eines
+Geraets verwerfen. Die Karte fragt nur Home Assistant ab, sie erzeugt keinen
+Funkverkehr.
+
+### Karte zum Anlernen
+
+```yaml
+type: custom:cul-max-pairing-card
+```
+
+Startet das Anlernen (60 s, 2 oder 5 min; bei mehreren CULs mit Auswahl),
+zeigt einen Countdown und listet alle Geraete, die sich in dieser Sitzung
+gemeldet haben – neu oder bereits bekannt – mit Namensvorschlag aus Typ und
+Bereich („Thermostat Bad“, bei Bedarf „… 2“). Name, Bereich und optional „mit
+den MAX!-Geraeten im Bereich verknuepfen“ (Gruppe und Verknuepfungen, nur fuer
+das neue Geraet) werden in einem Schritt uebernommen. Geraete, die noch an
+einer anderen Zentrale haengen, erscheinen mit dem Hinweis zum Zuruecksetzen.
+
 Zusaetzlich zur Bearbeitung ueber die `text`-Entitaeten liegt eine kleine
 Custom-Lovelace-Karte fuer Wochenprofile bei.
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import socket
+import time
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -98,6 +99,7 @@ from .protocol import (
     get_expected_week_profile_temperature,
     local_datetime_to_max_day,
     order_week_profile_days,
+    get_next_week_profile_switch,
     get_week_profile_segment_start,
     normalize_week_profile_hex,
     parse_time_information_payload,
@@ -311,6 +313,11 @@ class CommandRequest:
     # older as superseded, which is then not sent / not retried any more.
     supersede_key: str | None = None
     superseded: bool = False
+    # queue card bookkeeping
+    request_id: int = 0
+    queued_at: float = 0.0
+    state: str = "queued"  # queued | waiting_credit | sending | waiting_ack
+    attempt: int = 0
 
 
 @dataclass(frozen=True)
@@ -357,6 +364,10 @@ SEND_PROFILE_EXTENDED = SendProfile(
 
 class CommandSupersededError(Exception):
     """A newer command for the same target replaced this one before delivery."""
+
+
+class CommandCancelledError(Exception):
+    """The user removed this command from the transmission queue."""
 
 
 class CulCreditError(ConnectionError):
@@ -603,6 +614,13 @@ class CulMaxCoordinator:
         )
         self._command_seq: int = 0
         self._latest_by_supersede_key: dict[str, CommandRequest] = {}
+        # Commands waiting in / being sent by the worker, for the queue card
+        self._tracked_requests: dict[int, CommandRequest] = {}
+        self._next_request_id: int = 0
+        self._queue_listeners: list[Callable[[], None]] = []
+        self._queue_notify_handle: asyncio.TimerHandle | None = None
+        # Devices that answered during the current pairing window
+        self._pairing_session: dict[str, Any] = {"started_at": None, "devices": {}, "rejected": {}}
         self._queued_priority_counts: dict[int, int] = {}
         self._command_enqueued = asyncio.Event()
         self._command_worker_task: asyncio.Task | None = None
@@ -1003,6 +1021,10 @@ class CulMaxCoordinator:
         elif abs(actual_target - expected_temperature) <= 0.1:
             state = "likely_applied"
             reason = "target_matches_expected"
+        elif self._changed_in_current_segment(device, profile_hex):
+            # deliberately changed in auto: valid until the next switching point
+            state = "temporary_change"
+            reason = "changed_until_next_switch"
         else:
             state = "mismatch"
             reason = "target_differs_from_expected"
@@ -1066,6 +1088,26 @@ class CulMaxCoordinator:
             ):
                 return partner
         return None
+
+    def _changed_in_current_segment(self, device: KnownDevice, profile_hex: str) -> bool:
+        """True if the target was changed after the running profile segment began."""
+        if not device.last_target_change_at or not profile_hex:
+            return False
+        try:
+            changed_at = datetime.fromisoformat(device.last_target_change_at)
+        except ValueError:
+            return False
+        segment_start = get_week_profile_segment_start(profile_hex, dt_util.now())
+        return segment_start is not None and changed_at >= segment_start
+
+    def get_next_profile_switch(self, address: str) -> tuple[datetime, float] | None:
+        """When the (effective) week profile changes the temperature next."""
+        profile_hex = self.get_effective_week_profile(address)
+        if not profile_hex:
+            return None
+        return get_next_week_profile_switch(
+            profile_hex, dt_util.now(), self.get_week_profile_known_days(address)
+        )
 
     def get_week_profile_known_days(self, address: str) -> set[int]:
         """MAX! days (0=Sat … 6=Fri) of the effective profile that are known."""
@@ -1516,6 +1558,16 @@ class CulMaxCoordinator:
 
     def _enqueue_command_request(self, request: CommandRequest) -> None:
         """Put one request into the priority queue (FIFO within a priority)."""
+        if not request.request_id:
+            self._next_request_id += 1
+            request.request_id = self._next_request_id
+            request.queued_at = time.time()
+            self._tracked_requests[request.request_id] = request
+            request.future.add_done_callback(
+                lambda _f, rid=request.request_id: self._untrack_request(rid)
+            )
+        request.state = "queued"
+        self._notify_queue()
         if request.supersede_key:
             previous = self._latest_by_supersede_key.get(request.supersede_key)
             if previous is not None and not previous.future.done():
@@ -1561,6 +1613,8 @@ class CulMaxCoordinator:
                     if request.superseded:
                         request.future.set_exception(CommandSupersededError(request.description))
                         continue
+                    request.state = "waiting_credit"
+                    self._notify_queue()
                     ready = await self._wait_for_cul_credit(
                         self._estimate_cul_credit_cost(request.cmd),
                         reserve=self._credit_reserve_for(priority),
@@ -1573,6 +1627,8 @@ class CulMaxCoordinator:
                         self._queued_priority_counts[priority] = (
                             self._queued_priority_counts.get(priority, 0) + 1
                         )
+                        request.state = "queued"
+                        self._notify_queue()
                         self._command_queue.put_nowait((priority, seq, request))
                         continue
                     if request.superseded:
@@ -1622,6 +1678,9 @@ class CulMaxCoordinator:
                 # A newer command for this device took over: no more retries.
                 raise CommandSupersededError(request.description)
             attempt += 1
+            request.attempt = attempt
+            request.state = "sending"
+            self._notify_queue()
             future: asyncio.Future[MaxMessage] = self.hass.loop.create_future()
             self._pending_ack = PendingAck(
                 counter=request.counter,
@@ -1633,6 +1692,8 @@ class CulMaxCoordinator:
                 await self._send_raw(
                     request.cmd, reserve=self._credit_reserve_for(request.priority)
                 )
+                request.state = "waiting_ack"
+                self._notify_queue()
                 ack = await asyncio.wait_for(future, timeout=request.timeout)
                 self._pending_ack = None
                 if request.device_address:
@@ -1761,6 +1822,13 @@ class CulMaxCoordinator:
                 device = self.get_device(msg.src_hex)
                 if device is not None:
                     self._check_foreign_central(msg, device)
+                if self._pairing_mode:
+                    self._pairing_session["rejected"][msg.src_hex] = {
+                        "address": msg.src_hex,
+                        "central": msg.dst_hex,
+                        "at": datetime.now(UTC).isoformat(),
+                    }
+                    self._notify_pairing_state_updated()
                 return
             if self._pairing_mode:
                 await self._handle_pair_ping(msg)
@@ -2391,7 +2459,7 @@ class CulMaxCoordinator:
                     await self.async_set_temperature(address, temperature, until=device_end)
                 except asyncio.CancelledError:
                     raise
-                except CommandSupersededError:
+                except (CommandSupersededError, CommandCancelledError):
                     # changed by hand in the meantime – respect that
                     await self._vacation_set_record(
                         address, status="confirmed", error="durch neueren Befehl ersetzt"
@@ -2458,7 +2526,7 @@ class CulMaxCoordinator:
                         await self.async_set_temperature(address, 0.0, mode=MODE_AUTO)
                 except asyncio.CancelledError:
                     raise
-                except CommandSupersededError:
+                except (CommandSupersededError, CommandCancelledError):
                     record.update(status="restored", error="durch neueren Befehl ersetzt", updated_at=self._now_iso())
                     continue
                 except Exception as err:  # noqa: BLE001 - retried below
@@ -2765,6 +2833,12 @@ class CulMaxCoordinator:
         if duration < 1:
             raise ValueError("Pairing-Dauer muss mindestens 1 Sekunde betragen.")
         _LOGGER.info("MAX! pairing mode active for %d seconds", duration)
+        if not self._pairing_mode:
+            self._pairing_session = {
+                "started_at": datetime.now(UTC).isoformat(),
+                "devices": {},
+                "rejected": {},
+            }
         self._pairing_mode = True
         self._pairing_until = datetime.now(UTC) + timedelta(seconds=duration)
         if self._pairing_task:
@@ -2851,6 +2925,15 @@ class CulMaxCoordinator:
         try:
             auto_name = _default_device_name(device_type, src, serial_str)
             existing_device = self.get_device(src)
+            self._pairing_session["devices"][src] = {
+                "address": src,
+                "device_type": DEVICE_TYPE_NAMES.get(device_type, str(device_type)),
+                "serial_number": serial_str,
+                "already_known": existing_device is not None,
+                "at": datetime.now(UTC).isoformat(),
+            }
+            self._pairing_session["rejected"].pop(src, None)
+            self._notify_pairing_state_updated()
             if (
                 existing_device is not None
                 and existing_device.name.strip()
@@ -2989,7 +3072,7 @@ class CulMaxCoordinator:
             expected_src=address,
             device_address=address,
             counter=counter,
-            description=f"SetTemperature {label}",
+            description=f"{command_label} → {label}",
             retries=self._send_profile.set_temperature_retries,
             timeout=self._send_profile.set_temperature_timeout,
             priority=COMMAND_PRIORITY_HIGH,
@@ -3217,6 +3300,196 @@ class CulMaxCoordinator:
             if item.partner_address == command.partner_address:
                 return True
         return False
+
+    # ------------------------------------------------------------------
+    # Transmission queue (queue card) and pairing session (pairing card)
+    # ------------------------------------------------------------------
+
+    def _untrack_request(self, request_id: int) -> None:
+        if self._tracked_requests.pop(request_id, None) is not None:
+            self._notify_queue()
+
+    def add_queue_listener(self, cb: Callable[[], None]) -> Callable[[], None]:
+        self._queue_listeners.append(cb)
+
+        def remove() -> None:
+            if cb in self._queue_listeners:
+                self._queue_listeners.remove(cb)
+
+        return remove
+
+    def _notify_queue(self) -> None:
+        """Tell queue subscribers about a change (coalesced, at most ~3/s)."""
+        if not self._queue_listeners or self._queue_notify_handle is not None:
+            return
+
+        def fire() -> None:
+            self._queue_notify_handle = None
+            for cb in list(self._queue_listeners):
+                cb()
+
+        self._queue_notify_handle = self.hass.loop.call_later(0.3, fire)
+
+    def _registry_name(self, address: str) -> str:
+        """Current HA device name (user name first) for display."""
+        entry = self.get_registry_device(dr.async_get(self.hass), address)
+        if entry is not None:
+            return entry.name_by_user or entry.name or address
+        device = self.get_device(address)
+        return device.name if device else address
+
+    def get_queue_snapshot(self) -> dict[str, Any]:
+        """Everything waiting for radio time, for the queue card."""
+        priority_names = {
+            COMMAND_PRIORITY_HIGH: "interactive",
+            COMMAND_PRIORITY_NORMAL: "user",
+            COMMAND_PRIORITY_LOW: "background",
+        }
+        now = time.time()
+        commands: list[dict[str, Any]] = []
+        total_cost = 0.0
+        for request in sorted(
+            self._tracked_requests.values(),
+            key=lambda r: (r.state == "queued", r.priority, r.request_id),
+        ):
+            if request.future.done():
+                continue
+            cost = self._estimate_cul_credit_cost(request.cmd)
+            if request.state in ("queued", "waiting_credit"):
+                total_cost += cost
+            commands.append({
+                "id": request.request_id,
+                "description": request.description,
+                "device": request.device_address,
+                "device_name": self._registry_name(request.device_address) if request.device_address else None,
+                "priority": priority_names.get(request.priority, str(request.priority)),
+                "state": request.state,
+                "attempt": request.attempt,
+                "max_attempts": request.retries + 1,
+                "waiting_seconds": round(now - request.queued_at) if request.queued_at else 0,
+                "superseded": request.superseded,
+            })
+        pending: list[dict[str, Any]] = []
+        for kind, queues in (("climate", self._pending_climate_config), ("shutter", self._pending_shutter_config)):
+            for address, queue in queues.items():
+                if not queue:
+                    continue
+                head = queue[0]
+                total_cost += 120.0 * len(queue)
+                pending.append({
+                    "device": address,
+                    "device_name": self._registry_name(address),
+                    "kind": kind,
+                    "count": len(queue),
+                    "next": head.description,
+                    "attempts": head.attempts,
+                    "next_attempt_at": head.next_attempt_at or None,
+                    "last_error": head.last_error or None,
+                })
+        credit = self.get_cul_credit_status()
+        rate = max(self._cul_credit_rate, 0.1)
+        # one packet stays in reserve for interactive commands
+        missing = max(0.0, total_cost + CUL_CREDIT_INTERACTIVE_RESERVE - self._cul_credit_estimate)
+        return {
+            "gateway": self.display_name,
+            "entry_id": self.config_entry_id,
+            "connected": self._writer is not None,
+            "credit": credit,
+            "estimated_seconds": round(missing / rate) if (commands or pending) else 0,
+            "commands": commands,
+            "pending_config": pending,
+        }
+
+    async def async_cancel_queued_command(self, request_id: int) -> bool:
+        """Remove one command from the queue (an active one stops retrying)."""
+        request = self._tracked_requests.get(request_id)
+        if request is None or request.future.done():
+            return False
+        if request.state == "queued":
+            request.future.set_exception(CommandCancelledError(request.description))
+        else:
+            request.superseded = True  # no further retries
+        _LOGGER.info("Removed from transmission queue: %s", request.description)
+        self._notify_queue()
+        return True
+
+    async def async_clear_device_queue(self, address: str) -> int:
+        """Drop everything still queued for one device (commands and config)."""
+        normalized = address.upper()
+        removed = 0
+        for request in list(self._tracked_requests.values()):
+            if request.device_address and request.device_address.upper() == normalized:
+                if await self.async_cancel_queued_command(request.request_id):
+                    removed += 1
+        for queues in (self._pending_climate_config, self._pending_shutter_config):
+            queue = queues.pop(normalized, None)
+            if queue:
+                removed += len(queue)
+        if removed:
+            await self._save_devices()
+            await self._sync_pending_config_reading(normalized)
+            self._notify_diagnostics_updated(normalized)
+            _LOGGER.info("Cleared %d queued item(s) for %s", removed, self._format_device_identity(normalized))
+        self._notify_queue()
+        return removed
+
+    def get_pairing_session(self) -> dict[str, Any]:
+        """Pairing window state and the devices seen in it, for the pairing card."""
+        until = self._pairing_until
+        return {
+            "gateway": self.display_name,
+            "entry_id": self.config_entry_id,
+            "active": self._pairing_mode,
+            "until": until.isoformat() if until else None,
+            "remaining_seconds": self.get_pairing_remaining_seconds(),
+            "started_at": self._pairing_session.get("started_at"),
+            "devices": [
+                {**info, "name": self._registry_name(info["address"]),
+                 "device_id": (entry.id if (entry := self.get_registry_device(dr.async_get(self.hass), info["address"])) else None)}
+                for info in self._pairing_session.get("devices", {}).values()
+            ],
+            "rejected": list(self._pairing_session.get("rejected", {}).values()),
+        }
+
+    async def async_add_device_to_room(
+        self, address: str, room_addresses: list[str]
+    ) -> dict[str, Any]:
+        """Link a freshly paired device with the MAX! devices of its room.
+
+        Only the new device's group and links are written (not the whole
+        room again): it joins the room's existing group (or a free one) and
+        gets a link with every room device that supports one, both ways.
+        """
+        normalized = address.upper()
+        device = self.get_device(normalized)
+        if device is None:
+            raise ValueError(f"Unbekannte Geraeteadresse {address}")
+        others = [
+            d for a in dict.fromkeys(x.upper() for x in room_addresses)
+            if a != normalized and (d := self.get_device(a)) is not None and not d.superseded_by
+        ]
+        if not others:
+            raise ValueError("Im gewählten Bereich gibt es keine weiteren MAX!-Geräte.")
+        groups = [d.group_id for d in others if d.group_id]
+        group_id = max(set(groups), key=groups.count) if groups else self.get_next_free_group_id()
+        result: dict[str, Any] = {"group_id": group_id, "linked": [], "skipped": []}
+        if device.device_type in CLIMATE_DEVICE_TYPES and not device.is_virtual and device.group_id != group_id:
+            await self.async_set_group_id(normalized, group_id)
+        for other in others:
+            for src, dst in ((normalized, other.address), (other.address, normalized)):
+                try:
+                    self._validate_link_supported(src, dst)
+                except ValueError:
+                    continue
+                src_device = self.get_device(src)
+                if src_device is None or src_device.is_virtual or dst in src_device.linked_partners:
+                    continue
+                try:
+                    await self.async_add_link_partner(src, dst)
+                    result["linked"].append(f"{src}->{dst}")
+                except Exception as err:  # noqa: BLE001 - report, keep going
+                    result["skipped"].append(f"{src}->{dst}: {err}")
+        return result
 
     def get_pending_queue_details(self, address: str) -> dict[str, Any]:
         """Return one consolidated diagnostic snapshot for the pending queue."""

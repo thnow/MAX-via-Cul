@@ -173,6 +173,17 @@ type: custom:cul-max-week-profile-card
 entity: climate.living_room_radiator
 ```
 
+In auto mode the card also offers `−`/`+` for a change until the next
+switching point, and the day editor can copy the program of another room.
+
+Further bundled cards (registered automatically):
+
+- `custom:cul-max-vacation-card` – vacation for the whole flat
+- `custom:cul-max-queue-card` – what is waiting for radio time, with budget
+  and estimated time
+- `custom:cul-max-pairing-card` – pairing with countdown, found devices, name
+  suggestion, area and room links
+
 ## Services
 
 The integration exposes these Home Assistant services:
@@ -281,9 +292,23 @@ Repository layout:
 
 ### 0.6.2
 
-- Week profile card with several thermostats: the "⋮" button opens a small
-  menu to choose the thermostat, and tapping a thermostat's status row opens
-  exactly that one (before, only the first thermostat could be opened).
+- New **transmission queue card** (`custom:cul-max-queue-card`): send budget,
+  estimated time until everything is out, queued commands in plain words and
+  pending configuration per device; remove commands or discard pending
+  configuration.
+- New **pairing card** (`custom:cul-max-pairing-card`): countdown, devices found
+  in the session (new / already known / still paired elsewhere), name
+  suggestion from type and area, area and optional room links in one step.
+- Week profile card: **`−`/`+` until the next switching point** while in auto
+  (one command per thermostat, all thermostats of the card), with "bis 22:00,
+  danach 18 °C laut Plan" and "Zurück zum Plan". Such deliberate changes no
+  longer show up as "deviates from the schedule".
+- Week profile card: **copy the program from another room** (one day into the
+  editor, or the whole week with preview).
+- Week profile card with several thermostats: "⋮" opens a chooser and tapping
+  a thermostat's status row opens exactly that one.
+- Climate attributes `next_switch_at` / `next_switch_temperature`; validation
+  state `temporary_change`.
 
 ### 0.6.1
 

@@ -417,6 +417,8 @@ class CulMaxWeekProfileCard extends HTMLElement {
           .join("")
       : `<div class="chips">${chipsFor(stateObj)}</div>`;
 
+    const quickHtml = this._quickChangeHtml(stateObjs);
+
     // per day: normalised profile of every thermostat
     const dayProfiles = Object.fromEntries(
       DAYS.map(([key]) => [key, allAttrs.map((a) => this._daySegments(a, key))])
@@ -535,7 +537,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
             </div>
           </div>
           ${chipsHtml}
-          ${next ? `<div class="next"><ha-icon icon="mdi:clock-outline"></ha-icon>Nächster Wechsel: ${next}</div>` : ""}
+          ${quickHtml || (next ? `<div class="next"><ha-icon icon="mdi:clock-outline"></ha-icon>Nächster Wechsel: ${next}</div>` : "")}
           ${status}
           ${this._sensorRowHtml(stateObjs, shortNames)}
           <div class="axis"><span>0</span><span>6</span><span>12</span><span>18</span><span>24</span></div>
@@ -546,6 +548,101 @@ class CulMaxWeekProfileCard extends HTMLElement {
       ${this._styles()}`;
 
     this._bindEvents(editable);
+  }
+
+  /** "Until the next switching point": −/+ while all thermostats run in auto. */
+  _quickChangeHtml(stateObjs) {
+    if (this._config.quick_change === false || this._config.editable === false) return "";
+    const attrs = stateObjs.map((st) => st.attributes || {});
+    if (!attrs.length || attrs.some((a) => a.mode_detail !== "auto") || stateObjs.some((st) => st.state === "off")) {
+      return "";
+    }
+    const targets = attrs.map((a) => Number(a.temperature)).filter(Number.isFinite);
+    if (!targets.length) return "";
+    const same = targets.every((t) => Math.abs(t - targets[0]) < 0.01);
+    const shown = this._quick ? this._quick.value : targets[0];
+    const temporary = attrs.some((a) => a.week_profile_validation === "temporary_change");
+    const nextAt = attrs[0].next_switch_at ? new Date(attrs[0].next_switch_at) : null;
+    const nextTemp = attrs[0].next_switch_temperature;
+    let until = "";
+    if (nextAt) {
+      const sameDay = nextAt.toDateString() === new Date().toDateString();
+      const time = nextAt.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+      const day = sameDay ? "" : `${nextAt.toLocaleDateString("de-DE", { weekday: "short" })} `;
+      until = `bis ${day}${time}, danach ${fmtTemp(nextTemp)} laut Plan`;
+    } else {
+      until = "bis zum nächsten Schaltpunkt";
+    }
+    const label = this._quick
+      ? "wird gleich gesendet …"
+      : temporary
+        ? `vorübergehend – ${until}`
+        : same
+          ? until.replace(/^bis/, "laut Plan bis")
+          : "Thermostate unterschiedlich";
+    return `<div class="quick${temporary || this._quick ? " active" : ""}">
+        <ha-icon icon="${temporary ? "mdi:clock-edit-outline" : "mdi:clock-outline"}"></ha-icon>
+        <button class="qbtn" data-quick="-0.5" title="0,5 °C kälter bis zum nächsten Schaltpunkt"><ha-icon icon="mdi:minus"></ha-icon></button>
+        <span class="qval">${same || this._quick ? fmtTemp(shown) : "–"}</span>
+        <button class="qbtn" data-quick="0.5" title="0,5 °C wärmer bis zum nächsten Schaltpunkt"><ha-icon icon="mdi:plus"></ha-icon></button>
+        <span class="qtext">${esc(label)}</span>
+        ${temporary && !this._quick ? `<button class="text qreset">Zurück zum Plan</button>` : ""}
+      </div>`;
+  }
+
+  _quickStep(delta) {
+    const attrs = this._entityIds().map((id) => this._hass.states[id]?.attributes || {});
+    const base = this._quick ? this._quick.value : Number(attrs[0]?.temperature);
+    if (!Number.isFinite(base)) return;
+    const value = Math.min(TEMP_MAX, Math.max(TEMP_MIN + 0.5, Math.round((base + delta) * 2) / 2));
+    clearTimeout(this._quick?.timer);
+    // collect taps; one radio packet per thermostat once the user stops tapping
+    this._quick = { value, timer: setTimeout(() => this._quickSend(), 1200) };
+    this._render();
+  }
+
+  async _quickSend() {
+    const value = this._quick?.value;
+    if (value == null) return;
+    try {
+      for (const entityId of this._entityIds()) {
+        await this._hass.callService("climate", "set_temperature", { entity_id: entityId, temperature: value });
+      }
+    } catch (err) {
+      this._quickError = err?.message || String(err);
+    } finally {
+      this._quick = null;
+      this._render();
+    }
+  }
+
+  async _quickReset() {
+    for (const entityId of this._entityIds()) {
+      // auto without temperature: the thermostat takes the profile value again
+      await this._hass.callService("climate", "set_hvac_mode", { entity_id: entityId, hvac_mode: "auto" });
+    }
+  }
+
+  /** Other MAX! thermostats whose week profile can be copied, grouped by area. */
+  _copySources() {
+    const own = new Set(this._entityIds());
+    return Object.entries(this._hass?.states || {})
+      .filter(
+        ([id, st]) =>
+          id.startsWith("climate.") &&
+          !own.has(id) &&
+          st.attributes?.address !== undefined &&
+          DAYS.some(([key]) => st.attributes[`week_profile_${key}`])
+      )
+      .map(([id, st]) => {
+        const areaId = this._areaOf(id);
+        return {
+          id,
+          name: st.attributes.friendly_name || id,
+          area: (areaId && this._hass.areas?.[areaId]?.name) || "Ohne Bereich",
+        };
+      })
+      .sort((a, b) => a.area.localeCompare(b.area, "de") || a.name.localeCompare(b.name, "de"));
   }
 
   _areaOf(entityId) {
@@ -735,6 +832,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
             <button class="text" data-preset="none" ${ed.busy ? "disabled" : ""}>Keine</button>
           </div>
         </div>
+        ${this._sourceHtml(ed, longLabel)}
         ${ed.error ? `<div class="status error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><span>${esc(ed.error)}</span></div>` : ""}
         <div class="ed-actions">
           <button class="text ed-cancel" ${ed.busy ? "disabled" : ""}>Abbrechen</button>
@@ -744,6 +842,112 @@ class CulMaxWeekProfileCard extends HTMLElement {
         </div>
         <div class="ed-note">Jeder Tag braucht 1–2 Funkpakete. Thermostate übernehmen das Profil, sobald sie es empfangen haben; der Fortschritt erscheint oben.</div>
       </div>`;
+  }
+
+  _sourceHtml(ed, longLabel) {
+    if (!ed.source) {
+      return `<button class="text small ed-src-open" ${ed.busy ? "disabled" : ""}>Aus anderem Raum übernehmen …</button>`;
+    }
+    const sources = this._copySources();
+    if (!sources.length) {
+      return `<div class="ed-src"><span class="muted">Kein anderes MAX!-Thermostat mit bekanntem Wochenprogramm.</span>
+        <button class="text small ed-src-close">Schließen</button></div>`;
+    }
+    const src = ed.source;
+    if (!src.entity || !sources.some((s) => s.id === src.entity)) src.entity = sources[0].id;
+    let groups = "";
+    let lastArea = null;
+    for (const s of sources) {
+      if (s.area !== lastArea) {
+        if (lastArea !== null) groups += "</optgroup>";
+        groups += `<optgroup label="${esc(s.area)}">`;
+        lastArea = s.area;
+      }
+      groups += `<option value="${esc(s.id)}" ${s.id === src.entity ? "selected" : ""}>${esc(s.name)}</option>`;
+    }
+    groups += "</optgroup>";
+    const attrs = this._hass.states[src.entity]?.attributes || {};
+    let preview = "";
+    if (src.scope === "week") {
+      const unknown = DAYS.filter(([key]) => !attrs[`week_profile_${key}`]).map(([, short]) => short);
+      const bars = DAYS.map(([key, short]) => {
+        const segs = parseDay(attrs[`week_profile_${key}`]);
+        const inner = segs.length
+          ? segs
+              .map(
+                (seg) =>
+                  `<div class="mseg" style="left:${(seg.from / 1440) * 100}%;width:${((seg.until - seg.from) / 1440) * 100}%;background:${tempColor(
+                    seg.temp
+                  )}"></div>`
+              )
+              .join("")
+          : `<div class="mempty">unbekannt</div>`;
+        return `<div class="mrow"><span>${short}</span><div class="mbar">${inner}</div></div>`;
+      }).join("");
+      const targets = this._entityIds().length;
+      preview = `<div class="mini">${bars}</div>
+        <div class="muted">Überträgt die ganze Woche${targets > 1 ? ` an ${targets} Thermostate` : ""} – bis zu 14 Funkpakete pro
+          Thermostat, das dauert einige Minuten.${unknown.length ? ` Unbekannt und übersprungen: ${unknown.join(", ")}.` : ""}</div>`;
+    }
+    return `<div class="ed-src">
+        <div class="ed-src-row">
+          <select class="ed-src-entity" ${ed.busy ? "disabled" : ""}>${groups}</select>
+          <label><input type="radio" name="srcscope" value="day" ${src.scope !== "week" ? "checked" : ""}> nur ${esc(longLabel)}</label>
+          <label><input type="radio" name="srcscope" value="week" ${src.scope === "week" ? "checked" : ""}> ganze Woche</label>
+        </div>
+        ${preview}
+        <div class="ed-src-row end">
+          <button class="text small ed-src-close" ${ed.busy ? "disabled" : ""}>Abbrechen</button>
+          <button class="text small ed-src-apply" ${ed.busy ? "disabled" : ""}>${
+      src.scope === "week" ? "Ganze Woche übertragen" : "In den Editor übernehmen"
+    }</button>
+        </div>
+      </div>`;
+  }
+
+  async _applySource() {
+    const ed = this._editing;
+    const src = ed?.source;
+    if (!src?.entity) return;
+    const attrs = this._hass.states[src.entity]?.attributes || {};
+    if (src.scope !== "week") {
+      const segments = parseDay(attrs[`week_profile_${ed.day}`]);
+      if (!segments.length) {
+        ed.error = "Für diesen Tag ist das Programm dort unbekannt.";
+      } else {
+        ed.segments = segments.map((seg) => ({ ...seg }));
+        ed.source = null;
+        ed.error = null;
+      }
+      this._render();
+      return;
+    }
+    ed.busy = true;
+    ed.error = null;
+    const targets = this._entityIds();
+    try {
+      for (let idx = 0; idx < targets.length; idx += 1) {
+        const own = this._hass.states[targets[idx]]?.attributes || {};
+        const days = {};
+        for (const [key] of DAYS) {
+          const value = attrs[`week_profile_${key}`];
+          // skip unknown days and days that are already identical (saves radio time)
+          if (value && serializeDay(parseDay(value)) !== serializeDay(parseDay(own[`week_profile_${key}`]))) {
+            days[key] = serializeDay(parseDay(value));
+          }
+        }
+        if (!Object.keys(days).length) continue;
+        ed.progress = targets.length > 1 ? `${idx + 1}/${targets.length}` : "";
+        this._render();
+        await this._hass.callService("cul_max", "set_week_profile_days", { entity_id: targets[idx], ...days });
+      }
+      this._editing = null;
+    } catch (err) {
+      ed.busy = false;
+      ed.progress = "";
+      ed.error = err?.message || String(err);
+    }
+    this._render();
   }
 
   _openEditor(dayKey) {
@@ -900,6 +1104,17 @@ class CulMaxWeekProfileCard extends HTMLElement {
     });
     root.querySelector(".reg-save")?.addEventListener("click", () => this._saveSensor());
 
+    root.querySelectorAll("[data-quick]").forEach((btn) =>
+      btn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        this._quickStep(Number(btn.dataset.quick));
+      })
+    );
+    root.querySelector(".qreset")?.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      this._quickReset();
+    });
+
     const editor = root.querySelector(".editor");
     if (!editor || !this._editing) return;
     const ed = this._editing;
@@ -967,6 +1182,30 @@ class CulMaxWeekProfileCard extends HTMLElement {
         this._render();
       })
     );
+    editor.querySelector(".ed-src-open")?.addEventListener("click", () => {
+      this._readEditorInputs();
+      ed.source = { entity: null, scope: "day" };
+      this._render();
+    });
+    editor.querySelector(".ed-src-close")?.addEventListener("click", () => {
+      ed.source = null;
+      this._render();
+    });
+    editor.querySelector(".ed-src-entity")?.addEventListener("change", (ev) => {
+      ed.source.entity = ev.target.value;
+      this._render();
+    });
+    editor.querySelectorAll('input[name="srcscope"]').forEach((radio) =>
+      radio.addEventListener("change", () => {
+        this._readEditorInputs();
+        ed.source.scope = radio.value;
+        this._render();
+      })
+    );
+    editor.querySelector(".ed-src-apply")?.addEventListener("click", () => {
+      this._readEditorInputs();
+      this._applySource();
+    });
     editor.querySelector(".ed-cancel")?.addEventListener("click", () => this._closeEditor());
     editor.querySelector(".ed-save")?.addEventListener("click", () => this._save());
   }
@@ -1104,6 +1343,30 @@ class CulMaxWeekProfileCard extends HTMLElement {
       }
       .ed-add { margin-top: 6px; }
       .ed-copy { margin-top: 10px; font-size: 0.9rem; }
+      .quick { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px;
+        font-size: 0.9rem; color: var(--secondary-text-color); }
+      .quick ha-icon { --mdc-icon-size: 18px; }
+      .quick.active .qval { color: var(--primary-color); }
+      .qbtn { width: 28px; height: 28px; border-radius: 50%; border: none; cursor: pointer; display: inline-flex;
+        align-items: center; justify-content: center; background: var(--secondary-background-color);
+        color: var(--primary-text-color); }
+      .qbtn ha-icon { --mdc-icon-size: 16px; }
+      .qval { font-weight: 600; color: var(--primary-text-color); min-width: 3.6em; text-align: center; }
+      .qtext { flex: 1; min-width: 10em; }
+      .text.small { font-size: 0.82rem; padding: 4px 6px; }
+      .ed-src-open { margin-top: 6px; }
+      .ed-src { margin-top: 10px; padding: 10px; border-radius: 10px; border: 1px dashed var(--divider-color); font-size: 0.88rem; }
+      .ed-src-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .ed-src-row.end { justify-content: flex-end; margin-top: 6px; }
+      .ed-src select { flex: 1; min-width: 12em; height: 34px; border-radius: 8px; border: 1px solid var(--divider-color);
+        background: var(--card-background-color); color: var(--primary-text-color); font: inherit; }
+      .muted { color: var(--secondary-text-color); font-size: 0.8rem; }
+      .mini { display: grid; gap: 3px; margin: 8px 0 4px; }
+      .mrow { display: grid; grid-template-columns: 24px 1fr; gap: 6px; align-items: center; font-size: 0.75rem;
+        color: var(--secondary-text-color); }
+      .mbar { position: relative; height: 10px; border-radius: 3px; overflow: hidden; background: var(--secondary-background-color); }
+      .mseg { position: absolute; top: 0; bottom: 0; }
+      .mempty { font-size: 0.65rem; line-height: 10px; padding-left: 4px; font-style: italic; }
       .ed-copy > span { color: var(--secondary-text-color); }
       .copy-days { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 6px 0 2px; }
       .copy { display: inline-flex; align-items: center; gap: 4px; }

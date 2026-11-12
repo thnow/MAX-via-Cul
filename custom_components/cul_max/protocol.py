@@ -469,6 +469,60 @@ def get_week_profile_segment_start(
     return midnight + timedelta(minutes=start_minute)
 
 
+def _week_profile_day_points(profile_hex: str, day: int) -> list[tuple[int, float]]:
+    """(end minute, temperature) of one MAX! day; unused trailing points dropped."""
+    day_hex = normalize_week_profile_hex(profile_hex)[day * 52:(day + 1) * 52]
+    points: list[tuple[int, float]] = []
+    for idx in range(13):
+        value = int(day_hex[idx * 4:(idx + 1) * 4], 16)
+        end = (value & 0x1FF) * 5
+        if end == 0 or end > 24 * 60:
+            end = 24 * 60
+        points.append((end, ((value >> 9) & 0x3F) / 2.0))
+        if end >= 24 * 60:
+            break
+    return points
+
+
+def get_next_week_profile_switch(
+    profile_hex: str,
+    when: datetime,
+    known_days: set[int] | None = None,
+) -> tuple[datetime, float] | None:
+    """Next time the profile changes the temperature, and the new value.
+
+    Points with the same temperature as the running one are skipped. Returns
+    None if the profile is unknown or the search hits a day that is unknown.
+    """
+    if not profile_hex:
+        return None
+    today = local_datetime_to_max_day(when)
+    midnight = when.replace(hour=0, minute=0, second=0, microsecond=0)
+    minute_now = when.hour * 60 + when.minute
+    if known_days is not None and today not in known_days:
+        return None
+    current = None
+    start = 0
+    for end, temp in _week_profile_day_points(profile_hex, today):
+        if start <= minute_now < end:
+            current = temp
+            break
+        start = end
+    if current is None:
+        return None
+    for offset in range(0, 8):
+        day = (today + offset) % 7
+        if known_days is not None and day not in known_days:
+            return None
+        start = 0
+        for end, temp in _week_profile_day_points(profile_hex, day):
+            begins = midnight + timedelta(days=offset, minutes=start)
+            if begins > when and temp != current:
+                return begins, temp
+            start = end
+    return None
+
+
 def decode_max_until_datetime(byte1: int, byte2: int, byte3: int) -> str | None:
     """Decode the MAX! three-byte until representation into a readable local string."""
     day = byte1 & 0x1F

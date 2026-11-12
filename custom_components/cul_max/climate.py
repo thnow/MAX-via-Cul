@@ -291,6 +291,9 @@ class CulMaxClimate(ClimateEntity):
         }
         validation = self._coordinator.get_week_profile_validation(self._address)
         attrs["week_profile_validation"] = validation.get("state")
+        next_switch = self._coordinator.get_next_profile_switch(self._address)
+        attrs["next_switch_at"] = next_switch[0].isoformat() if next_switch else None
+        attrs["next_switch_temperature"] = next_switch[1] if next_switch else None
         attrs["week_profile_validation_reason"] = validation.get("reason")
         attrs["window_open_active"] = validation.get("window_open_active")
         attrs["open_window_partners"] = validation.get("open_window_partners")
