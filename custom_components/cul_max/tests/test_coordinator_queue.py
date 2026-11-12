@@ -3,76 +3,20 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import replace
 
 import pytest
 
 from custom_components.cul_max import coordinator as coord_mod
-from custom_components.cul_max.const import DEVICE_HEATING_THERMOSTAT, MSG_SET_TEMPERATURE
+from custom_components.cul_max.const import MSG_SET_TEMPERATURE
 from custom_components.cul_max.coordinator import (
     COMMAND_PRIORITY_LOW,
     CommandSupersededError,
-    CulMaxCoordinator,
     DeviceNackError,
-    KnownDevice,
 )
 from custom_components.cul_max.protocol import build_time_information
 
+from .conftest import BATH, KITCHEN, OWN, wait_for
 from .fake_cul import FakeCul, packet_cost
-
-OWN = 0x123456
-KITCHEN = "0A0001"
-BATH = "0A0002"
-
-
-async def wait_for(predicate, timeout: float = 3.0) -> None:
-    """Poll until predicate() is true (the coordinator works in tasks)."""
-    deadline = asyncio.get_running_loop().time() + timeout
-    while not predicate():
-        if asyncio.get_running_loop().time() > deadline:
-            raise AssertionError("condition not reached in time")
-        await asyncio.sleep(0.01)
-
-
-@pytest.fixture
-def fake_cul(monkeypatch) -> FakeCul:
-    cul = FakeCul()
-    cul.add_device(KITCHEN)
-    cul.add_device(BATH)
-    monkeypatch.setattr(coord_mod, "open_cul_connection", cul.open)
-    # Shrink waits so the tests run in well under a second each.
-    fast = {"set_temperature_timeout": 0.2, "pending_retry_base_delay": 0.1}
-    monkeypatch.setattr(coord_mod, "SEND_PROFILE_STANDARD", replace(coord_mod.SEND_PROFILE_STANDARD, **fast))
-    monkeypatch.setattr(coord_mod, "SEND_PROFILE_EXTENDED", replace(coord_mod.SEND_PROFILE_EXTENDED, **fast))
-    monkeypatch.setattr(coord_mod, "CUL_CREDIT_MAX_WAIT_SLICE", 0.05)
-    monkeypatch.setattr(coord_mod, "CUL_CREDIT_UNKNOWN_WAIT", 0.05)
-    monkeypatch.setattr(coord_mod, "CUL_CREDIT_QUERY_MIN_INTERVAL", 0.0)
-    monkeypatch.setattr(coord_mod, "CUL_CREDIT_QUERY_TIMEOUT", 0.2)
-    monkeypatch.setattr(coord_mod, "RECONNECT_DELAY_MIN", 0.05)
-    monkeypatch.setattr(coord_mod, "RECONNECT_WAIT_TIMEOUT", 2.0)
-    return cul
-
-
-@pytest.fixture
-async def coordinator(hass, fake_cul):
-    """A connected coordinator with two paired thermostats.
-
-    Only the connection and the command worker run; startup jobs (time sync,
-    wall-thermostat separation, vacation) stay off so each test controls
-    exactly which packets go on air.
-    """
-    coord = CulMaxCoordinator(hass, "fake-cul", 2323, own_address=OWN)
-    coord._send_profile = coord_mod.SEND_PROFILE_STANDARD
-    for address, name in ((KITCHEN, "Küche"), (BATH, "Bad")):
-        coord._devices[address] = KnownDevice(
-            address=address, device_type=DEVICE_HEATING_THERMOSTAT, name=name, paired=True
-        )
-    coord._command_worker_task = hass.loop.create_task(coord._command_worker())
-    assert await coord._connect()
-    await wait_for(lambda: coord._cul_credit_known)
-    yield coord
-    await coord.async_shutdown()
-    await hass.async_block_till_done()
 
 
 def set_temperatures(fake_cul: FakeCul, address: str) -> list:
