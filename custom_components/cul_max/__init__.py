@@ -620,8 +620,8 @@ def _register_services(
                 targets = [
                     eid for eid in per_entry
                     if eid == gateway
-                    or (entry := hass.config_entries.async_get_entry(eid)) is not None
-                    and gateway in (entry.title, entry.data.get(CONF_HOST))
+                    or ((entry := hass.config_entries.async_get_entry(eid)) is not None
+                    and gateway in (entry.title, entry.data.get(CONF_HOST)))
                 ]
                 if not targets:
                     raise HomeAssistantError(f"Unbekanntes MAX!-Gateway: {gateway}")

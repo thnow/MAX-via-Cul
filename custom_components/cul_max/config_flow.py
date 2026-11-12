@@ -44,19 +44,19 @@ async def _test_connection(host: str, port: int) -> bool:
         writer.close()
         await writer.wait_closed()
         return True
-    except (OSError, asyncio.TimeoutError):
+    except (TimeoutError, OSError):
         return False
 
 
 async def _test_serial(device: str, baudrate: int) -> bool:
     """Open the serial port and check that a CULFW answers the version command."""
     try:
-        from serialx import open_serial_connection  # noqa: PLC0415
+        from serialx import open_serial_connection
 
         reader, writer = await asyncio.wait_for(
             open_serial_connection(url=device, baudrate=baudrate), timeout=5.0
         )
-    except (OSError, asyncio.TimeoutError, ImportError) as err:
+    except (TimeoutError, OSError, ImportError) as err:
         _LOGGER.debug("Cannot open %s: %s", device, err)
         return False
     try:
@@ -68,7 +68,7 @@ async def _test_serial(device: str, baudrate: int) -> bool:
             if line.decode("ascii", "ignore").strip().startswith("V "):
                 return True
         return False
-    except (OSError, asyncio.TimeoutError):
+    except (TimeoutError, OSError):
         return False
     finally:
         writer.close()
@@ -81,7 +81,7 @@ async def _test_serial(device: str, baudrate: int) -> bool:
 async def _serial_port_options() -> list[SelectOptionDict]:
     """Serial ports found on the system (stable /dev/serial/by-id names first)."""
     try:
-        from serialx import async_list_serial_ports  # noqa: PLC0415
+        from serialx import async_list_serial_ports
 
         ports = await async_list_serial_ports()
     except Exception:  # noqa: BLE001 - listing is only a convenience

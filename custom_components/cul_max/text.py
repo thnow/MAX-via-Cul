@@ -13,7 +13,6 @@ from .coordinator import CulMaxCoordinator, KnownDevice
 from .protocol import (
     MaxMessage,
     WEEK_PROFILE_DAY_NAMES,
-    format_week_profile_by_day,
 )
 
 DAY_INDEXES = (2, 3, 4, 5, 6, 0, 1)
@@ -158,7 +157,6 @@ class CulMaxWeekProfileDayText(TextEntity):
     @property
     def extra_state_attributes(self) -> dict[str, object]:
         effective_week_profile = self._coordinator.get_effective_week_profile(self._address)
-        by_day = format_week_profile_by_day(effective_week_profile)
         return {
             "weekday": self._day_long_label,
             "weekday_short": DAY_SHORT_LABELS[self._day_index],
