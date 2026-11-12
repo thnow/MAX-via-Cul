@@ -8,6 +8,13 @@ want to run it locally in Home Assistant without a MAX! Cube cloud dependency.
 It talks directly to the CUL/CUNO over TCP and implements the MAX!/MORITZ
 protocol locally.
 
+> [!IMPORTANT]
+> **You need a CUL/CUNO radio or a MAX! Cube flashed with [a-culfw](https://github.com/heliflieger/a-culfw).**
+> A MAX! Cube with its original eQ-3 firmware does **not** work with this
+> integration – it talks the MAX! radio protocol itself, through CULFW.
+> Flashing replaces the Cube's firmware; the eQ-3 software and app no longer
+> work with it afterwards.
+
 [![Open your Home Assistant instance and add this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=thnow&repository=MAX-via-Cul&category=integration)
 
 ## What You Get
@@ -68,7 +75,8 @@ protocol locally.
 ## Requirements
 
 - Home Assistant 2026.11 or newer
-- A CUL or CUNO flashed with CULFW (also a MAX! Cube flashed with a-culfw)
+- A CUL or CUNO flashed with CULFW, or a MAX! Cube flashed with
+  [a-culfw](https://github.com/heliflieger/a-culfw) – a Cube with its original firmware does not work
 - Connected via TCP (commonly port `2323`) or as a USB stick (e.g. CUL,
   nanoCUL; typically 38400 baud)
 - CULFW support for MAX!/MORITZ mode
