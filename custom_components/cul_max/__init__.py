@@ -88,6 +88,9 @@ SERVICE_NAMES: tuple[str, ...] = (
 )
 
 
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up shared integration resources."""
     async_register_websocket_api(hass)
