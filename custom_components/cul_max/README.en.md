@@ -73,8 +73,9 @@ The configuration flow first asks how the CUL is connected:
 - **USB stick / serial:** the serial device (prefer the stable name below
   `/dev/serial/by-id/`) and baud rate (38400 for a CUL); setup checks that a
   CULFW answers. If Home Assistant OS runs in a VM (e.g. Proxmox), pass the
-  stick through to the VM and reboot HAOS completely once so it shows up below
-  `/dev/serial/by-id/`. Tested with a busware CUL868 (original CULFW 1.58,
+  stick through to the VM and **reboot the VM from the virtualization
+  platform** (e.g. Proxmox) so it shows up below `/dev/serial/by-id/` –
+  rebooting from within Home Assistant is not enough. Tested with a busware CUL868 (original CULFW 1.58,
   also via Proxmox USB passthrough).
 
 It also asks for the integration's own MAX! radio address (default `123456`).
