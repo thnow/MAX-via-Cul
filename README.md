@@ -408,7 +408,7 @@ Repository layout:
 
 ## Changelog
 
-### Unreleased
+### 0.6.4
 
 - Fix: after a reconnect (Cube reboot, network glitch) waiting commands were
   sent before the CUL was back in MAX! receive mode. Their ACKs got lost and
@@ -421,6 +421,9 @@ Repository layout:
   shutdown as well.
 - Coordinator tests against a simulated CUL, Ruff linting, CodeQL and
   OpenSSF Scorecard in CI, security policy.
+- hassfest-clean manifest (sorted keys) and config-entry-only
+  `CONFIG_SCHEMA`; HACS validation and hassfest run in CI.
+- Docs: clearer note that a CUL/CUNO or an a-culfw-flashed Cube is required.
 
 ### 0.6.3
 
