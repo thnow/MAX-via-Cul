@@ -36,6 +36,16 @@ FRONTEND_MODULES = [
         "filename": "cul-max-vacation-card.js",
         "version": _frontend_version("cul-max-vacation-card.js"),
     },
+    {
+        "name": "CUL MAX Queue Card",
+        "filename": "cul-max-queue-card.js",
+        "version": _frontend_version("cul-max-queue-card.js"),
+    },
+    {
+        "name": "CUL MAX Pairing Card",
+        "filename": "cul-max-pairing-card.js",
+        "version": _frontend_version("cul-max-pairing-card.js"),
+    },
 ]
 
 # TCP connection defaults (CULFW on MAX! Cube or CUNO)

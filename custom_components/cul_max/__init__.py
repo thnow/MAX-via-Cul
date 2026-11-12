@@ -42,6 +42,7 @@ from .const import (
 )
 from .coordinator import CulMaxCoordinator
 from .frontend import async_register_frontend
+from .websocket_api import async_register_websocket_api
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -89,6 +90,7 @@ SERVICE_NAMES: tuple[str, ...] = (
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up shared integration resources."""
+    async_register_websocket_api(hass)
 
     async def _setup_frontend(_event=None) -> None:
         await async_register_frontend(hass)

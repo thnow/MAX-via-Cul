@@ -551,6 +551,46 @@ Home Assistant (e.g. with the old Cube) the card shows those days as
 "unbekannt" (unknown). Tapping a day still opens the editor (starting from the
 eco/comfort temperatures); "Auch übernehmen für" sets several days at once.
 
+**A bit warmer or cooler:** while all thermostats of the card run their week
+program (auto), the card shows `−`/`+` (0.5 °C steps) below the chips. The
+change lasts until the next switching point ("19,5 °C bis 22:00, danach 18 °C
+laut Plan"); then the thermostat follows its program again by itself. Several
+taps are collected into one command per thermostat; with several thermostats
+in the card (e.g. a kitchen without wall thermostat) all of them change.
+"Zurück zum Plan" undoes it right away. Disable with `quick_change: false`.
+
+**Program from another room:** in the day editor, "Aus anderem Raum übernehmen
+…" lists the other MAX! thermostats with a known program (by area). "this day
+only" fills the editor so it can still be adjusted; "whole week" shows a
+preview and then uploads all known days (identical days are skipped).
+
+**Several thermostats in one card:** "⋮" opens a chooser; tapping a
+thermostat's status row opens exactly that one.
+
+### Transmission queue card
+
+```yaml
+type: custom:cul-max-queue-card
+```
+
+Shows what is waiting for radio time: send budget and recovery per second,
+estimated time until everything is out, the queued commands in plain words
+and pending configuration per device. Single commands can be removed, pending
+configuration of a device discarded. Read-only towards the radio.
+
+### Pairing card
+
+```yaml
+type: custom:cul-max-pairing-card
+```
+
+Starts pairing (60 s, 2 or 5 min; gateway chooser with several CULs), shows a
+countdown and lists every device that answered in this session – new or
+already known – with a name suggested from type and area. Name, area and
+optionally "link with the MAX! devices in the area" (group and links, for the
+new device only) are saved in one step. Devices still belonging to another
+central are listed with the hint to reset them.
+
 In Lovelace storage mode, the integration registers its card resource
 automatically and makes it available in the visual card editor.
 

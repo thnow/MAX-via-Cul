@@ -452,3 +452,27 @@ class WeekProfileOrderTests(unittest.TestCase):
         when = datetime(2026, 11, 12, 9, 0, tzinfo=ZoneInfo("Europe/Berlin"))
         self.assertEqual(protocol.order_week_profile_days(range(7), when), [5, 6, 0, 1, 2, 3, 4])
         self.assertEqual(protocol.order_week_profile_days([0, 2, 6], when), [6, 0, 2])
+
+
+class NextSwitchTests(unittest.TestCase):
+    TZ = ZoneInfo("Europe/Berlin")
+
+    def profile(self, text: str) -> str:
+        return encode_week_profile(parse_week_profile_text(text))
+
+    def test_next_switch_same_day(self) -> None:
+        p = self.profile("Thu 18,06:00,21,22:00,18")
+        when = datetime(2026, 11, 12, 9, 0, tzinfo=self.TZ)  # Thursday
+        at, temp = protocol.get_next_week_profile_switch(p, when)
+        self.assertEqual((at.strftime("%a %H:%M"), temp), ("Thu 22:00", 18.0))
+
+    def test_equal_neighbours_skipped_and_next_day(self) -> None:
+        p = self.profile("Thu 18,06:00,21,22:00,18\nFri 18,05:30,20,23:00,18")
+        when = datetime(2026, 11, 12, 22, 30, tzinfo=self.TZ)
+        at, temp = protocol.get_next_week_profile_switch(p, when)
+        self.assertEqual((at.strftime("%a %H:%M"), temp), ("Fri 05:30", 20.0))
+
+    def test_unknown_day_stops(self) -> None:
+        p = self.profile("Thu 18,06:00,21,22:00,18")
+        when = datetime(2026, 11, 12, 22, 30, tzinfo=self.TZ)
+        self.assertIsNone(protocol.get_next_week_profile_switch(p, when, known_days={5}))
