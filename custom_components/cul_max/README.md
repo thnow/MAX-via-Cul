@@ -22,6 +22,68 @@ weiter sinnvoll zusammenarbeiten.
 - JSON-Export und -Import der bekannten MAX!-Topologie
 - Urlaubsmodus fuer die ganze Wohnung mit automatischer Rueckkehr zum Wochenprogramm
 
+## Schnellstart
+
+Neu bei MAX! in Home Assistant? So kommt man zum fertigen Heizungs-Dashboard:
+
+1. **Installieren** ueber HACS (benutzerdefiniertes Repository
+   `https://github.com/thnow/MAX-via-Cul`, Kategorie Integration) und Home
+   Assistant neu starten.
+2. **Integration hinzufuegen:** *Einstellungen > Geraete & Dienste >
+   Integration hinzufuegen > MAX! via CUL*. Netzwerk oder USB waehlen, die
+   vorgeschlagene MAX!-Adresse uebernehmen ([Einrichtung](#einrichtung)).
+3. **Karten aufs Dashboard:** Die [Dashboard-Vorlage](#dashboard-vorlage) unten
+   laesst sich direkt einfuegen – Anlernen, Urlaub, Funk-Warteschlange und
+   eine Wochenprogramm-Karte pro Raum.
+4. **Geraete anlernen** mit der Karte zum Anlernen: *Anlernen starten*, dann
+   das Geraet in den Anlernmodus bringen (Heizkoerperthermostat: *Boost* etwa
+   3 s halten). Das Geraet erscheint in der Karte: Name und Bereich waehlen,
+   *mit den MAX!-Geraeten im Bereich verknuepfen* anhaken, *Uebernehmen*.
+   Fuer jedes Geraet des Raums wiederholen.
+5. **Wochenprogramm pruefen** in der Wochenprogramm-Karte und bei Bedarf
+   anpassen. Das Programm laeuft auf dem Thermostat selbst, auch wenn Home
+   Assistant einmal nicht laeuft.
+6. Optional: nach einem [Raumthermometer regeln](#externer-raumfuehler-virtuelles-wandthermostat)
+   und vor der Abreise den [Urlaubsmodus](#urlaubsmodus) nutzen.
+
+Geraete, die vorher an einem MAX! Cube hingen, muessen zuerst
+**zurueckgesetzt** werden – sie merken sich ihre alte Zentrale
+([Reset und Anlernen](#reset-und-anlernen)).
+
+### Dashboard-Vorlage
+
+Als neue Ansicht einfuegen (*Dashboard bearbeiten > ⋮ >
+Raw-Konfigurationseditor*) und die Entitaets-IDs anpassen:
+
+```yaml
+title: Heizung
+cards:
+  - type: custom:cul-max-vacation-card
+  - type: custom:cul-max-week-profile-card
+    entity: climate.thermostat_wohnzimmer
+  - type: custom:cul-max-week-profile-card
+    title: Kueche
+    entities:            # mehrere Thermostate eines Raums in einer Karte
+      - climate.thermostat_kuche_links
+      - climate.thermostat_kuche_rechts
+  - type: custom:cul-max-queue-card
+  - type: custom:cul-max-pairing-card
+```
+
+Alle Karten werden automatisch registriert und stehen auch in der
+Kartenauswahl. Sieht eine Karte nach einem Update alt aus: Browser ohne Cache
+neu laden (Strg+F5, in der App nach unten ziehen).
+
+### Begriffe
+
+| Begriff | Bedeutung |
+| --- | --- |
+| CUL / CUNO | Kleiner 868-MHz-Funkstick bzw. Netzwerkbox. Mit der Firmware CULFW spricht er das MAX!-Funkprotokoll. Ein MAX! Cube mit a-culfw ist auch einer. |
+| Zentrale | Das Geraet, an dem die MAX!-Komponenten angelernt sind – frueher der Cube, jetzt diese Integration. |
+| Wochenprogramm | Der Zeitplan, der in jedem Thermostat gespeichert ist (bis 13 Schaltpunkte pro Tag). |
+| Verknuepfung / Gruppe | Direkte Funkbeziehungen innerhalb eines Raums: Fensterkontakt senkt die Heizkoerper ab, Wandthermostat steuert sie – ohne Home Assistant dazwischen. |
+| Sendebudget | Der CUL darf nur 1 % der Zeit senden. Grosse Aenderungen (z. B. Wochenprogramme fuer die ganze Wohnung) werden eingereiht und dauern ein paar Minuten. |
+
 ## Zielbild
 
 Die Integration ist auf einen robusten Alltagseinsatz mit alter, aber
@@ -122,8 +184,13 @@ MAX!-Geraete gedacht.
 
 Vor dem Anlernen in Home Assistant:
 
-1. `cul_max.start_pairing` aufrufen
+1. das Anlernfenster oeffnen – am einfachsten mit der
+   [Karte zum Anlernen](#karte-zum-anlernen), alternativ mit dem Schalter
+   „Anlernen“ auf der CUL-Geraeteseite oder `cul_max.start_pairing`
 2. danach das jeweilige Geraet in den Anlernmodus bringen
+
+Die Karte zeigt jedes gefundene Geraet sofort an; Name, Bereich und
+Verknuepfung mit dem Raum lassen sich dort direkt setzen.
 
 Wenn alles korrekt laeuft, sollte das Pairing in der Regel schnell
 abgeschlossen sein.
@@ -525,23 +592,9 @@ unterscheiden scheint.
 
 ### Pairing bequem vom Handy starten
 
-Fuer den Alltag ist es oft angenehmer, das Pairing nicht jedes Mal manuell aus
-den Entwicklerwerkzeugen zu starten, sondern ueber ein Script oder einen
-Lovelace-Button.
-
-Beispiel als Script:
-
-```yaml
-script:
-  cul_max_pairing_60s:
-    alias: MAX Pairing 60s
-    sequence:
-      - action: cul_max.start_pairing
-        data:
-          duration: 60
-```
-
-Direkt als Lovelace-Button:
+Am bequemsten mit der [Karte zum Anlernen](#karte-zum-anlernen) oder dem
+Schalter „Anlernen“ auf der CUL-Geraeteseite (auch als Kachel im Dashboard
+nutzbar). Fuer Automationen oder einen eigenen Knopf:
 
 ```yaml
 type: button
@@ -805,34 +858,6 @@ alle bekannten Tage (gleiche Tage werden uebersprungen).
 **Mehrere Thermostate in einer Karte:** „⋮“ oeffnet eine Auswahl, ein Tipp auf
 die Statuszeile eines Thermostats oeffnet genau dieses.
 
-### Karte fuer die Funk-Warteschlange
-
-```yaml
-type: custom:cul-max-queue-card
-```
-
-Zeigt, was gerade auf Sendezeit wartet: Sendebudget mit Erholung pro Sekunde,
-geschaetzte Restzeit, die wartenden Befehle in Klartext (z. B. „Thermostat
-Kueche links: Wochenprogramm Mo (Teil 1)“, „wartet auf Sendezeit“, „wartet
-auf Bestaetigung · Versuch 2/3“) und ausstehende Konfiguration pro Geraet.
-Einzelne Befehle lassen sich entfernen, ausstehende Konfiguration eines
-Geraets verwerfen. Die Karte fragt nur Home Assistant ab, sie erzeugt keinen
-Funkverkehr.
-
-### Karte zum Anlernen
-
-```yaml
-type: custom:cul-max-pairing-card
-```
-
-Startet das Anlernen (60 s, 2 oder 5 min; bei mehreren CULs mit Auswahl),
-zeigt einen Countdown und listet alle Geraete, die sich in dieser Sitzung
-gemeldet haben – neu oder bereits bekannt – mit Namensvorschlag aus Typ und
-Bereich („Thermostat Bad“, bei Bedarf „… 2“). Name, Bereich und optional „mit
-den MAX!-Geraeten im Bereich verknuepfen“ (Gruppe und Verknuepfungen, nur fuer
-das neue Geraet) werden in einem Schritt uebernommen. Geraete, die noch an
-einer anderen Zentrale haengen, erscheinen mit dem Hinweis zum Zuruecksetzen.
-
 Zusaetzlich zur Bearbeitung ueber die `text`-Entitaeten liegt eine kleine
 Custom-Lovelace-Karte fuer Wochenprofile bei.
 
@@ -913,7 +938,37 @@ Hinweise:
 - Nach einem Update oder der ersten automatischen Registrierung kann ein
   Browser-Reload sinnvoll sein.
 - Das Drei-Punkte-Symbol oeffnet das Mehr-Infos-Dialogfenster der
-  Climate-Entitaet
+  Climate-Entitaet (bei mehreren Thermostaten erst eine Auswahl).
+- Optionen: `entity` oder `entities`, `title`, `show_current_temp`
+  (Standard an), `editable` (Standard an), `quick_change` (Standard an).
+
+### Karte fuer die Funk-Warteschlange
+
+```yaml
+type: custom:cul-max-queue-card
+```
+
+Zeigt, was gerade auf Sendezeit wartet: Sendebudget mit Erholung pro Sekunde,
+geschaetzte Restzeit, die wartenden Befehle in Klartext (z. B. „Thermostat
+Kueche links: Wochenprogramm Mo (Teil 1)“, „wartet auf Sendezeit“, „wartet
+auf Bestaetigung · Versuch 2/3“) und ausstehende Konfiguration pro Geraet.
+Einzelne Befehle lassen sich entfernen, ausstehende Konfiguration eines
+Geraets verwerfen. Die Karte fragt nur Home Assistant ab, sie erzeugt keinen
+Funkverkehr.
+
+### Karte zum Anlernen
+
+```yaml
+type: custom:cul-max-pairing-card
+```
+
+Startet das Anlernen (60 s, 2 oder 5 min; bei mehreren CULs mit Auswahl),
+zeigt einen Countdown und listet alle Geraete, die sich in dieser Sitzung
+gemeldet haben – neu oder bereits bekannt – mit Namensvorschlag aus Typ und
+Bereich („Thermostat Bad“, bei Bedarf „… 2“). Name, Bereich und optional „mit
+den MAX!-Geraeten im Bereich verknuepfen“ (Gruppe und Verknuepfungen, nur fuer
+das neue Geraet) werden in einem Schritt uebernommen. Geraete, die noch an
+einer anderen Zentrale haengen, erscheinen mit dem Hinweis zum Zuruecksetzen.
 
 ### Kompletten Raum aufbauen
 
