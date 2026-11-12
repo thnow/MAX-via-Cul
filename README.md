@@ -298,6 +298,11 @@ Repository layout:
   addressed to another thermostat. Every room sensor now gets its own virtual
   wall thermostat; existing setups are relinked automatically on the first
   start (two configuration packets per moved thermostat).
+- Presets `eco` and `comfort`: manual at the thermostat's eco/comfort
+  temperature, for schedulers that can only switch presets (thanks
+  [@adampr1](https://github.com/adampr1)).
+- Docs: several CULs work side by side (each controls the devices it paired),
+  not as repeaters; the 1 % airtime limit applies throughout the EU.
 
 ### 0.6.2
 
