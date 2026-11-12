@@ -103,7 +103,7 @@ Die Integration verbindet sich per TCP mit dem CUL und nutzt den MAX!/MORITZ-Mod
 
 Wichtige Eigenschaften:
 
-- lokale Kommunikation ohne Cloud
+- rein lokal: direkte Funkkommunikation ueber den CUL, ohne die eingestellte eQ-3-Software
 - zentrale serielle Command-Queue fuer Schreiboperationen
 - ACK-basierte Wiederholungen bei Konfigurations- und Steuerbefehlen
 - priorisierte Queue: interaktive Befehle (Solltemperatur, Modus) ueberholen
