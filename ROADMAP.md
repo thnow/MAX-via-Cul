@@ -82,3 +82,33 @@ Things to respect:
   deliberate temporary change: show the temporary-change status instead
   (e.g. track `last_target_change_at` ≥ segment start as "temporary")
 - unknown profile days (program set elsewhere): no "bis …" time, just the value
+
+## Copy the week profile from another room (week profile card)
+
+Rarely needed, but handy when several rooms get the same program: take the
+profile of another MAX! thermostat instead of entering it again. Keep it small
+– it must not clutter the editor.
+
+UI (inside the day editor, below "Auch übernehmen für"):
+
+- a small text link "Aus anderem Raum übernehmen …" that opens a compact
+  picker: list of the other MAX! climate entities that have a known profile
+  (name + area, e.g. "Büro – Thermostat Büro"), grouped by area
+- choice of scope: "nur diesen Tag" (default, fills the editor so the user
+  can still adjust it before "Übertragen") or "ganze Woche"
+- "ganze Woche" shows a short preview (7 mini bars like the card) and a
+  confirmation, because it means 7 days × up to 2 packets per thermostat
+  (≈ 1,700 credits, several minutes with the radio budget – say so)
+
+Implementation notes:
+
+- source data: `week_profile_<day>` attributes of the chosen entity; days that
+  are unknown there (program set elsewhere) are skipped and named
+- writing: the existing `cul_max.set_week_profile_days` per target entity of
+  the card, all days in one call per thermostat (upload order already starts
+  with today)
+- cards with several thermostats: the copied profile goes to all of them, as
+  with a normal edit
+- only offer sources from the same gateway? Not needed – profiles are just
+  data; any MAX! thermostat known to HA works
+- skip identical days (source == target) to save radio time
