@@ -11,6 +11,12 @@ Assoziationen zwischen MAX!-Geraeten. Dadurch koennen Fensterkontakte,
 Wandthermostate und Heizkoerperthermostate auch ohne laufenden Home Assistant
 weiter sinnvoll zusammenarbeiten.
 
+> [!IMPORTANT]
+> **Noetig ist ein CUL/CUNO oder ein mit [a-culfw](https://github.com/heliflieger/a-culfw) geflashter MAX!
+> Cube.** Ein Cube mit der originalen eQ-3-Firmware funktioniert **nicht** –
+> die Integration spricht das MAX!-Funkprotokoll selbst, ueber CULFW. Nach dem
+> Flashen laufen eQ-3-Software und -App nicht mehr mit dem Cube.
+
 ## Highlights
 
 - Pairing neuer MAX!-Geraete direkt aus Home Assistant
@@ -132,7 +138,8 @@ Aktuell ausgelegt fuer:
 
 ### Voraussetzungen
 
-- ein mit CULFW geflashter CUL/CUNO (auch ein MAX! Cube mit a-culfw)
+- ein mit CULFW geflashter CUL/CUNO oder ein mit [a-culfw](https://github.com/heliflieger/a-culfw) geflashter
+  MAX! Cube (ein Cube mit Originalfirmware funktioniert nicht)
 - Anbindung per TCP (typischerweise Port `2323`) oder als USB-Stick
   (z. B. CUL, nanoCUL, meist 38400 Baud)
 - Home Assistant 2026.11 oder neuer mit installiertem Custom Component `cul_max`

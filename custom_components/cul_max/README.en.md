@@ -16,6 +16,12 @@ New to MAX! in Home Assistant? Start with the
 [quick start and the recommended dashboard](../../README.md#quick-start) in
 the main README.
 
+> [!IMPORTANT]
+> **You need a CUL/CUNO radio or a MAX! Cube flashed with [a-culfw](https://github.com/heliflieger/a-culfw).**
+> A Cube with its original eQ-3 firmware does **not** work – the integration
+> talks the MAX! radio protocol itself, through CULFW. After flashing, the
+> eQ-3 software and app no longer work with the Cube.
+
 ## Features
 
 - Pair MAX! devices directly from Home Assistant.
@@ -67,8 +73,8 @@ Its main components are:
 
 ## Setup
 
-You need a CUL/CUNO running CULFW with MAX!/MORITZ support (a MAX! Cube
-flashed with a-culfw works too) and the `cul_max` custom integration installed
+You need a CUL/CUNO running CULFW with MAX!/MORITZ support or a MAX! Cube
+flashed with [a-culfw](https://github.com/heliflieger/a-culfw) (a Cube with its original firmware does not work) and the `cul_max` custom integration installed
 in Home Assistant 2026.11 or newer.
 
 The configuration flow first asks how the CUL is connected:
