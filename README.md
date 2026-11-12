@@ -290,6 +290,15 @@ Repository layout:
 
 ## Changelog
 
+### 0.6.3
+
+- Fix: rooms with an external room sensor took over each other's target
+  temperatures. All of them shared one virtual wall thermostat, and a MAX!
+  thermostat follows every telegram of a linked wall thermostat, even one
+  addressed to another thermostat. Every room sensor now gets its own virtual
+  wall thermostat; existing setups are relinked automatically on the first
+  start (two configuration packets per moved thermostat).
+
 ### 0.6.2
 
 - New **transmission queue card** (`custom:cul-max-queue-card`): send budget,

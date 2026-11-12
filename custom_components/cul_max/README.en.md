@@ -321,8 +321,13 @@ data:
   sensor_entity_id: sensor.kids_room_temperature  # empty = own sensor
 ```
 
-The integration links the thermostat with a virtual wall thermostat (own
-address + 1, e.g. `123457`) and sends `WallThermostatControl` with current and
+Every room sensor gets its own virtual wall thermostat (thermostats with the
+same sensor share one; the first is own address + 1, e.g. `123457`, further
+ones get addresses from `A00000`), because a thermostat takes over every
+telegram of its wall thermostat, even one addressed to another thermostat. Only
+telegrams to the first one are acknowledged by the CUL itself; turning the knob
+of a thermostat in another room makes it repeat its message a few times
+(harmless). The integration links the thermostat with its virtual wall thermostat and sends `WallThermostatControl` with current and
 target temperature like a real wall thermostat, on changes of 0.5 K or more (at most
 every 3 min, 5 min with the standard send budget – every message wakes the
 thermostat), on a new target and periodically (every 8 min with an extended send budget, 20 min

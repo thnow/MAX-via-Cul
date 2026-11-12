@@ -367,9 +367,18 @@ data:
 So funktioniert es:
 
 - Die Integration verknuepft das Thermostat mit einem virtuellen
-  Wandthermostat (Adresse = eigene Adresse + 1, z. B. `123457`) und schickt ihm
-  wie ein echtes Wandthermostat `WallThermostatControl` mit Ist- und
-  Solltemperatur. Das Thermostat regelt dann nach dem gesendeten Ist-Wert.
+  Wandthermostat und schickt ihm wie ein echtes Wandthermostat
+  `WallThermostatControl` mit Ist- und Solltemperatur. Das Thermostat regelt
+  dann nach dem gesendeten Ist-Wert.
+- Jeder Raumfuehler bekommt einen eigenen virtuellen Wandthermostat – wie bei
+  echten Wandthermostaten einer pro Raum. Thermostate mit demselben Fuehler
+  teilen sich einen. Der erste hat die eigene Adresse + 1 (z. B. `123457`),
+  weitere bekommen Adressen ab `A00000`. Ein Thermostat uebernimmt naemlich
+  jedes Telegramm seines Wandthermostats, auch wenn es an ein anderes
+  Thermostat adressiert ist.
+- Nur Telegramme an den ersten virtuellen Wandthermostat bestaetigt der CUL
+  selbst. Wird an einem Thermostat eines weiteren Raums am Rad gedreht,
+  wiederholt es seine Meldung an den Wandthermostat ein paar Mal (harmlos).
 - Gesendet wird bei Aenderungen ab 0,5 K (hoechstens alle 3 min, mit
   Standard-Sendebudget alle 5 min), bei einem neuen Sollwert und sonst
   regelmaessig (erweitertes Sendebudget alle 8 min, Standard alle 20 min). Jede

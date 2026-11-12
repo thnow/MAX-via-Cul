@@ -280,6 +280,11 @@ class KnownDevice:
     # External room temperature sensor (HA entity) used via the virtual wall
     # thermostat; empty = thermostat regulates on its own sensor.
     external_sensor: str = ""
+    # Virtual wall thermostat the device is linked to. Thermostats take over
+    # every WallThermostatControl of a linked wall thermostat, whoever it is
+    # addressed to, so each room (= each external sensor) needs its own.
+    # Empty = the first one (own address + 1, from before this field).
+    wall_thermostat_address: str = ""
     last_target_change_at: str = ""
     # MAX! days (0=Sat … 6=Fri) of week_profile that were really written to
     # the device. Empty = all seven (profiles from before this field or
@@ -1293,6 +1298,7 @@ class CulMaxCoordinator:
                 self.hass.loop.time() + VIRTUAL_CONTACT_STARTUP_DELAY
             )
             self._schedule_startup_time_sync()
+            self._background(self._separate_wall_thermostats(), "separate virtual wall thermostats")
             self._resume_pending_config_processing()
             return True
         return False
@@ -1793,7 +1799,7 @@ class CulMaxCoordinator:
         msg = parse_message(line)
         if msg is None:
             return
-        if msg.src in (self.own_address, self.virtual_wall_thermostat_address):
+        if msg.src == self.own_address or msg.src in self._wall_thermostat_addresses():
             # Echo of an ACK that culfw sent on its own (auto-ACK via "Za"/"Zw").
             _LOGGER.debug("CUL auto-ACK sent to %s (counter=%d)", msg.dst_hex, msg.counter)
             self._consume_cul_credit(self._estimate_cul_credit_cost("Zf" + line[1:].split(" ")[0]))
@@ -1973,6 +1979,33 @@ class CulMaxCoordinator:
         """Address of the virtual wall thermostat (own address + 1)."""
         return (self.own_address + 1) & 0xFFFFFF
 
+    def _device_wall_thermostat(self, device: KnownDevice) -> int:
+        """Virtual wall thermostat address a device is linked to."""
+        if device.wall_thermostat_address:
+            return int(device.wall_thermostat_address, 16)
+        return self.virtual_wall_thermostat_address
+
+    def _wall_thermostat_addresses(self) -> set[int]:
+        """All virtual wall thermostat addresses of this gateway."""
+        addresses = {self.virtual_wall_thermostat_address}
+        for device in self._devices.values():
+            if device.external_sensor:
+                addresses.add(self._device_wall_thermostat(device))
+        return addresses
+
+    def _allocate_wall_thermostat(self, sensor: str, exclude: str = "") -> int:
+        """Virtual wall thermostat for a sensor: shared per sensor, one per room."""
+        in_use: dict[int, set[str]] = {}
+        for device in self._devices.values():
+            if device.external_sensor and device.address != exclude:
+                wt = self._device_wall_thermostat(device)
+                if device.external_sensor == sensor:
+                    return wt
+                in_use.setdefault(wt, set()).add(device.external_sensor)
+        if self.virtual_wall_thermostat_address not in in_use:
+            return self.virtual_wall_thermostat_address
+        return int(self.get_next_virtual_address(), 16)
+
     def _read_external_temperature(self, device: KnownDevice) -> tuple[float | None, str]:
         """Return (temperature in °C, status) of the configured sensor."""
         state = self.hass.states.get(device.external_sensor)
@@ -2056,6 +2089,7 @@ class CulMaxCoordinator:
             status = "unconfirmed"
         return {
             "external_temperature_sensor": device.external_sensor,
+            "virtual_wall_thermostat": f"{self._device_wall_thermostat(device):06X}",
             "external_temperature": value,
             "external_temperature_status": status,
             "external_temperature_sent": last.get("measured"),
@@ -2111,32 +2145,20 @@ class CulMaxCoordinator:
             if not sensor.startswith("sensor."):
                 raise ValueError("Bitte einen Temperatursensor (sensor.*) waehlen.")
         previous = device.external_sensor
-        vwt = self.virtual_wall_thermostat_address
-        label = self.format_device_label(normalized)
-        if sensor and not previous:
-            counter = self._next_counter()
-            await self._set_last_command(normalized, "AddLinkPartner virtueller Wandthermostat")
-            await self._send_command(
-                build_add_link_partner(counter, self.own_address, int(normalized, 16), vwt, DEVICE_WALL_THERMOSTAT),
-                expected_src=normalized,
-                device_address=normalized,
-                counter=counter,
-                description=f"AddLinkPartner {label} -> virtueller Wandthermostat {vwt:06X}",
-                retries=self._send_profile.config_retries,
-                timeout=CONFIG_ACK_TIMEOUT,
-            )
-        elif not sensor and previous:
-            counter = self._next_counter()
-            await self._set_last_command(normalized, "RemoveLinkPartner virtueller Wandthermostat")
-            await self._send_command(
-                build_remove_link_partner(counter, self.own_address, int(normalized, 16), vwt, DEVICE_WALL_THERMOSTAT),
-                expected_src=normalized,
-                device_address=normalized,
-                counter=counter,
-                description=f"RemoveLinkPartner {label} -> virtueller Wandthermostat {vwt:06X}",
-                retries=self._send_profile.config_retries,
-                timeout=CONFIG_ACK_TIMEOUT,
-            )
+        current_wt = self._device_wall_thermostat(device) if previous else None
+        target_wt = self._allocate_wall_thermostat(sensor, exclude=normalized) if sensor else None
+        if target_wt != current_wt:
+            if current_wt is not None and target_wt is not None:
+                if not await self._relink_wall_thermostat(device, current_wt, target_wt):
+                    raise ValueError(
+                        "Der Thermostat hat den neuen virtuellen Wandthermostaten abgelehnt."
+                    )
+            elif target_wt is not None:
+                await self._link_wall_thermostat(normalized, target_wt, add=True)
+                device.wall_thermostat_address = f"{target_wt:06X}"
+            else:
+                await self._link_wall_thermostat(normalized, current_wt, add=False)
+                device.wall_thermostat_address = ""
         device.external_sensor = sensor
         self._ext_last.pop(normalized, None)
         await self._save_devices()
@@ -2151,6 +2173,92 @@ class CulMaxCoordinator:
         self._notify_week_profile_updated(normalized)
         self._notify_diagnostics_updated(normalized)
         return self.get_external_temperature_status(normalized)
+
+    async def _link_wall_thermostat(self, address: str, wt: int, *, add: bool) -> None:
+        """Add/remove a virtual wall thermostat as link partner of a thermostat."""
+        builder = build_add_link_partner if add else build_remove_link_partner
+        name = "AddLinkPartner" if add else "RemoveLinkPartner"
+        counter = self._next_counter()
+        await self._set_last_command(address, f"{name} virtueller Wandthermostat")
+        await self._send_command(
+            builder(counter, self.own_address, int(address, 16), wt, DEVICE_WALL_THERMOSTAT),
+            expected_src=address,
+            device_address=address,
+            counter=counter,
+            description=(
+                f"{name} {self.format_device_label(address)} -> virtueller Wandthermostat {wt:06X}"
+            ),
+            retries=self._send_profile.config_retries,
+            timeout=CONFIG_ACK_TIMEOUT,
+        )
+
+    async def _relink_wall_thermostat(self, device: KnownDevice, old: int, new: int) -> bool:
+        """Move a thermostat from one virtual wall thermostat to another.
+
+        A heating thermostat accepts only one wall thermostat as link partner
+        (it answers 0x81 to a second one), so the old link goes first. If the
+        new one is rejected, the old link is restored.
+        """
+        address = device.address
+        try:
+            await self._link_wall_thermostat(address, old, add=False)
+        except Exception as err:  # noqa: BLE001 - nothing changed yet
+            _LOGGER.warning("Removing wall thermostat link %06X from %s failed: %s", old, address, err)
+            return False
+        try:
+            await self._link_wall_thermostat(address, new, add=True)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Linking %s to wall thermostat %06X failed: %s", address, new, err)
+            try:
+                await self._link_wall_thermostat(address, old, add=True)
+            except Exception as err2:  # noqa: BLE001
+                _LOGGER.error(
+                    "%s has no virtual wall thermostat link any more (%s); "
+                    "set its room sensor again", address, err2,
+                )
+            return False
+        device.wall_thermostat_address = f"{new:06X}"
+        self._ext_last.pop(address, None)
+        await self._save_devices()
+        return True
+
+    async def _separate_wall_thermostats(self) -> None:
+        """Give every external sensor (room) its own virtual wall thermostat.
+
+        Up to 0.6.2 all thermostats with an external sensor shared one virtual
+        wall thermostat, and thermostats adopt the target of every telegram of
+        a linked wall thermostat: rooms took over each other's targets. The
+        sensor group with the most thermostats keeps the old address, the
+        others are relinked.
+        """
+        if self._writer is None:
+            return
+        groups: dict[int, dict[str, list[KnownDevice]]] = {}
+        for device in self._devices.values():
+            if device.external_sensor:
+                groups.setdefault(self._device_wall_thermostat(device), {}).setdefault(
+                    device.external_sensor, []
+                ).append(device)
+        taken: set[int] = set()
+        for wt, sensors in groups.items():
+            if len(sensors) < 2:
+                continue
+            keep = max(sensors, key=lambda sensor: len(sensors[sensor]))
+            for sensor, devices in sensors.items():
+                if sensor == keep:
+                    continue
+                new_wt = int(self.get_next_virtual_address(), 16)
+                while new_wt in taken:
+                    new_wt += 1
+                taken.add(new_wt)
+                for device in devices:
+                    _LOGGER.info(
+                        "%s: own virtual wall thermostat %06X for %s (was shared %06X)",
+                        self._format_device_identity(device.address), new_wt, sensor, wt,
+                    )
+                    if not await self._relink_wall_thermostat(device, wt, new_wt):
+                        continue
+                    await self._external_temperature_tick(device.address, reason="relinked")
 
     async def _external_temperature_tick(self, address: str, *, reason: str) -> None:
         """Send WallThermostatControl if the value or target changed or a heartbeat is due."""
@@ -2190,7 +2298,7 @@ class CulMaxCoordinator:
             counter = self._next_counter()
             cmd = build_wall_thermostat_control(
                 counter,
-                self.virtual_wall_thermostat_address,
+                self._device_wall_thermostat(device),
                 int(device.address, 16),
                 desired,
                 measured,
@@ -2735,7 +2843,7 @@ class CulMaxCoordinator:
             return
         if msg.dst == 0 or msg.msg_type not in FOREIGN_CENTRAL_MSG_TYPES:
             return
-        if self.get_device(msg.dst_hex) is not None or msg.dst == self.virtual_wall_thermostat_address:
+        if self.get_device(msg.dst_hex) is not None or msg.dst in self._wall_thermostat_addresses():
             return  # talks to a device we know (link partner / virtual WT)
         if device.last_central_contact_at:
             try:
@@ -5882,10 +5990,12 @@ class CulMaxCoordinator:
         """Return the next free address in the virtual device range A00000-AFFFFF."""
         # Virtual devices are on air: they must be unique across all gateways
         used = {address.upper() for address in self._devices}
+        used.update(f"{a:06X}" for a in self._wall_thermostat_addresses())
         for entry in self.hass.config_entries.async_loaded_entries(DOMAIN):
             other = getattr(entry, "runtime_data", None)
             if other is not None and other is not self:
                 used.update(d.address.upper() for d in other.get_all_devices())
+                used.update(f"{a:06X}" for a in other._wall_thermostat_addresses())
         for value in range(0xA00000, 0xB00000):
             address = f"{value:06X}"
             if address not in used:
@@ -6490,6 +6600,7 @@ class CulMaxCoordinator:
                 foreign_central_seen_at=str(d.get("foreign_central_seen_at", "") or ""),
                 last_central_contact_at=str(d.get("last_central_contact_at", "") or ""),
                 external_sensor=str(d.get("external_sensor", "") or ""),
+                wall_thermostat_address=str(d.get("wall_thermostat_address", "") or "").upper(),
                 last_target_change_at=str(d.get("last_target_change_at", "") or ""),
                 week_profile_days=[
                     int(x) for x in (d.get("week_profile_days") or []) if str(x).isdigit() and 0 <= int(x) <= 6
@@ -6591,6 +6702,7 @@ class CulMaxCoordinator:
                     "foreign_central_seen_at": d.foreign_central_seen_at,
                     "last_central_contact_at": d.last_central_contact_at,
                     "external_sensor": d.external_sensor,
+                    "wall_thermostat_address": d.wall_thermostat_address,
                     "last_target_change_at": d.last_target_change_at,
                     "week_profile_days": d.week_profile_days,
                 }
