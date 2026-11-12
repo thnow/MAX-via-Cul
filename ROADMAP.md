@@ -39,3 +39,46 @@ A card that guides pairing instead of a button plus a binary sensor.
 
 Fork reference: `frontend/cul-max-pairing-card.js`, `pairing.py`,
 `pairing_api.py`.
+
+## Temporary change until the next switching point (week profile card)
+
+"A bit warmer / cooler until the program switches next" directly in the week
+profile card, so the normal thermostat card is not needed for that (and can be
+hidden). Especially useful for cards with several thermostats and no wall
+thermostat (e.g. kitchen: links + rechts), where one tap should change all of
+them.
+
+How MAX! does it: the thermostat stays in **auto** and gets `SetTemperature`
+with mode auto and the new temperature (`async_set_temperature(addr, temp,
+mode=MODE_AUTO)`, same as `climate.set_temperature` while in auto). It keeps
+that target until its next switching point and then follows the week program
+again – nothing has to be reset afterwards.
+
+Card UI:
+
+- next to the target chip a compact `−` / `+` (0.5 °C steps), or tapping the
+  target chip opens a small stepper; changes are debounced locally (~1 s) so
+  several taps become one radio packet per thermostat
+- status line while active: "19,5 °C bis 22:00 (danach 18 °C laut Plan)",
+  computed from the profile (`expected_week_profile_temperature`, next switch
+  point – the card already has `_nextSwitch`)
+- "zurück zum Plan" resets right away (auto with temperature 0 → the
+  thermostat takes the profile value)
+- several thermostats in the card: one change is sent to all of them (one
+  `climate.set_temperature` per entity, they queue one after the other); the
+  status shows the common value or "unterschiedlich"
+- a room with a wall thermostat: the card's entity is the wall thermostat; it
+  passes the new target on to its radiator thermostats itself
+
+Things to respect:
+
+- only offered while the thermostat is in auto (in manual the card keeps
+  showing "Wochenprogramm nicht aktiv")
+- vacation and boost: hide the stepper
+- external room sensor: `_intended_target` already keeps a target that was
+  changed after the current segment began and returns to the profile value at
+  the next segment – no extra work, but test it
+- the profile mismatch warning ("Weicht vom Plan ab") must not fire for such a
+  deliberate temporary change: show the temporary-change status instead
+  (e.g. track `last_target_change_at` ≥ segment start as "temporary")
+- unknown profile days (program set elsewhere): no "bis …" time, just the value
