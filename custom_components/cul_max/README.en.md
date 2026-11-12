@@ -87,6 +87,12 @@ that owns the device. Services without a device (`start_pairing`, `sync_time`,
 "Pairing" switch (on = pairing window open, off = stop early). Time sync,
 wake-up and vacation without a gateway apply to all CULs.
 
+Several CULs (e.g. several Cubes with a-culfw in a large house) work side by
+side, not as repeaters: each CUL controls the devices it paired, so best the
+ones within its radio range. Keep the devices of one room (thermostats, wall
+thermostat, window contacts) on the same CUL, because links and groups are set
+up within one CUL.
+
 **Removing a device:** choose "Delete device" on the MAX! device page. Reset
 the device first if it will be used with another central.
 
@@ -292,8 +298,10 @@ Feedback and display:
   last command sent.
 - `manual` at 4.5 °C is shown as HVAC mode `off`. Switching from `off` to
   `heat` uses the comfort temperature.
-- Presets: `boost` starts boost, `none` ends it and returns to the weekly
-  program.
+- Presets: `eco` and `comfort` set the thermostat to manual at its eco or
+  comfort temperature (handy for schedulers that can only switch presets),
+  `boost` starts boost, `none` returns to the weekly program. A thermostat in
+  manual at exactly its eco or comfort temperature shows that preset.
 - Changes made on a wall thermostat (knob, mode button) are applied directly
   from its `SetTemperature` telegram.
 
@@ -858,6 +866,7 @@ known topology rather than performing an exact replacement of all state.
 > **Legal notice:** MAX! transmits on 868.3 MHz in an SRD band where a device
 > may transmit at most 1 % of the time (EU rules for short range devices,
 > ETSI EN 300 220; in Germany the general assignment by the Bundesnetzagentur).
+> The limit applies throughout the EU, not only in Germany.
 > A CULFW that allows more airtime does not respect this limit. Operating it is
 > **not legal** and can disturb other radio users. The integration does not
 > modify firmware, unlocks nothing and never sends more than the firmware

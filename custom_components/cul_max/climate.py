@@ -101,7 +101,9 @@ class CulMaxClimate(ClimateEntity):
         ClimateEntityFeature.TARGET_TEMPERATURE
         | ClimateEntityFeature.PRESET_MODE
     )
-    _attr_preset_modes = ["none", "boost"]
+    # eco/comfort: manual at the device's own eco/comfort temperature, so
+    # schedulers that can only switch presets can set those temperatures.
+    _attr_preset_modes = ["none", "eco", "comfort", "boost"]
 
     def __init__(self, coordinator: CulMaxCoordinator, device: KnownDevice) -> None:
         self._coordinator = coordinator
@@ -184,7 +186,7 @@ class CulMaxClimate(ClimateEntity):
             self._attr_native_current_temperature = measured
         mode = state.get("mode", MODE_MANUAL)
         self._attr_hvac_mode = self._hvac_mode_for(mode, self._attr_native_target_temperature)
-        self._attr_preset_mode = "boost" if mode == MODE_BOOST else "none"
+        self._attr_preset_mode = self._preset_for(mode, self._attr_native_target_temperature)
 
         valve = state.get("valve_position", 0)
         if self._attr_hvac_mode == HVACMode.OFF:
@@ -193,6 +195,16 @@ class CulMaxClimate(ClimateEntity):
             self._attr_hvac_action = HVACAction.HEATING
         else:
             self._attr_hvac_action = HVACAction.IDLE
+
+    def _preset_for(self, mode: int, target: float | None) -> str:
+        if mode == MODE_BOOST:
+            return "boost"
+        if mode == MODE_MANUAL and target is not None:
+            if target == self._device.eco_temperature:
+                return "eco"
+            if target == self._device.comfort_temperature:
+                return "comfort"
+        return "none"
 
     @staticmethod
     def _hvac_mode_for(mode: int, target: float | None) -> HVACMode:
@@ -394,7 +406,23 @@ class CulMaxClimate(ClimateEntity):
                 optimistic_preset="boost",
             )
             return
-        if self._raw_mode() != MODE_BOOST:
+        if preset_mode in ("eco", "comfort"):
+            target = (
+                self._device.eco_temperature
+                if preset_mode == "eco"
+                else self._device.comfort_temperature
+            )
+            label = "Eco" if preset_mode == "eco" else "Komfort"
+            await self._async_write_with_feedback(
+                description=f"{label} {target:.1f} °C",
+                temperature=target,
+                mode=MODE_MANUAL,
+                optimistic_target=target,
+                optimistic_hvac=HVACMode.HEAT,
+                optimistic_preset=preset_mode,
+            )
             return
-        # Leaving boost: return to the week program.
+        if self._attr_preset_mode == "none":
+            return
+        # Leaving boost/eco/comfort: return to the week program.
         await self.async_set_hvac_mode(HVACMode.AUTO)

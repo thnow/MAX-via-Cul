@@ -102,6 +102,12 @@ auf jeder CUL-Geraeteseite den Schalter „Anlernen“ (an = Anlernfenster offen
 aus = vorzeitig beenden). Zeit-Sync, Wecken und Urlaub ohne Gateway-Angabe
 gelten fuer alle CULs.
 
+Mehrere CULs (z. B. mehrere Cubes mit a-culfw in einem grossen Haus) arbeiten
+nebeneinander, nicht als Repeater: Jeder CUL steuert die Geraete, die er
+anlernt, also am besten die in seiner Funkreichweite. Geraete eines Raums
+(Thermostate, Wandthermostat, Fensterkontakte) gehoeren an denselben CUL, weil
+Verknuepfungen und Gruppen nur innerhalb eines CULs eingerichtet werden.
+
 **Geraet entfernen:** Auf der Geraeteseite eines MAX!-Geraets „Geraet
 loeschen“ waehlen. Das Geraet selbst vorher zuruecksetzen, wenn es an einer
 anderen Zentrale weiterverwendet werden soll.
@@ -338,8 +344,11 @@ Rueckmeldung und Anzeige:
   `command_requested` beschreibt den zuletzt gesendeten Befehl.
 - `manual` mit 4,5 °C wird als HVAC-Modus `off` angezeigt. Beim Wechsel auf
   `heat` aus `off` wird die Komforttemperatur verwendet.
-- Presets: `boost` startet den Boost, `none` beendet ihn und kehrt ins
-  Wochenprogramm zurueck.
+- Presets: `eco` und `comfort` stellen das Thermostat manuell auf seine Eco-
+  bzw. Komforttemperatur (praktisch fuer Zeitplaner, die nur Presets schalten
+  koennen), `boost` startet den Boost, `none` kehrt ins Wochenprogramm zurueck.
+  Steht ein Thermostat manuell genau auf Eco- oder Komforttemperatur, zeigt
+  es das passende Preset.
 - Aenderungen am Wandthermostat (Drehrad, Modustaste) werden direkt aus dessen
   `SetTemperature`-Telegramm uebernommen.
 
@@ -1138,7 +1147,8 @@ Fuer einen stabilen Betrieb sind ein paar Punkte wichtig:
 > **Rechtlicher Hinweis:** MAX! funkt auf 868,3 MHz in einem SRD-Band, in dem
 > ein Geraet hoechstens 1 % der Zeit senden darf (EU-Regeln fuer
 > Funkanwendungen mit geringer Reichweite, ETSI EN 300 220; in Deutschland die
-> Allgemeinzuteilung der Bundesnetzagentur). Eine CULFW, die mehr Sendezeit
+> Allgemeinzuteilung der Bundesnetzagentur). Die Grenze gilt in der ganzen EU,
+> nicht nur in Deutschland. Eine CULFW, die mehr Sendezeit
 > erlaubt, haelt diese Grenze nicht ein. Ihr Betrieb ist **nicht zulaessig** und
 > kann andere Funkteilnehmer stoeren. Die Integration veraendert keine Firmware,
 > schaltet nichts frei und sendet nie mehr, als die Firmware selbst zulaesst.
