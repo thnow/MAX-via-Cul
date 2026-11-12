@@ -1,0 +1,17 @@
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "ASYNC", "BLE", "UP", "SIM", "RUF"]
+ignore = [
+    "E501",     # long log/format strings are kept on one line on purpose
+    "SIM102",   # nested ifs kept where they mirror the protocol logic
+    "SIM105",   # try/except/pass reads clearer than contextlib.suppress here
+    "SIM108",   # if/else blocks kept for readability
+    "ASYNC109", # timeout parameters are passed through on purpose
+    "RUF001",   # German texts use en dashes on purpose
+    "RUF002",
+    "RUF003",
+    "RUF012",   # Home Assistant entity class attributes (_attr_*)
+]

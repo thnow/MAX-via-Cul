@@ -20,22 +20,15 @@ from __future__ import annotations
 import logging
 import re
 from datetime import datetime, timedelta
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from .const import (
     DEFAULT_WEEK_PROFILE,
-    DEVICE_HEATING_THERMOSTAT,
-    DEVICE_HEATING_THERMOSTAT_PLUS,
-    DEVICE_SHUTTER_CONTACT,
-    DEVICE_WALL_THERMOSTAT,
     MODE_AUTO,
-    MODE_BOOST,
     MODE_MANUAL,
-    MODE_NAMES,
     MODE_VACATION,
     MSG_ACK,
-    MSG_PAIR_PING,
     MSG_TIME_INFORMATION,
     MSG_SET_TEMPERATURE,
     MSG_SHUTTER_CONTACT_STATE,
@@ -1018,8 +1011,8 @@ def build_wall_thermostat_control(
     if group_id < 0 or group_id > 255:
         raise ValueError("group_id must be in range 0..255")
     desired = max(TEMP_MIN, min(TEMP_MAX, float(desired_temperature)))
-    measured = int(round(max(0.0, min(51.1, float(measured_temperature))) * 10))
-    byte0 = ((measured & 0x100) >> 1) | (int(round(desired * 2)) & 0x7F)
+    measured = round(max(0.0, min(51.1, float(measured_temperature))) * 10)
+    byte0 = ((measured & 0x100) >> 1) | (round(desired * 2) & 0x7F)
     byte1 = measured & 0xFF
     inner = (
         f"{counter & 0xFF:02X}"

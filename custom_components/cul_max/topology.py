@@ -201,8 +201,8 @@ def render_topology_svg(nodes: list[TopologyNode], edges: list[TopologyEdge], *,
         right_n = left_n = 0
         for edge in room_edges:
             a, b = by_key[edge.a], by_key[edge.b]
-            ax, ay = layout[a.key]
-            bx, by = layout[b.key]
+            _ax, ay = layout[a.key]
+            _bx, by = layout[b.key]
             ay_mid = ry + ay + NODE_HEIGHT / 2
             by_mid = ry + by + NODE_HEIGHT / 2
             if (a.kind == KIND_CONTACT) != (b.kind == KIND_CONTACT):

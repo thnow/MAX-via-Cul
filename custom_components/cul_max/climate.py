@@ -20,7 +20,6 @@ from . import CulMaxConfigEntry
 from .const import (
     DEVICE_HEATING_THERMOSTAT,
     DEVICE_HEATING_THERMOSTAT_PLUS,
-    DEVICE_WALL_THERMOSTAT,
     DOMAIN,
     MODE_AUTO,
     MODE_BOOST,

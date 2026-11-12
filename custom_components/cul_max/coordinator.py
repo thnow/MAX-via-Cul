@@ -31,7 +31,6 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CULFW_CMD_MORITZ_RX,
-    CULFW_CMD_VERSION,
     DEFAULT_OWN_ADDRESS,
     DEFAULT_PORT,
     DOMAIN,
@@ -498,7 +497,7 @@ async def open_cul_connection(
     """Open the CUL either via TCP (host, port) or USB/serial (device, baud rate)."""
     if serial:
         # Same library Home Assistant's own serial integrations use.
-        from serialx import open_serial_connection  # noqa: PLC0415
+        from serialx import open_serial_connection
 
         return await open_serial_connection(url=host, baudrate=port)
     reader, writer = await asyncio.open_connection(host, port)
@@ -566,12 +565,6 @@ class CulMaxCoordinator:
         },
     }
 
-    async def async_wake_device(self, address: str) -> None:
-        """Send WakeUp (0xF1) — keeps device RF receiver open briefly."""
-        dst = int(address, 16)
-        self._counter = (self._counter + 1) % 256
-        cmd = build_wake_up(self._counter, self.own_address, dst)
-        await self._send_raw(cmd)
     """
     Manages the TCP connection to a CULFW device and dispatches MAX! messages.
 
@@ -1409,7 +1402,7 @@ class CulMaxCoordinator:
             self._cul_credit_known = False
             self._cul_credit_queried_at = 0.0
             _LOGGER.info("Connected to CULFW at %s:%d", self.host, self.port)
-        except (OSError, asyncio.TimeoutError, ImportError) as e:
+        except (TimeoutError, OSError, ImportError) as e:
             _LOGGER.error("Cannot connect to CULFW at %s:%d — %s", self.host, self.port, e)
             return False
 
@@ -1547,7 +1540,7 @@ class CulMaxCoordinator:
             return
         self._schedule_reconnect()
         deadline = self.hass.loop.time() + timeout
-        while self._writer is None and self.hass.loop.time() < deadline:
+        while self._writer is None and self.hass.loop.time() < deadline:  # noqa: ASYNC110
             await asyncio.sleep(0.2)
         if self._writer is None:
             raise ConnectionError(
@@ -1647,7 +1640,7 @@ class CulMaxCoordinator:
                     if not request.future.done():
                         request.future.cancel()
                     raise
-                except Exception as err:
+                except Exception as err:  # noqa: BLE001 - handed to the caller via the future
                     _LOGGER.debug("Command worker propagates exception for %s: %s", request.description, err)
                     if not request.future.done():
                         request.future.set_exception(err)
@@ -1710,7 +1703,7 @@ class CulMaxCoordinator:
                     )
                 _LOGGER.info("ACK ok for %s on attempt %d", request.description, attempt)
                 return ack
-            except asyncio.TimeoutError as err:
+            except TimeoutError as err:
                 last_error = err
                 if not future.done():
                     future.cancel()
@@ -1740,7 +1733,7 @@ class CulMaxCoordinator:
                         request.device_address, str(err), retries=attempt - 1
                     )
                 raise
-            except Exception as err:
+            except Exception as err:  # noqa: BLE001 - retried, last error is re-raised
                 last_error = err
                 if not future.done():
                     future.cancel()
@@ -2365,7 +2358,7 @@ class CulMaxCoordinator:
         for cb in list(self._vacation_listeners):
             try:
                 cb()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _LOGGER.exception("Vacation listener failed")
 
     def _vacation_targets(self, addresses: list[str] | None = None) -> list[KnownDevice]:
@@ -2665,7 +2658,7 @@ class CulMaxCoordinator:
         for cb in list(self._listeners.get(address, [])):
             try:
                 cb(None, state)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _LOGGER.exception("State refresh listener failed for %s", address)
 
     def _arm_vacation_timer(self) -> None:
@@ -3142,7 +3135,7 @@ class CulMaxCoordinator:
             if pending_task is not None and not pending_task.done():
                 try:
                     await asyncio.wait_for(asyncio.shield(pending_task), timeout=10.0)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     _LOGGER.info(
                         "Pending climate config for %s still active; proceeding with SetTemperature anyway",
                         self._format_device_identity(normalized),
@@ -3696,7 +3689,7 @@ class CulMaxCoordinator:
                 try:
                     self._mark_pending_attempt(command)
                     await self._send_shutter_pending_command(normalized, command, trigger=trigger)
-                except Exception as err:
+                except Exception as err:  # noqa: BLE001 - kept pending, logged, retried later
                     self._mark_pending_failure(command, err)
                     await self._sync_pending_config_reading(normalized)
                     _LOGGER.warning(
@@ -3874,7 +3867,7 @@ class CulMaxCoordinator:
                 try:
                     self._mark_pending_attempt(command)
                     await self._send_climate_pending_command(normalized, command, trigger=trigger)
-                except Exception as err:
+                except Exception as err:  # noqa: BLE001 - kept pending, logged, retried later
                     self._mark_pending_failure(command, err)
                     await self._sync_pending_config_reading(normalized)
                     _LOGGER.warning(
@@ -4226,7 +4219,7 @@ class CulMaxCoordinator:
                 await self.async_send_virtual_shutter_contact_state(
                     device.address, bool(is_open), reason=reason
                 )
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _LOGGER.exception(
                     "Virtual contact refresh for %s failed",
                     self._format_device_identity(device.address),
@@ -4985,7 +4978,7 @@ class CulMaxCoordinator:
             )
             try:
                 await self.async_set_group_id(address, resolved_group_id)
-            except Exception as err:
+            except Exception as err:  # noqa: BLE001 - one device must not stop the room
                 _LOGGER.warning(
                     "Room association '%s': SetGroupId failed for %s: %s: %s",
                     room_name,
@@ -5049,7 +5042,7 @@ class CulMaxCoordinator:
                 continue
             try:
                 await self.async_add_link_partner(src, dst)
-            except Exception as err:
+            except Exception as err:  # noqa: BLE001 - one link must not stop the room
                 _LOGGER.warning(
                     "Room association '%s': AddLinkPartner failed for %s -> %s: %s: %s",
                     room_name,
@@ -5825,7 +5818,7 @@ class CulMaxCoordinator:
                 return None
         try:
             credit = await asyncio.wait_for(asyncio.shield(future), timeout=CUL_CREDIT_QUERY_TIMEOUT)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             _LOGGER.debug("CUL did not answer credit query in time")
             return None
         return float(credit)
@@ -5890,7 +5883,7 @@ class CulMaxCoordinator:
             self._command_enqueued.clear()
             try:
                 await asyncio.wait_for(self._command_enqueued.wait(), timeout=wait_time)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
 
     # ------------------------------------------------------------------
