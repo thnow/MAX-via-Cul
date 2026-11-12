@@ -44,25 +44,68 @@ class SentPacket:
         return self.raw[14:20].upper()
 
 
+MSG_CONFIG_WEEK_PROFILE = 0x10
+MSG_ADD_LINK_PARTNER = 0x20
+MSG_REMOVE_LINK_PARTNER = 0x21
+DEVICE_TYPE_WALL_THERMOSTAT = 3
+
+
 @dataclass
 class FakeDevice:
-    """A MAX! device that ACKs packets addressed to it."""
+    """A MAX! heating thermostat that ACKs packets addressed to it.
+
+    It keeps what a real one keeps: the week-profile chunks it received and
+    its link partners. Like the real device it accepts only one wall
+    thermostat as link partner and answers 0x81 to a second one.
+    """
 
     address: str
     ignore_next: int = 0  # packets lost on air before the device hears one
     silent: bool = False  # never answers
     nack: bool = False  # answers "invalid command/argument"
+    lose_from: int | None = None  # stop answering after this many received packets
+    drop: set[int] = field(default_factory=set)  # numbers (1-based) of transmissions lost on air
+    heard: int = 0  # transmissions addressed to this device so far
     received: list[SentPacket] = field(default_factory=list)
+    week_profile: dict[tuple[int, int], str] = field(default_factory=dict)
+    links: dict[str, int] = field(default_factory=dict)  # partner -> device type
+
+    @property
+    def wall_thermostats(self) -> list[str]:
+        return [a for a, t in self.links.items() if t == DEVICE_TYPE_WALL_THERMOSTAT]
+
+    def _apply(self, packet: SentPacket) -> bool:
+        """Apply a configuration packet; False means 'invalid command'."""
+        payload = packet.raw[22:]
+        if packet.msg_type == MSG_CONFIG_WEEK_PROFILE:
+            selector = int(payload[0:2], 16)
+            self.week_profile[(selector & 0x07, (selector >> 3) & 0x01)] = payload[2:].upper()
+        elif packet.msg_type == MSG_ADD_LINK_PARTNER:
+            partner, kind = payload[0:6].upper(), int(payload[6:8], 16)
+            if kind == DEVICE_TYPE_WALL_THERMOSTAT and any(
+                wt != partner for wt in self.wall_thermostats
+            ):
+                return False
+            self.links[partner] = kind
+        elif packet.msg_type == MSG_REMOVE_LINK_PARTNER:
+            self.links.pop(payload[0:6].upper(), None)
+        return True
 
     def answer(self, packet: SentPacket) -> str | None:
         """Return the ACK line for a received packet, or None."""
+        self.heard += 1
+        if self.heard in self.drop:
+            return None
         if self.silent:
             return None
         if self.ignore_next > 0:
             self.ignore_next -= 1
             return None
+        if self.lose_from is not None and len(self.received) >= self.lose_from:
+            return None
         self.received.append(packet)
-        status = "81" if self.nack else "01"
+        ok = not self.nack and self._apply(packet)
+        status = "01" if ok else "81"
         body = f"{packet.counter:02X}0202{self.address}{packet.src}00{status}"
         return f"Z{len(body) // 2:02X}{body}"
 

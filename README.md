@@ -390,6 +390,12 @@ uvx ruff check custom_components
 - `test_coordinator_queue.py`: the coordinator against a simulated CUL
   (`fake_cul.py`): ACKs, retries, lost packets, LOVF, send budget,
   priorities, superseded commands and reconnects
+- `test_coordinator_week_profile.py`: week profile uploads with lost
+  packets, an unreachable thermostat, single-day changes, a newer profile
+  replacing a pending one and a restart with an unfinished upload
+- `test_coordinator_wall_thermostat.py`: room sensors, one virtual wall
+  thermostat per room, relinking (remove first), rejected links and the
+  separation of shared setups from 0.6.2
 
 Repository layout:
 
@@ -406,6 +412,11 @@ Repository layout:
   sent before the CUL was back in MAX! receive mode. Their ACKs got lost and
   every such command cost needless repeats from the send budget. Commands now
   wait until the connection is fully initialised.
+- Fix: unloading or restarting while a week profile was still being
+  delivered aborted the shutdown (`dictionary changed size during
+  iteration`): the CUL connection stayed open and the device store was not
+  written. The follow-up time sync after an upload is now cancelled on
+  shutdown as well.
 - Coordinator tests against a simulated CUL, Ruff linting, CodeQL and
   OpenSSF Scorecard in CI, security policy.
 

@@ -1326,13 +1326,10 @@ class CulMaxCoordinator:
                 await self._pending_queue_task
             except asyncio.CancelledError:
                 pass
-        for task in self._auto_mode_time_sync_tasks.values():
+        tasks = list(self._auto_mode_time_sync_tasks.values())
+        for task in tasks:
             task.cancel()
-        for task in self._auto_mode_time_sync_tasks.values():
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+        await asyncio.gather(*tasks, return_exceptions=True)
         self._auto_mode_time_sync_tasks.clear()
         if self._pending_ack and not self._pending_ack.future.done():
             self._pending_ack.future.cancel()
@@ -1344,21 +1341,17 @@ class CulMaxCoordinator:
             except asyncio.CancelledError:
                 pass
             self._command_worker_task = None
-        for task in self._pending_shutter_tasks.values():
+        # Copy first: a cancelled task removes itself from the dict.
+        tasks = list(self._pending_shutter_tasks.values())
+        for task in tasks:
             task.cancel()
-        for task in self._pending_shutter_tasks.values():
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+        await asyncio.gather(*tasks, return_exceptions=True)
         self._pending_shutter_tasks.clear()
-        for task in self._pending_climate_tasks.values():
+        # Copy first: a cancelled task removes itself from the dict.
+        tasks = list(self._pending_climate_tasks.values())
+        for task in tasks:
             task.cancel()
-        for task in self._pending_climate_tasks.values():
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+        await asyncio.gather(*tasks, return_exceptions=True)
         self._pending_climate_tasks.clear()
         while not self._command_queue.empty():
             _prio, _seq, request = self._command_queue.get_nowait()
@@ -3901,11 +3894,12 @@ class CulMaxCoordinator:
                     queue_drained = True
                 await self._sync_pending_config_reading(normalized)
                 await asyncio.sleep(WEEK_PROFILE_PART_DELAY)
+            if queue_drained and not self._pending_climate_config.get(normalized):
+                # Still inside the tracked task, so shutdown cancels it too.
+                await self._maybe_sync_time_after_climate_config(normalized, reason=trigger)
         finally:
             if owns_task:
                 self._pending_climate_tasks.pop(normalized, None)
-        if queue_drained and not self._pending_climate_config.get(normalized):
-            await self._maybe_sync_time_after_climate_config(normalized, reason=trigger)
 
     async def _pending_queue_maintenance_loop(self) -> None:
         """Keep pending config queues alive and retry due climate items."""

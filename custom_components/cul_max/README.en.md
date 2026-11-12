@@ -896,8 +896,9 @@ Hardware tests depend on the specific CULFW firmware and device behaviour.
 ## Tests
 
 Protocol regression tests are in [tests/test_protocol.py](tests/test_protocol.py),
-coordinator tests against a simulated CUL in
-[tests/test_coordinator_queue.py](tests/test_coordinator_queue.py).
+coordinator tests against a simulated CUL ([tests/fake_cul.py](tests/fake_cul.py)) in
+`tests/test_coordinator_*.py` (queue and send budget, week profiles, virtual
+wall thermostats).
 Run them from the repository root:
 
 ```sh
