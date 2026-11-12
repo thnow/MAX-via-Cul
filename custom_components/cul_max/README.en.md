@@ -895,11 +895,14 @@ Hardware tests depend on the specific CULFW firmware and device behaviour.
 
 ## Tests
 
-Protocol regression tests are in [tests/test_protocol.py](tests/test_protocol.py).
+Protocol regression tests are in [tests/test_protocol.py](tests/test_protocol.py),
+coordinator tests against a simulated CUL in
+[tests/test_coordinator_queue.py](tests/test_coordinator_queue.py).
 Run them from the repository root:
 
 ```sh
-python3 -m unittest discover -s custom_components/cul_max/tests -v
+pip install -r requirements_test.txt
+python3 -m pytest -v
 ```
 
 Coverage includes FHEM-compatible weekly schedule encoding, packet splitting,

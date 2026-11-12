@@ -623,6 +623,10 @@ class CulMaxCoordinator:
         self._command_enqueued = asyncio.Event()
         self._command_worker_task: asyncio.Task | None = None
         self._send_lock = asyncio.Lock()
+        # True once the culfw init sequence ran and the read loop is up. A
+        # command sent before that would lose its ACK (nobody reads yet, and
+        # culfw is not in MAX! RX mode before "Zr").
+        self._connection_ready = False
         self._cul_credit_lock = asyncio.Lock()
         self._pending_ack: PendingAck | None = None
         self._pending_shutter_config: dict[str, list[PendingShutterCommand]] = {}
@@ -1390,6 +1394,7 @@ class CulMaxCoordinator:
     async def _connect(self) -> bool:
         """Open TCP connection to CULFW device and start read loop."""
         await self._close_connection()
+        self._connection_ready = False
         try:
             self._reader, self._writer = await asyncio.wait_for(
                 open_cul_connection(self.host, self.port, serial=self.serial),
@@ -1411,7 +1416,7 @@ class CulMaxCoordinator:
         try:
             await asyncio.sleep(0.2)
             _LOGGER.info("CUL TX: %s", CULFW_CMD_MORITZ_RX.strip())
-            await self._send_raw(CULFW_CMD_MORITZ_RX)
+            await self._send_raw(CULFW_CMD_MORITZ_RX, init=True)
             await asyncio.sleep(0.1)
             # Let culfw ACK ShutterContactState / SetTemperature / PushButton
             # telegrams addressed to us right in firmware (20 ms, no preamble),
@@ -1420,13 +1425,13 @@ class CulMaxCoordinator:
             # their ACK.
             auto_ack = f"Za{self.own_address:06X}\n"
             _LOGGER.info("CUL TX: %s", auto_ack.strip())
-            await self._send_raw(auto_ack)
+            await self._send_raw(auto_ack, init=True)
             await asyncio.sleep(0.1)
             # Virtual wall thermostat: culfw ACKs SetTemperature telegrams that
             # linked thermostats send to it (knob turned on the thermostat).
             fake_wt = f"Zw{self.virtual_wall_thermostat_address:06X}\n"
             _LOGGER.info("CUL TX: %s", fake_wt.strip())
-            await self._send_raw(fake_wt)
+            await self._send_raw(fake_wt, init=True)
             await asyncio.sleep(0.1)
         except (ConnectionError, OSError) as e:
             _LOGGER.warning("CULFW init sequence failed at %s:%d: %s", self.host, self.port, e)
@@ -1435,12 +1440,14 @@ class CulMaxCoordinator:
 
         self._last_rx_at = self.hass.loop.time()
         self._read_task = self.hass.loop.create_task(self._read_loop())
+        self._connection_ready = True
         self.hass.loop.create_task(self._query_cul_credit(force=True))
         return True
 
     async def _close_connection(self) -> None:
         """Close the current TCP connection if one exists."""
         writer = self._writer
+        self._connection_ready = False
         self._reader = None
         self._writer = None
         if writer is not None:
@@ -1535,14 +1542,16 @@ class CulMaxCoordinator:
                 self._reconnect_delay = min(self._reconnect_delay * 2, RECONNECT_DELAY_MAX)
 
     async def _ensure_connected(self, timeout: float = RECONNECT_WAIT_TIMEOUT) -> None:
-        """Ensure a live TCP connection exists, waiting briefly for reconnect if needed."""
-        if self._writer is not None:
+        """Ensure a ready connection exists, waiting briefly for reconnect if needed."""
+        if self._connection_ready:
             return
-        self._schedule_reconnect()
-        deadline = self.hass.loop.time() + timeout
-        while self._writer is None and self.hass.loop.time() < deadline:  # noqa: ASYNC110
-            await asyncio.sleep(0.2)
         if self._writer is None:
+            # Not connected at all (a connect in progress already set the writer).
+            self._schedule_reconnect()
+        deadline = self.hass.loop.time() + timeout
+        while not self._connection_ready and self.hass.loop.time() < deadline:  # noqa: ASYNC110
+            await asyncio.sleep(0.2)
+        if not self._connection_ready:
             raise ConnectionError(
                 f"not connected to CULFW at {self.host}:{self.port}"
             )
@@ -5596,9 +5605,14 @@ class CulMaxCoordinator:
         *,
         priority: bool = False,
         reserve: float = 0.0,
+        init: bool = False,
     ) -> None:
-        """Write a raw CULFW command string over TCP."""
-        if self._writer is None:
+        """Write a raw CULFW command string over TCP.
+
+        init=True is only for the culfw init sequence in _connect, which runs
+        before the connection counts as ready.
+        """
+        if not init and not self._connection_ready:
             _LOGGER.warning("Cannot send immediately because CULFW is disconnected, waiting for reconnect")
             await self._ensure_connected()
         cost = self._estimate_cul_credit_cost(cmd)
@@ -5606,7 +5620,7 @@ class CulMaxCoordinator:
             await self._wait_for_cul_credit(cost, reserve=reserve)
         cmd = self._refresh_time_information_command(cmd)
         async with self._send_lock:
-            if self._writer is None:
+            if self._writer is None or (not init and not self._connection_ready):
                 _LOGGER.warning("CULFW disconnected while waiting to send, reconnecting")
                 await self._ensure_connected()
             if not cmd.endswith("\n"):
