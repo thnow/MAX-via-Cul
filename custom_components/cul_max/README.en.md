@@ -254,6 +254,10 @@ automatically):
 type: custom:cul-max-vacation-card
 ```
 
+| Before leaving | While away |
+|---|---|
+| ![Vacation card](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/vacation-card.png) | ![Vacation card while away](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/vacation-card-active.png) |
+
 Normally it shows return date and time, temperature and preheat with a "start
 vacation" button for the whole flat. During a vacation it shows the return
 time, temperature, when the thermostats go back to their program and how many
@@ -637,6 +641,8 @@ thermostats a chooser first).
 type: custom:cul-max-queue-card
 ```
 
+![Transmission queue card](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/queue-card.png)
+
 Shows what is waiting for radio time: send budget and recovery per second,
 estimated time until everything is out, the queued commands in plain words
 and pending configuration per device. Single commands can be removed, pending
@@ -647,6 +653,8 @@ configuration of a device discarded. Read-only towards the radio.
 ```yaml
 type: custom:cul-max-pairing-card
 ```
+
+![Pairing card](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/pairing-card.png)
 
 Starts pairing (60 s, 2 or 5 min; gateway chooser with several CULs), shows a
 countdown and lists every device that answered in this session – new or

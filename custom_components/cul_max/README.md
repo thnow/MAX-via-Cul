@@ -349,6 +349,10 @@ Ressource registriert):
 type: custom:cul-max-vacation-card
 ```
 
+| Vor dem Urlaub | Waehrend des Urlaubs |
+|---|---|
+| ![Urlaubskarte](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/vacation-card.png) | ![Urlaubskarte waehrend des Urlaubs](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/vacation-card-active.png) |
+
 Sie zeigt im Normalbetrieb Rueckkehr (Datum, Uhrzeit), Temperatur und
 Vorheizen mit einem Knopf „Urlaub starten“ fuer die ganze Wohnung. Waehrend des
 Urlaubs zeigt sie Rueckkehr, Temperatur, wann die Thermostate zurueck ins
@@ -948,6 +952,8 @@ Hinweise:
 type: custom:cul-max-queue-card
 ```
 
+![Karte fuer die Funk-Warteschlange](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/queue-card.png)
+
 Zeigt, was gerade auf Sendezeit wartet: Sendebudget mit Erholung pro Sekunde,
 geschaetzte Restzeit, die wartenden Befehle in Klartext (z. B. „Thermostat
 Kueche links: Wochenprogramm Mo (Teil 1)“, „wartet auf Sendezeit“, „wartet
@@ -961,6 +967,8 @@ Funkverkehr.
 ```yaml
 type: custom:cul-max-pairing-card
 ```
+
+![Karte zum Anlernen](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/pairing-card.png)
 
 Startet das Anlernen (60 s, 2 oder 5 min; bei mehreren CULs mit Auswahl),
 zeigt einen Countdown und listet alle Geraete, die sich in dieser Sitzung
