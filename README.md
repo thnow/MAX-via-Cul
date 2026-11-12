@@ -7,10 +7,12 @@
 Home Assistant custom integration for eQ-3 MAX! devices connected through a
 CUL or CUNO running CULFW.
 
-This integration is for people who still have useful MAX! heating hardware and
-want to run it locally in Home Assistant without a MAX! Cube cloud dependency.
-It talks directly to the CUL/CUNO over TCP and implements the MAX!/MORITZ
-protocol locally.
+This integration is for people who still have working MAX! heating hardware.
+eQ-3 has discontinued the MAX! system: the MAX! Cube with its software and app
+still works, but gets no updates any more. This integration takes over the
+Cube's job in Home Assistant: it talks directly to a CUL/CUNO (or a MAX! Cube
+flashed with a-culfw) over TCP or USB and implements the MAX!/MORITZ protocol
+itself, fully local.
 
 > [!IMPORTANT]
 > **You need a CUL/CUNO radio or a MAX! Cube flashed with [a-culfw](https://github.com/heliflieger/a-culfw).**
@@ -358,8 +360,8 @@ point; *Zurück zum Plan* in the card does it right away.
 ## Known Limitations
 
 - This is a local custom integration, not an official Home Assistant core integration.
-- It needs a CUL/CUNO (network or USB) with CULFW; the original MAX! Cube
-  firmware and the eQ-3 cloud are not supported.
+- It needs a CUL/CUNO (network or USB) with CULFW, or a MAX! Cube flashed
+  with a-culfw; a Cube with its original eQ-3 firmware is not supported.
 - It intentionally avoids aggressive wake-up polling to reduce radio traffic and battery drain.
 - MAX! radio is not perfectly reliable. Some radio messages can be missed or
   acknowledged late, and larger setup operations can take a while when many
