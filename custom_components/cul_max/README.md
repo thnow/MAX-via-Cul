@@ -85,8 +85,10 @@ Zuerst waehlt man die Anbindung:
 - **USB-Stick / seriell:** serielles Geraet (am besten der stabile Name unter
   `/dev/serial/by-id/`) und Baudrate; die Einrichtung prueft, ob ein CULFW
   antwortet. Laeuft Home Assistant OS in einer VM (z. B. Proxmox), den Stick
-  per USB-Durchreichung an die VM geben und HAOS danach einmal komplett neu
-  starten, damit er unter `/dev/serial/by-id/` erscheint. Getestet mit einem
+  per USB-Durchreichung an die VM geben und die **VM von der
+  Virtualisierung aus neu starten** (z. B. in Proxmox), damit er unter
+  `/dev/serial/by-id/` erscheint – ein Neustart aus Home Assistant heraus
+  reicht dafuer nicht. Getestet mit einem
   busware CUL868 (originale CULFW 1.58, auch per Proxmox-Durchreichung).
 
 Dazu kommt die eigene MAX!-Adresse der Integration.
