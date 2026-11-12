@@ -45,6 +45,14 @@ protocol locally.
 |---|---|
 | ![Choosing an external room sensor](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/room-sensor.png) | ![Shared card for two radiator thermostats](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/shared-room-card.png) |
 
+| Vacation for the whole flat | Vacation running |
+|---|---|
+| ![Vacation card: return, temperature, preheating](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/vacation-card.png) | ![Vacation card while away](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/vacation-card-active.png) |
+
+| Pairing with name and area | What waits for radio time |
+|---|---|
+| ![Pairing card with a found thermostat](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/pairing-card.png) | ![Transmission queue card](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/queue-card.png) |
+
 **Topology picture** (image entity on the CUL device: rooms, devices, links, problems)
 
 ![Topology overview](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/topology.png)
