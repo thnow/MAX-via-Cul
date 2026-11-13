@@ -443,6 +443,16 @@ class CulMaxWeekProfileCard extends HTMLElement {
     return this._hass?.states?.[this._entityIds()[0]];
   }
 
+  /** Card title; the German default "Wochenprofil" (alone or as in
+   *  "Büro Wochenprofil") is translated, everything else stays as configured. */
+  _title() {
+    const title = String(this._config.title || "").trim();
+    const de = W_TEXT.de.title;
+    if (!title || title === de) return WT().title;
+    if (title.endsWith(` ${de}`)) return `${title.slice(0, -de.length)}${WT().title}`;
+    return title;
+  }
+
   _daySegments(attrs, key) {
     return parseDay(attrs[`week_profile_${key}`]);
   }
@@ -716,10 +726,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
         <div class="wrapper">
           <div class="header">
             <div class="titles">
-              <div class="title">${esc(
-                // the old default title was stored in the card config: translate it too
-                !this._config.title || this._config.title === W_TEXT.de.title ? WT().title : this._config.title
-              )}</div>
+              <div class="title">${esc(this._title())}</div>
               <div class="subtitle">${esc(
                 multi ? stateObjs.map((st) => st.attributes.friendly_name).join(" · ") : attrs.friendly_name || ""
               )}</div>
