@@ -126,6 +126,17 @@ async def test_no_room_sensor_traffic_in_summer(hass, coordinator, fake_cul, hea
 
     assert not [p for p in fake_cul.on_air[before:] if p.msg_type == MSG_WALL_THERMOSTAT_CONTROL]
 
+    # summer over: the paused room value goes out right away
+    coordinator._ext_last[KITCHEN] = {"at": hass.loop.time(), "measured": 19.5, "desired": 21.0, "confirmed": True}
+    coordinator.get_device(KITCHEN).last_state.update(mode=MODE_MANUAL, desired_temperature=4.5)
+    await coordinator.async_end_summer()
+    await wait_for(
+        lambda: any(
+            p.msg_type == MSG_WALL_THERMOSTAT_CONTROL for p in fake_cul.on_air_to(KITCHEN)[-3:]
+        ),
+        timeout=5,
+    )
+
 
 async def test_summer_survives_restart(hass, coordinator, fake_cul, heating_season) -> None:
     """Persisted with the device store; unconfirmed thermostats are resent."""

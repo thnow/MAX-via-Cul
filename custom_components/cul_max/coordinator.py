@@ -2989,6 +2989,8 @@ class CulMaxCoordinator:
                 await self._save_devices()
                 self._notify_vacation()
                 if device.external_sensor:
+                    # The room value was paused all summer: send a fresh one now.
+                    self._ext_last.pop(address, None)
                     self._background(
                         self._external_temperature_tick(address, reason="summer end"),
                         f"external temperature {address}",
