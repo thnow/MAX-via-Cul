@@ -8,7 +8,7 @@ ROOM_WIDTH = 400
 ROOM_GAP = 16
 COLUMNS = 3
 NODE_WIDTH = 158
-NODE_HEIGHT = 50
+NODE_HEIGHT = 64  # name, status, address/serial
 NODE_GAP = 10
 ROOM_HEADER = 36
 LEFT_X = 14
@@ -50,6 +50,7 @@ class TopologyNode:
     kind: str
     name: str
     status: str = ""
+    ident: str = ""  # MAX! address and serial number
     virtual: bool = False
     problems: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
@@ -256,7 +257,12 @@ def render_topology_svg(nodes: list[TopologyNode], edges: list[TopologyEdge], *,
                     f'<text x="{x + 9}" y="{y0 + 35}" font-size="11.5" fill="{COLORS["muted"]}">'
                     f"{escape(_short(node.status, 26))}</text>"
                 )
-            line_y = y0 + 35 + LINE_HEIGHT
+            if node.ident:
+                out.append(
+                    f'<text x="{x + 9}" y="{y0 + 50}" font-size="10.5" font-family="ui-monospace, Menlo, Consolas, monospace" '
+                    f'fill="{COLORS["muted"]}">{escape(_short(node.ident, 28))}</text>'
+                )
+            line_y = y0 + 50 + LINE_HEIGHT
             for text, colour in _note_lines(node):
                 out.append(
                     f'<text x="{x + 9}" y="{line_y}" font-size="11" fill="{colour}">'

@@ -3093,6 +3093,9 @@ class CulMaxCoordinator:
                     kind=kind,
                     name=name,
                     status=status,
+                    ident=" · ".join(
+                        part for part in (device.address, device.serial_number) if part
+                    ),
                     virtual=device.is_virtual,
                     problems=problems,
                     notes=notes,

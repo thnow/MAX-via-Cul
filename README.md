@@ -465,6 +465,13 @@ Repository layout:
 
 ## Changelog
 
+### Unreleased
+
+- Topology picture: every device also shows its MAX! address and serial
+  number (suggested by [@adampr1](https://github.com/adampr1), #3).
+- Removed the outdated `ROADMAP.md`; ideas and requests live in the GitHub
+  issues.
+
 ### 0.6.6
 
 - English and German throughout: dashboard cards and error messages follow
