@@ -160,3 +160,21 @@ async def test_summer_survives_restart(hass, coordinator, fake_cul, heating_seas
         await wait_for(lambda: restarted._summer["devices"][BATH]["status"] == "confirmed", timeout=5)
     finally:
         await restarted.async_shutdown()
+
+
+async def test_week_card_knows_which_thermostats_are_parked(coordinator, fake_cul, heating_season) -> None:
+    """Drives the 'Sommermodus' notice in the week profile card."""
+    assert coordinator.summer_valve_for(KITCHEN) is None
+    await coordinator.async_start_summer(valve="open")
+    await wait_summer(coordinator, "confirmed")
+    for address in THERMOSTATS:
+        coordinator.get_device(address).last_state.update(mode=MODE_MANUAL, desired_temperature=30.5)
+    assert coordinator.summer_valve_for(KITCHEN) == "open"
+
+    # heated by hand on a cold summer day: show its real state instead
+    coordinator.get_device(BATH).last_state.update(desired_temperature=22.0)
+    assert coordinator.summer_valve_for(BATH) is None
+
+    await coordinator.async_end_summer()
+    assert coordinator.summer_valve_for(KITCHEN) is None
+    await wait_summer(coordinator, "restored")

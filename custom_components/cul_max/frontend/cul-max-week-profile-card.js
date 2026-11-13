@@ -301,6 +301,14 @@ class CulMaxWeekProfileCard extends HTMLElement {
         icon: "mdi:airplane",
         text: `${who}Urlaub${until} – ${fmtTemp(attrs.temperature)}, danach wieder Wochenprogramm`,
       });
+    } else if (attrs.summer_mode) {
+      items.push({
+        level: "info",
+        icon: "mdi:white-balance-sunny",
+        text: `${who}Sommermodus – ${
+          attrs.summer_mode === "open" ? "Ventil ganz offen" : "Heizung aus"
+        }, Wochenprogramm pausiert bis zum Ende des Sommermodus`,
+      });
     } else if (scheduleOff && mode && mode !== "auto") {
       const label = stateObj.state === "off" ? "Aus" : MODE_LABELS[mode] || mode;
       const target = attrs.temperature != null && stateObj.state !== "off" ? ` ${fmtTemp(attrs.temperature)}` : "";

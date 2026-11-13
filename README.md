@@ -256,6 +256,9 @@ select `Sommermodus Ventil`.
   its week program); a thermostat you changed by hand during the summer stays
   as it is.
 - The thermostats keep their weekly decalcification run.
+- The week profile card says *Sommermodus – Wochenprogramm pausiert* instead
+  of just "off", so nobody wonders why the program does not run (a vacation
+  shows *Urlaub bis …* the same way).
 - Room thermometers send nothing to the thermostats meanwhile, and a vacation
   cannot be started (nothing to lower anyway).
 - Thermostats that are out of reach get the command again, also after a
