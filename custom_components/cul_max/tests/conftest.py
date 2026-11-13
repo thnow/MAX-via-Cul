@@ -80,4 +80,5 @@ async def coordinator(hass, fake_cul):
     await wait_for(lambda: coord._cul_credit_known)
     yield coord
     await coord.async_shutdown()
+    fake_cul.close()
     await hass.async_block_till_done()

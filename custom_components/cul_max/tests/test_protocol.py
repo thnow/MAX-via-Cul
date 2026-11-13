@@ -42,6 +42,7 @@ class _Platform(StrEnum):
     IMAGE = "image"
     BINARY_SENSOR = "binary_sensor"
     NUMBER = "number"
+    SELECT = "select"
     SENSOR = "sensor"
     SWITCH = "switch"
     TEXT = "text"

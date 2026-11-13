@@ -534,6 +534,21 @@ def _default_vacation_state() -> dict[str, Any]:
     }
 
 
+SUMMER_VALVE_CLOSED = "closed"  # "Aus": 4.5 °C, valve closed
+SUMMER_VALVE_OPEN = "open"      # "Ein": 30.5 °C, valve fully open
+SUMMER_TEMPERATURES = {SUMMER_VALVE_CLOSED: 4.5, SUMMER_VALVE_OPEN: 30.5}
+
+
+def _default_summer_state() -> dict[str, Any]:
+    """Persisted summer mode: heating season over, thermostats parked."""
+    return {
+        "active": False,
+        "valve": SUMMER_VALVE_CLOSED,
+        "started_at": None,
+        "devices": {},          # address -> {prev_mode, prev_temperature, status, error, updated_at}
+    }
+
+
 def _floor_half_hour(when: datetime) -> datetime:
     """Round down to the MAX! until resolution (:00 / :30)."""
     return when.replace(minute=0 if when.minute < 30 else 30, second=0, microsecond=0)
@@ -672,6 +687,8 @@ class CulMaxCoordinator:
         self._cul_status_listeners: list[Callable[[], None]] = []
         # Vacation mode (whole flat or selected thermostats), persisted
         self._vacation: dict[str, Any] = _default_vacation_state()
+        self._summer: dict[str, Any] = _default_summer_state()
+        self._summer_task: asyncio.Task | None = None
         self._vacation_task: asyncio.Task | None = None
         self._vacation_timer_unsub: Callable[[], None] | None = None
         self._vacation_listeners: list[Callable[[], None]] = []
@@ -1299,6 +1316,7 @@ class CulMaxCoordinator:
         await self._ensure_time_slots_assigned()
         connected = await self._connect()
         self._resume_vacation()
+        self._resume_summer()
         if connected:
             self._virtual_contact_refresh_after = (
                 self.hass.loop.time() + VIRTUAL_CONTACT_STARTUP_DELAY
@@ -1385,6 +1403,9 @@ class CulMaxCoordinator:
                 await self._vacation_task
             except asyncio.CancelledError:
                 pass
+        if self._summer_task is not None and not self._summer_task.done():
+            self._summer_task.cancel()
+            await asyncio.gather(self._summer_task, return_exceptions=True)
         await self._close_connection()
         await self._save_devices_now()
         _LOGGER.info("CUL TCP connection to %s:%d closed", self.host, self.port)
@@ -2313,6 +2334,8 @@ class CulMaxCoordinator:
         device = self.get_device(address)
         if device is None or not device.external_sensor or self._writer is None:
             return
+        if self._summer.get("active"):
+            return  # nothing to regulate; saves radio budget and batteries
         lock = self._ext_locks.setdefault(device.address, asyncio.Lock())
         if lock.locked():
             return
@@ -2523,6 +2546,11 @@ class CulMaxCoordinator:
             self._vacation["end"] = dt_util.as_local(end).replace(second=0, microsecond=0).isoformat()
         if preheat_hours is not None:
             self._vacation["preheat_hours"] = max(0.0, float(preheat_hours))
+        if self._summer.get("active"):
+            raise ValueError(
+                "Der Sommermodus ist aktiv – die Heizung ist ohnehin aus. "
+                "Für einen Urlaub erst den Sommermodus beenden."
+            )
         end_dt = self._vacation_end_datetime()
         if end_dt is None:
             raise ValueError("Bitte zuerst das Urlaubsende (Rückkehr) setzen.")
@@ -2757,6 +2785,231 @@ class CulMaxCoordinator:
         ]
         if unconfirmed:
             self._run_vacation_task(self._vacation_send_all(unconfirmed))
+
+    # ------------------------------------------------------------------
+    # Summer mode
+    # ------------------------------------------------------------------
+    #
+    # Heating season over: every thermostat goes to manual "off" (4.5 °C,
+    # valve closed) or "on" (30.5 °C, valve fully open) until summer mode is
+    # switched off by hand. The thermostats keep their weekly decalcification
+    # run either way. Each thermostat's previous state is remembered and
+    # restored at the end, unless it was changed by hand in the meantime.
+
+    def get_summer_status(self) -> dict[str, Any]:
+        """Run state and per-thermostat delivery for entities, card and services."""
+        summer = self._summer
+        counts: dict[str, int] = {}
+        details: dict[str, str] = {}
+        registry = dr.async_get(self.hass)
+        for address, info in (summer.get("devices") or {}).items():
+            status = str(info.get("status", "pending"))
+            counts[status] = counts.get(status, 0) + 1
+            entry = self.get_registry_device(registry, address)
+            device = self.get_device(address)
+            name = (
+                (entry.name_by_user or entry.name) if entry is not None
+                else (device.name if device else address)
+            )
+            details[name] = status
+        valve = summer.get("valve") or SUMMER_VALVE_CLOSED
+        return {
+            "active": bool(summer.get("active")),
+            "valve": valve,
+            "temperature": SUMMER_TEMPERATURES.get(valve, 4.5),
+            "started_at": summer.get("started_at"),
+            "counts": counts,
+            "devices": details,
+        }
+
+    async def async_set_summer_valve(self, valve: str) -> None:
+        """Choose "closed" (off) or "open" (on); a running summer mode is re-sent."""
+        if valve not in SUMMER_TEMPERATURES:
+            raise ValueError(f"Unbekannte Ventilstellung {valve!r} (closed oder open).")
+        if valve == self._summer.get("valve"):
+            return
+        self._summer["valve"] = valve
+        await self._save_devices()
+        self._notify_vacation()
+        if self._summer.get("active"):
+            await self.async_start_summer(valve=valve)
+
+    async def async_start_summer(
+        self,
+        *,
+        valve: str | None = None,
+        addresses: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Park all (or the given) thermostats for the summer."""
+        if valve is not None:
+            if valve not in SUMMER_TEMPERATURES:
+                raise ValueError(f"Unbekannte Ventilstellung {valve!r} (closed oder open).")
+            self._summer["valve"] = valve
+        if self._vacation.get("active"):
+            raise ValueError("Bitte zuerst den Urlaubsmodus beenden.")
+        targets = self._vacation_targets(addresses)
+        if not targets:
+            raise ValueError("Keine angemeldeten MAX!-Thermostate gefunden.")
+        was_active = bool(self._summer.get("active"))
+        records: dict[str, dict[str, Any]] = dict(self._summer.get("devices") or {}) if was_active else {}
+        for device in targets:
+            record = records.get(device.address)
+            if record is None:
+                state = device.last_state or {}
+                prev_mode = state.get("mode", MODE_AUTO)
+                if prev_mode in (MODE_BOOST, MODE_VACATION):
+                    prev_mode = MODE_AUTO
+                record = {
+                    "prev_mode": int(prev_mode),
+                    "prev_temperature": state.get("desired_temperature"),
+                }
+            record.update(status="pending", error="", updated_at=self._now_iso())
+            records[device.address] = record
+        self._summer.update(
+            active=True,
+            devices=records,
+            started_at=self._summer.get("started_at") if was_active else self._now_iso(),
+        )
+        await self._save_devices_now()
+        self._notify_vacation()
+        _LOGGER.info(
+            "Summer mode: %d thermostat(s) %s (%.1f °C)",
+            len(targets),
+            "valve open" if self._summer["valve"] == SUMMER_VALVE_OPEN else "off",
+            SUMMER_TEMPERATURES[self._summer["valve"]],
+        )
+        self._run_summer_task(self._summer_send_all([d.address for d in targets]))
+        return self.get_summer_status()
+
+    async def async_end_summer(self) -> dict[str, Any]:
+        """Heating season again: restore every thermostat's previous state."""
+        if not self._summer.get("active"):
+            return self.get_summer_status()
+        records = dict(self._summer.get("devices") or {})
+        for record in records.values():
+            record.update(status="restoring", error="", updated_at=self._now_iso())
+        self._summer["active"] = False
+        await self._save_devices_now()
+        self._notify_vacation()
+        _LOGGER.info("Summer mode ended: restoring %d thermostat(s)", len(records))
+        self._run_summer_task(self._summer_restore_all(records))
+        return self.get_summer_status()
+
+    def _run_summer_task(self, coro) -> None:
+        if self._summer_task is not None and not self._summer_task.done():
+            self._summer_task.cancel()
+        self._summer_task = self.hass.loop.create_task(coro)
+
+    async def _summer_set_record(self, address: str, **values: Any) -> None:
+        record = (self._summer.get("devices") or {}).get(address)
+        if record is None:
+            return
+        record.update(values, updated_at=self._now_iso())
+        await self._save_devices()
+        self._notify_vacation()
+
+    async def _summer_send_all(self, addresses: list[str]) -> None:
+        """Send manual off/on; retry thermostats that did not confirm."""
+        remaining = list(addresses)
+        for attempt in range(VACATION_SEND_ROUNDS):
+            failed: list[str] = []
+            for address in remaining:
+                if not self._summer.get("active"):
+                    return
+                temperature = SUMMER_TEMPERATURES[self._summer.get("valve") or SUMMER_VALVE_CLOSED]
+                try:
+                    await self.async_set_temperature(address, temperature, mode=MODE_MANUAL)
+                except asyncio.CancelledError:
+                    raise
+                except (CommandSupersededError, CommandCancelledError):
+                    await self._summer_set_record(
+                        address, status="confirmed", error="durch neueren Befehl ersetzt"
+                    )
+                    continue
+                except Exception as err:  # noqa: BLE001 - retried below
+                    failed.append(address)
+                    await self._summer_set_record(address, status="failed", error=str(err))
+                else:
+                    await self._summer_set_record(address, status="confirmed", error="")
+            if not failed:
+                return
+            remaining = failed
+            if attempt + 1 < VACATION_SEND_ROUNDS:
+                await asyncio.sleep(VACATION_RETRY_DELAY)
+        _LOGGER.warning(
+            "Summer mode not confirmed by: %s",
+            ", ".join(self.format_device_label(a) for a in remaining),
+        )
+
+    async def _summer_restore_all(self, records: dict[str, dict[str, Any]]) -> None:
+        """Bring the thermostats back to where they were before the summer."""
+        order = sorted(
+            records,
+            key=lambda a: (
+                (self.get_device(a).device_type if self.get_device(a) else 0) != DEVICE_WALL_THERMOSTAT,
+                a,
+            ),
+        )
+        parked = set(SUMMER_TEMPERATURES.values())
+        remaining = order
+        for attempt in range(VACATION_SEND_ROUNDS):
+            failed: list[str] = []
+            for address in remaining:
+                if self._summer.get("active"):
+                    return  # switched on again meanwhile
+                record = records[address]
+                device = self.get_device(address)
+                if device is None:
+                    continue
+                state = device.last_state or {}
+                still_parked = (
+                    state.get("mode") == MODE_MANUAL
+                    and state.get("desired_temperature") in parked
+                ) or not state
+                prev_mode = int(record.get("prev_mode", MODE_AUTO))
+                prev_temp = record.get("prev_temperature")
+                try:
+                    if not still_parked:
+                        pass  # changed by hand during the summer – keep that
+                    elif prev_mode == MODE_MANUAL and prev_temp is not None:
+                        await self.async_set_temperature(address, float(prev_temp), mode=MODE_MANUAL)
+                    else:
+                        await self.async_set_temperature(address, 0.0, mode=MODE_AUTO)
+                except asyncio.CancelledError:
+                    raise
+                except (CommandSupersededError, CommandCancelledError):
+                    record.update(status="restored", error="durch neueren Befehl ersetzt", updated_at=self._now_iso())
+                    continue
+                except Exception as err:  # noqa: BLE001 - retried below
+                    failed.append(address)
+                    record.update(status="restore_failed", error=str(err), updated_at=self._now_iso())
+                else:
+                    record.update(status="restored", error="", updated_at=self._now_iso())
+                self._summer["devices"] = records
+                await self._save_devices()
+                self._notify_vacation()
+                if device.external_sensor:
+                    self._background(
+                        self._external_temperature_tick(address, reason="summer end"),
+                        f"external temperature {address}",
+                    )
+            if not failed:
+                return
+            remaining = failed
+            if attempt + 1 < VACATION_SEND_ROUNDS:
+                await asyncio.sleep(VACATION_RETRY_DELAY)
+
+    def _resume_summer(self) -> None:
+        """After a restart: re-send to thermostats that did not confirm yet."""
+        records = self._summer.get("devices") or {}
+        if self._summer.get("active"):
+            unconfirmed = [a for a, r in records.items() if r.get("status") != "confirmed"]
+            if unconfirmed:
+                self._run_summer_task(self._summer_send_all(unconfirmed))
+            return
+        restoring = {a: r for a, r in records.items() if r.get("status") in ("restoring", "restore_failed")}
+        if restoring:
+            self._run_summer_task(self._summer_restore_all(restoring))
 
     # ------------------------------------------------------------------
     # Topology picture
@@ -6678,6 +6931,11 @@ class CulMaxCoordinator:
             ]
             if restored:
                 self._pending_climate_config[normalized] = restored
+        stored_summer = data.get("summer")
+        if isinstance(stored_summer, dict):
+            self._summer = {**_default_summer_state(), **stored_summer}
+            if not isinstance(self._summer.get("devices"), dict):
+                self._summer["devices"] = {}
         stored_vacation = data.get("vacation")
         if isinstance(stored_vacation, dict):
             self._vacation = {**_default_vacation_state(), **stored_vacation}
@@ -6779,5 +7037,6 @@ class CulMaxCoordinator:
                 if commands
             },
             "vacation": self._vacation,
+            "summer": self._summer,
         }
         return data

@@ -85,6 +85,8 @@ SERVICE_NAMES: tuple[str, ...] = (
     "cleanup_superseded_devices",
     "start_vacation",
     "end_vacation",
+    "start_summer",
+    "end_summer",
 )
 
 
@@ -521,7 +523,9 @@ def _hide_legacy_week_profile_editors(hass: HomeAssistant, entry: ConfigEntry) -
 _SERVICE_HANDLERS = f"{DOMAIN}_service_handlers"
 # Services that act on the whole installation: without a target they run on
 # every gateway instead of asking which one is meant.
-ALL_GATEWAY_SERVICES = {"wake_thermostats", "sync_time", "start_vacation", "end_vacation"}
+ALL_GATEWAY_SERVICES = {
+    "wake_thermostats", "sync_time", "start_vacation", "end_vacation", "start_summer", "end_summer",
+}
 _HEX_ADDRESS = re.compile(r"^[0-9A-Fa-f]{6}$")
 
 
@@ -865,6 +869,15 @@ def _register_services(
 
     async def handle_end_vacation(call: ServiceCall) -> dict[str, object]:
         return await coordinator.async_end_vacation(reason="manual")
+
+    async def handle_start_summer(call: ServiceCall) -> dict[str, object]:
+        try:
+            return await coordinator.async_start_summer(valve=call.data.get("valve"))
+        except ValueError as err:
+            raise HomeAssistantError(str(err)) from err
+
+    async def handle_end_summer(call: ServiceCall) -> dict[str, object]:
+        return await coordinator.async_end_summer()
 
     async def handle_set_desired_temperature(call: ServiceCall) -> dict[str, object] | None:
         address = _resolve_device_address(hass, call)
@@ -1587,6 +1600,18 @@ def _register_services(
     _register(
         "end_vacation",
         handle_end_vacation,
+        schema=vol.Schema({}),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    _register(
+        "start_summer",
+        handle_start_summer,
+        schema=vol.Schema({vol.Optional("valve"): vol.In(["closed", "open"])}),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    _register(
+        "end_summer",
+        handle_end_summer,
         schema=vol.Schema({}),
         supports_response=SupportsResponse.OPTIONAL,
     )

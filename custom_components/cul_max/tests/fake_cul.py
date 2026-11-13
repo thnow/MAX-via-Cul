@@ -157,6 +157,7 @@ class FakeCul:
         self.refuse_connections = False
         self._reader: asyncio.StreamReader | None = None
         self._writer: FakeWriter | None = None
+        self._timers: list[asyncio.TimerHandle] = []
 
     def add_device(self, address: str, **kwargs) -> FakeDevice:
         device = FakeDevice(address.upper(), **kwargs)
@@ -202,9 +203,17 @@ class FakeCul:
             if device is not None:
                 ack = device.answer(packet)
                 if ack is not None:
-                    asyncio.get_running_loop().call_later(self.ack_delay, self.send_line, ack)
+                    self._timers.append(
+                        asyncio.get_running_loop().call_later(self.ack_delay, self.send_line, ack)
+                    )
             return
         self.control.append(cmd)
+
+    def close(self) -> None:
+        """Cancel ACKs still scheduled when a test ends."""
+        for timer in self._timers:
+            timer.cancel()
+        self._timers.clear()
 
     def on_air_to(self, address: str) -> list[SentPacket]:
         return [p for p in self.on_air if p.dst == address.upper()]
