@@ -2822,6 +2822,24 @@ class CulMaxCoordinator:
             "devices": details,
         }
 
+    def summer_valve_for(self, address: str) -> str | None:
+        """Summer variant a thermostat is parked in, or None.
+
+        None as well when it was changed by hand during the summer, so the
+        week profile card shows its real state instead.
+        """
+        if not self._summer.get("active"):
+            return None
+        if address.upper() not in (self._summer.get("devices") or {}):
+            return None
+        device = self.get_device(address)
+        state = (device.last_state if device else None) or {}
+        if state.get("mode") not in (None, MODE_MANUAL):
+            return None
+        if state.get("desired_temperature") not in (None, *SUMMER_TEMPERATURES.values()):
+            return None
+        return self._summer.get("valve") or SUMMER_VALVE_CLOSED
+
     async def async_set_summer_valve(self, valve: str) -> None:
         """Choose "closed" (off) or "open" (on); a running summer mode is re-sent."""
         if valve not in SUMMER_TEMPERATURES:

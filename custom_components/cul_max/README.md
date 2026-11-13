@@ -403,6 +403,8 @@ Sommermodus wird eine Aenderung sofort an alle Thermostate geschickt.
   (meist das Wochenprogramm). Wer im Sommer ein Thermostat von Hand verstellt
   hat, behaelt diese Einstellung.
 - Die woechentliche Entkalkungsfahrt der Thermostate laeuft weiter.
+- Die Wochenprogramm-Karte zeigt *Sommermodus – Wochenprogramm pausiert*
+  statt nur „Aus“ (im Urlaub entsprechend *Urlaub bis …*).
 - Raumthermometer senden in dieser Zeit nichts an die Thermostate; ein Urlaub
   ist gesperrt.
 - Nicht erreichbare Thermostate bekommen den Befehl erneut, auch nach einem

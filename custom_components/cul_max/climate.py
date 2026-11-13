@@ -157,6 +157,8 @@ class CulMaxClimate(ClimateEntity):
         self.async_on_remove(
             self._coordinator.add_diagnostic_listener(self._address, self._on_week_profile_update)
         )
+        # Summer / vacation mode switched on or off: refresh the attributes.
+        self.async_on_remove(self._coordinator.add_vacation_listener(self._on_week_profile_update))
         # Restore last known state if available
         last = self._device.last_state
         if last:
@@ -288,6 +290,7 @@ class CulMaxClimate(ClimateEntity):
             "last_command": self._device.last_command or None,
             "mode_detail": MODE_NAMES.get(self._raw_mode(), self._raw_mode()),
             "mode_is_temporary": self._raw_mode() == MODE_VACATION,
+            "summer_mode": self._coordinator.summer_valve_for(self._address),
             "expected_week_profile_temperature": self._coordinator.get_expected_week_profile_temperature(self._address),
             "group_id": self._device.group_id,
             "linked_partners": self._device.linked_partners,
