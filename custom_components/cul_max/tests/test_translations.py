@@ -37,6 +37,9 @@ def test_german_and_english_have_the_same_keys_and_placeholders() -> None:
     assert set(de) == set(en)
     for key, text in en.items():
         assert _placeholders(str(text)) == _placeholders(str(de[key])), key
+        # hassfest rejects placeholders in single quotes
+        for value in (str(text), str(de[key])):
+            assert not re.search(r"'\{[^}]+\}'", value), key
 
 
 def test_every_error_key_in_the_code_is_translated() -> None:
