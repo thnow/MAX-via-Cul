@@ -5,10 +5,10 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .errors import ha_error
 from . import CulMaxConfigEntry
 from .const import DOMAIN
 from .coordinator import CulMaxCoordinator
@@ -81,7 +81,7 @@ class CulMaxVacationSwitch(SwitchEntity):
         try:
             await self._coordinator.async_start_vacation()
         except ValueError as err:
-            raise HomeAssistantError(str(err)) from err
+            raise ha_error(err) from err
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self._coordinator.async_end_vacation(reason="manual")
@@ -135,7 +135,7 @@ class CulMaxSummerSwitch(SwitchEntity):
         try:
             await self._coordinator.async_start_summer()
         except ValueError as err:
-            raise HomeAssistantError(str(err)) from err
+            raise ha_error(err) from err
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self._coordinator.async_end_summer()

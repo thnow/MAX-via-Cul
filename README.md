@@ -462,6 +462,13 @@ Repository layout:
 
 ## Changelog
 
+### Unreleased
+
+- English and German throughout: entity names, services, dashboard cards and
+  error messages follow the language of the Home Assistant user profile
+  (German for German, English for every other language). More languages can
+  be added as `translations/<lang>.json`.
+
 ### 0.6.5
 
 - Summer mode: all thermostats off (valve closed) or fully open until it is

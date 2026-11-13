@@ -12,13 +12,14 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import CoreState, HomeAssistant, ServiceCall, SupportsResponse
-from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
+from .errors import CulMaxError, ha_error
 from .const import (
     CLIMATE_DEVICE_TYPES,
     CONF_BAUDRATE,
@@ -286,7 +287,7 @@ def _parse_until_value(hass: HomeAssistant, raw: str) -> DateTime:
     """Parse a user-supplied until value into a timezone-aware local datetime."""
     text = raw.strip()
     if not text:
-        raise ValueError("Leerer until-Wert.")
+        raise CulMaxError("until_empty")
 
     parsed = dt_util.parse_datetime(text)
     if parsed is None:
@@ -297,9 +298,7 @@ def _parse_until_value(hass: HomeAssistant, raw: str) -> DateTime:
             except ValueError:
                 continue
     if parsed is None:
-        raise ValueError(
-            "Until muss als ISO-Zeit oder im Format TT.MM.JJJJ HH:MM angegeben werden."
-        )
+        raise CulMaxError("until_format")
 
     if parsed.tzinfo is None:
         timezone = dt_util.get_time_zone(hass.config.time_zone) or dt_util.DEFAULT_TIME_ZONE
@@ -308,9 +307,9 @@ def _parse_until_value(hass: HomeAssistant, raw: str) -> DateTime:
         parsed = dt_util.as_local(parsed)
 
     if parsed.minute not in (0, 30):
-        raise ValueError("Until-Zeiten muessen bei MAX! auf :00 oder :30 liegen.")
+        raise CulMaxError("until_half_hour")
     if parsed <= dt_util.now():
-        raise ValueError("Until-Zeitpunkt muss in der Zukunft liegen.")
+        raise CulMaxError("until_future")
     return parsed
 
 
@@ -329,7 +328,7 @@ def _parse_vacation_end(hass: HomeAssistant, raw: object) -> DateTime:
                 except ValueError:
                     continue
     if parsed is None:
-        raise ValueError("Rückkehr als ISO-Zeit oder im Format TT.MM.JJJJ HH:MM angeben.")
+        raise CulMaxError("return_format")
     if parsed.tzinfo is None:
         timezone = dt_util.get_time_zone(hass.config.time_zone) or dt_util.DEFAULT_TIME_ZONE
         parsed = parsed.replace(tzinfo=timezone)
@@ -618,7 +617,7 @@ def _register_services(
                 if _name in entry_handlers
             }
             if not per_entry:
-                raise HomeAssistantError("Kein MAX!-Gateway geladen.")
+                raise ha_error(CulMaxError("gateway_none"))
             gateway = str(call.data.get("gateway") or "").strip()
             if gateway:
                 targets = [
@@ -628,7 +627,7 @@ def _register_services(
                     and gateway in (entry.title, entry.data.get(CONF_HOST)))
                 ]
                 if not targets:
-                    raise HomeAssistantError(f"Unbekanntes MAX!-Gateway: {gateway}")
+                    raise ha_error(CulMaxError("gateway_unknown", gateway=gateway))
             elif len(per_entry) == 1:
                 targets = list(per_entry)
             else:
@@ -636,22 +635,22 @@ def _register_services(
                 if len(referenced) == 1:
                     targets = list(referenced)
                 elif len(referenced) > 1:
-                    raise HomeAssistantError(
-                        "Die Geräte dieses Aufrufs gehören zu verschiedenen MAX!-Gateways."
-                    )
+                    raise ha_error(CulMaxError("gateway_mixed"))
                 elif _name in ALL_GATEWAY_SERVICES:
                     targets = list(per_entry)
                 else:
-                    raise HomeAssistantError(
-                        "Mehrere MAX!-Gateways eingerichtet – bitte im Feld „Gateway“ eines auswählen."
-                    )
-            if len(targets) == 1:
-                return await per_entry[targets[0]](call)
-            responses: dict[str, object] = {}
-            for eid in targets:
-                entry = hass.config_entries.async_get_entry(eid)
-                responses[entry.title if entry else eid] = await per_entry[eid](call)
-            return {"gateways": responses}
+                    raise ha_error(CulMaxError("gateway_choose"))
+            try:
+                if len(targets) == 1:
+                    return await per_entry[targets[0]](call)
+                responses: dict[str, object] = {}
+                for eid in targets:
+                    entry = hass.config_entries.async_get_entry(eid)
+                    responses[entry.title if entry else eid] = await per_entry[eid](call)
+                return {"gateways": responses}
+            except CulMaxError as err:
+                # shown to the user in their language (exceptions.<key>)
+                raise ha_error(err) from err
 
         hass.services.async_register(
             DOMAIN,
@@ -723,12 +722,12 @@ def _register_services(
         if address is None and call.data.get("device_name"):
             address = _resolve_device_address_from_name(coordinator, str(call.data["device_name"]))
         if address is None:
-            raise HomeAssistantError("set_external_temperature_sensor: Thermostat nicht gefunden")
+            raise ha_error(CulMaxError("thermostat_not_found"))
         sensor = call.data.get("sensor_entity_id") or None
         try:
             status = await coordinator.async_set_external_temperature_sensor(address, sensor)
         except ValueError as err:
-            raise HomeAssistantError(str(err)) from err
+            raise ha_error(err) from err
         return {"device": _device_payload(address), **status}
 
     async def handle_wake_thermostats(call: ServiceCall) -> dict[str, object]:
@@ -853,7 +852,7 @@ def _register_services(
                 if (d := coordinator.get_device(a)) is not None and d.device_type in CLIMATE_DEVICE_TYPES
             ]
             if not in_areas:
-                raise HomeAssistantError("In den gewählten Bereichen gibt es keine MAX!-Thermostate.")
+                raise ha_error(CulMaxError("areas_no_thermostats"))
             addresses.extend(in_areas)
         end = call.data.get("end")
         try:
@@ -864,7 +863,7 @@ def _register_services(
                 addresses=list(dict.fromkeys(addresses)) or None,
             )
         except ValueError as err:
-            raise HomeAssistantError(str(err)) from err
+            raise ha_error(err) from err
         return status
 
     async def handle_end_vacation(call: ServiceCall) -> dict[str, object]:
@@ -874,7 +873,7 @@ def _register_services(
         try:
             return await coordinator.async_start_summer(valve=call.data.get("valve"))
         except ValueError as err:
-            raise HomeAssistantError(str(err)) from err
+            raise ha_error(err) from err
 
     async def handle_end_summer(call: ServiceCall) -> dict[str, object]:
         return await coordinator.async_end_summer()
@@ -902,7 +901,7 @@ def _register_services(
 
         if until_text:
             if temperature is None:
-                raise ValueError("set_desired_temperature mit until braucht eine Temperatur.")
+                raise CulMaxError("temperature_needed_until")
             until = _parse_until_value(hass, until_text)
             await coordinator.async_set_temperature(
                 address,
@@ -931,7 +930,7 @@ def _register_services(
 
         if mode_name == "manual":
             if temperature is None:
-                raise ValueError("set_desired_temperature im manual-Modus braucht eine Temperatur.")
+                raise CulMaxError("temperature_needed_manual")
             await coordinator.async_set_temperature(address, float(temperature), mode=MODE_MANUAL)
             return {
                 "device": _device_payload(address),
@@ -940,7 +939,7 @@ def _register_services(
             }
 
         if temperature is None:
-            raise ValueError("set_desired_temperature braucht eine Temperatur oder einen expliziten Modus.")
+            raise CulMaxError("temperature_or_mode")
 
         current_mode = coordinator.get_raw_mode(address)
         if keep_auto and current_mode in (MODE_AUTO, MODE_VACATION):

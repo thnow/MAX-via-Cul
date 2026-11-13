@@ -119,8 +119,9 @@ async def test_rejected_relink_restores_old_link(coordinator, fake_cul, sensors,
 
     thermostat._apply = refuse_new_link
 
-    with pytest.raises(ValueError, match="abgelehnt"):
+    with pytest.raises(ValueError) as rejected:
         await coordinator.async_set_external_temperature_sensor(BATH, "sensor.kueche")
+    assert rejected.value.key == "wall_thermostat_link_rejected"
 
     assert wt_of(coordinator, BATH) == old
     assert coordinator.get_device(BATH).external_sensor == "sensor.bad"

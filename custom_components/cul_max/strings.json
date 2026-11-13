@@ -894,6 +894,248 @@
       }
     }
   },
+  "exceptions": {
+    "unknown_device": {
+      "message": "Unknown MAX! device address {address}."
+    },
+    "unknown_partner": {
+      "message": "Unknown partner address {address}."
+    },
+    "unknown_partner_type_hint": {
+      "message": "Unknown partner address {address}. For a stale link to an unknown device, give partner_type."
+    },
+    "association_not_supported": {
+      "message": "This MAX! association is not supported: {source} -> {partner}. Allowed partners for {type}: {allowed}."
+    },
+    "not_paired": {
+      "message": "{device} is only discovered, not paired. Pair the device properly before writing configuration or room links."
+    },
+    "external_sensor_wall_thermostat": {
+      "message": "An external room sensor is only possible for radiator thermostats (wall thermostats have their own sensor)."
+    },
+    "sensor_not_found": {
+      "message": "Sensor {sensor} not found."
+    },
+    "sensor_not_temperature": {
+      "message": "Please choose a temperature sensor (sensor.*)."
+    },
+    "wall_thermostat_link_rejected": {
+      "message": "The thermostat rejected the new virtual wall thermostat."
+    },
+    "no_thermostats_listed": {
+      "message": "Not paired MAX! thermostats: {addresses}"
+    },
+    "no_thermostats": {
+      "message": "No paired MAX! thermostats found."
+    },
+    "summer_blocks_vacation": {
+      "message": "Summer mode is on – the heating is off anyway. End summer mode before starting a vacation."
+    },
+    "vacation_blocks_summer": {
+      "message": "Please end the vacation mode first."
+    },
+    "vacation_end_missing": {
+      "message": "Please set the vacation end (return) first."
+    },
+    "vacation_end_past": {
+      "message": "The vacation end (minus preheating) must be at least a few minutes in the future."
+    },
+    "return_in_future": {
+      "message": "The return must be in the future."
+    },
+    "summer_valve_invalid": {
+      "message": "Unknown valve position {valve} (closed or open)."
+    },
+    "pairing_duration": {
+      "message": "The pairing duration must be at least 1 second."
+    },
+    "no_temperature_config": {
+      "message": "Device {address} has no temperature configuration."
+    },
+    "no_week_profile_support": {
+      "message": "Device {address} has no week profile."
+    },
+    "no_time_sync_support": {
+      "message": "Device {address} does not support time synchronisation."
+    },
+    "area_no_devices": {
+      "message": "There are no other MAX! devices in the chosen area."
+    },
+    "address_invalid": {
+      "message": "The address must be 6 hexadecimal digits."
+    },
+    "address_exists": {
+      "message": "Device address {address} already exists."
+    },
+    "not_virtual": {
+      "message": "Device {address} is not a virtual device."
+    },
+    "not_virtual_contact": {
+      "message": "Device {address} is not a virtual window contact."
+    },
+    "virtual_no_links": {
+      "message": "Virtual devices have no links stored on the device."
+    },
+    "partner_type_invalid": {
+      "message": "Unknown partner_type {type}."
+    },
+    "associate_two_devices": {
+      "message": "At least two devices are needed for an association."
+    },
+    "deassociate_two_devices": {
+      "message": "At least two devices are needed to remove an association."
+    },
+    "group_id_range": {
+      "message": "The group ID must be between 1 and 255."
+    },
+    "room_needs_climate": {
+      "message": "A room needs at least one climate device."
+    },
+    "room_two_devices": {
+      "message": "A room needs at least two devices."
+    },
+    "room_teardown_two_devices": {
+      "message": "Taking a room apart needs at least two devices."
+    },
+    "no_free_group": {
+      "message": "No free MAX! group ID left."
+    },
+    "no_free_virtual_address": {
+      "message": "No free virtual MAX! address left."
+    },
+    "topology_devices_list": {
+      "message": "The topology JSON has no valid 'devices' list."
+    },
+    "topology_object": {
+      "message": "The topology must be a JSON object."
+    },
+    "topology_empty": {
+      "message": "The topology contains no devices."
+    },
+    "import_address_invalid": {
+      "message": "Invalid device address in the import: {address}"
+    },
+    "import_address_duplicate": {
+      "message": "Duplicate device address in the import: {address}"
+    },
+    "until_empty": {
+      "message": "Empty until value."
+    },
+    "until_format": {
+      "message": "Give until as ISO time or in the format DD.MM.YYYY HH:MM."
+    },
+    "until_half_hour": {
+      "message": "Until times must be at :00 or :30 for MAX!."
+    },
+    "until_future": {
+      "message": "The until time must be in the future."
+    },
+    "return_format": {
+      "message": "Give the return as ISO time or in the format DD.MM.YYYY HH:MM."
+    },
+    "gateway_none": {
+      "message": "No MAX! gateway loaded."
+    },
+    "gateway_unknown": {
+      "message": "Unknown MAX! gateway: {gateway}"
+    },
+    "gateway_mixed": {
+      "message": "The devices of this call belong to different MAX! gateways."
+    },
+    "gateway_choose": {
+      "message": "Several MAX! gateways are set up – please choose one in the field \"Gateway\"."
+    },
+    "thermostat_not_found": {
+      "message": "Thermostat not found."
+    },
+    "areas_no_thermostats": {
+      "message": "There are no MAX! thermostats in the chosen areas."
+    },
+    "temperature_needed_until": {
+      "message": "A temperature is needed together with until."
+    },
+    "temperature_needed_manual": {
+      "message": "Manual mode needs a temperature."
+    },
+    "temperature_or_mode": {
+      "message": "Give a temperature or an explicit mode."
+    },
+    "command_not_confirmed": {
+      "message": "{device}: {command} was not confirmed ({error})"
+    },
+    "profile_line_invalid": {
+      "message": "Invalid line '{line}'. Expected: day and profile."
+    },
+    "day_unknown": {
+      "message": "Unknown day '{day}'."
+    },
+    "day_twice": {
+      "message": "Day '{day}' was given twice."
+    },
+    "profile_invalid": {
+      "message": "Invalid profile for {day}. Format: temp,HH:MM,temp,HH:MM,temp"
+    },
+    "profile_times": {
+      "message": "Switching times for {day} must be strictly ascending and before 24:00."
+    },
+    "profile_too_many": {
+      "message": "Too many switching points for {day} (at most 13)."
+    },
+    "profile_empty": {
+      "message": "No week profile given."
+    },
+    "temperature_invalid": {
+      "message": "Invalid temperature '{value}'."
+    },
+    "temperature_range": {
+      "message": "Temperature '{value}' is invalid. Allowed are 4.5 to 30.5 in steps of 0.5."
+    },
+    "offset_invalid": {
+      "message": "Invalid temperature offset '{value}'."
+    },
+    "offset_range": {
+      "message": "Offset '{value}' is invalid. Allowed are -3.5 to 3.5 in steps of 0.5."
+    },
+    "window_duration_invalid": {
+      "message": "Invalid window-open duration '{value}'."
+    },
+    "window_duration_range": {
+      "message": "The window-open duration must be between 0 and 60 minutes."
+    },
+    "window_duration_step": {
+      "message": "The window-open duration must be given in steps of 5 minutes."
+    },
+    "time_invalid_format": {
+      "message": "Invalid time '{value}'. Expected HH:MM."
+    },
+    "time_invalid": {
+      "message": "Invalid time '{value}'."
+    },
+    "time_step": {
+      "message": "Time '{value}' is invalid. MAX! uses steps of 5 minutes."
+    },
+    "weekday_range": {
+      "message": "The weekday must be between 0 (Saturday) and 6 (Friday)."
+    },
+    "day_points": {
+      "message": "A day profile needs 1 to 13 switching points."
+    },
+    "day_end_2400": {
+      "message": "A day profile must end at 24:00."
+    },
+    "times_ascending": {
+      "message": "Switching times must be strictly ascending."
+    },
+    "times_range": {
+      "message": "Switching times must be between 00:00 and 24:00 in steps of 5 minutes."
+    },
+    "until_year": {
+      "message": "The until year must be between 2000 and 2063."
+    },
+    "until_time_half_hour": {
+      "message": "The until time must be at :00 or :30."
+    }
+  },
   "issues": {
     "paired_elsewhere": {
       "title": "{name} is still paired with another controller",
