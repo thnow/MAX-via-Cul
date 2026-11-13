@@ -467,6 +467,12 @@ Repository layout:
 
 ## Changelog
 
+### Unreleased
+
+- A thermostat that does not answer now ends in a readable message with the
+  room name ("Thermostat Büro did not answer by radio – check batteries and
+  range") instead of the internal radio log line.
+
 ### 0.6.7
 
 - Topology picture: every device also shows its MAX! address and serial

@@ -1063,6 +1063,15 @@
     "command_not_confirmed": {
       "message": "{device}: {command} was not confirmed ({error})"
     },
+    "command_no_answer": {
+      "message": "{device} did not answer by radio – the change was not applied. Please check the batteries and the radio range of the thermostat."
+    },
+    "command_rejected": {
+      "message": "{device} rejected the change."
+    },
+    "command_no_credit": {
+      "message": "The CUL has no send time left right now (1 % rule). Please try again in a few minutes."
+    },
     "profile_line_invalid": {
       "message": "Invalid line \"{line}\". Expected: day and profile."
     },
