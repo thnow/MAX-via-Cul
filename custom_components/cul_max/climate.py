@@ -12,10 +12,10 @@ from homeassistant.components.climate import (
 )
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import DeviceInfo
 
+from .errors import CulMaxError, ha_error
 from . import CulMaxConfigEntry
 from .const import (
     DEVICE_HEATING_THERMOSTAT,
@@ -256,9 +256,7 @@ class CulMaxClimate(ClimateEntity):
             self._command_error = str(err)
             self._restore_confirmed_state()
             self.async_write_ha_state()
-            raise HomeAssistantError(
-                f"{self._device.name}: {description} wurde nicht bestätigt ({err})"
-            ) from err
+            raise ha_error(CulMaxError("command_not_confirmed", device=self._device.name, command=description, error=err)) from err
         self._command_status = "confirmed"
         self.async_write_ha_state()
 

@@ -29,6 +29,7 @@ from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.util import dt as dt_util
 
+from .errors import CulMaxError
 from .const import (
     EVENT_PUSH_BUTTON,
     CULFW_CMD_MORITZ_RX,
@@ -844,17 +845,18 @@ class CulMaxCoordinator:
         device = self.get_device(address)
         partner = self.get_device(partner_address)
         if device is None:
-            raise ValueError(f"Unbekannte Geraeteadresse {address}")
+            raise CulMaxError("unknown_device", address=address)
         if partner is None:
-            raise ValueError(f"Unbekannte Partneradresse {partner_address}")
+            raise CulMaxError("unknown_partner", address=partner_address)
         supported = self._supported_partner_types(device.device_type)
         if supported and partner.device_type in supported:
             return
-        raise ValueError(
-            "Diese MAX!-Assoziation wird nicht unterstuetzt: "
-            f"{self._format_device_identity(address)} -> {self._format_device_identity(partner_address)}. "
-            f"Erlaubte Partner fuer {DEVICE_TYPE_NAMES.get(device.device_type, device.device_type)} sind: "
-            f"{', '.join(self.get_supported_partner_type_names(device.device_type)) or 'keine'}."
+        raise CulMaxError(
+            "association_not_supported",
+            source=self._format_device_identity(address),
+            partner=self._format_device_identity(partner_address),
+            type=DEVICE_TYPE_NAMES.get(device.device_type, device.device_type),
+            allowed=", ".join(self.get_supported_partner_type_names(device.device_type)) or "-",
         )
 
     def get_peer_names(self, address: str) -> list[str]:
@@ -904,13 +906,10 @@ class CulMaxCoordinator:
         """Raise if a physical device is only discovered but not properly paired."""
         device = self.get_device(address)
         if device is None:
-            raise ValueError(f"Unbekannte Geraeteadresse {address}")
+            raise CulMaxError("unknown_device", address=address)
         if device.is_virtual or device.paired:
             return
-        raise ValueError(
-            f"Geraet {self._format_device_identity(address)} ist nur discovered und noch nicht gepaired. "
-            "Bitte das Geraet erst sauber anlernen, bevor Konfigurationen oder Raum-Assoziationen geschrieben werden."
-        )
+        raise CulMaxError("not_paired", device=self._format_device_identity(address))
 
     def get_config_draft(self, address: str) -> dict[str, Any]:
         """Return the current unsaved config draft for one device."""
@@ -1163,7 +1162,7 @@ class CulMaxCoordinator:
         normalized = address.upper()
         device = self.get_device(normalized)
         if device is None:
-            raise ValueError(f"Unbekannte Geraeteadresse {address}")
+            raise CulMaxError("unknown_device", address=address)
         by_day = format_week_profile_by_day(self.get_local_week_profile(normalized))
         draft = self._config_drafts.setdefault(normalized, {})
         draft_by_day = dict(draft.get("week_profile_by_day") or by_day)
@@ -1186,7 +1185,7 @@ class CulMaxCoordinator:
         """Stage one thermostat config change without sending it immediately."""
         normalized = address.upper()
         if self.get_device(normalized) is None:
-            raise ValueError(f"Unbekannte Geraeteadresse {address}")
+            raise CulMaxError("unknown_device", address=address)
         self._config_drafts.setdefault(normalized, {})[key] = value
         self._notify_diagnostics_updated(normalized)
         if key in TEMPERATURE_CONFIG_KEYS:
@@ -2200,28 +2199,23 @@ class CulMaxCoordinator:
         normalized = address.upper()
         device = self.get_device(normalized)
         if device is None:
-            raise ValueError(f"Unbekannte Geraeteadresse {address}")
+            raise CulMaxError("unknown_device", address=address)
         if device.device_type not in (DEVICE_HEATING_THERMOSTAT, DEVICE_HEATING_THERMOSTAT_PLUS):
-            raise ValueError(
-                "Ein externer Raumfuehler ist nur fuer Heizkoerperthermostate moeglich "
-                "(Wandthermostate haben einen eigenen Fuehler)."
-            )
+            raise CulMaxError("external_sensor_wall_thermostat")
         self._require_paired_for_write(normalized)
         sensor = (sensor_entity_id or "").strip()
         if sensor:
             if self.hass.states.get(sensor) is None:
-                raise ValueError(f"Sensor {sensor} nicht gefunden.")
+                raise CulMaxError("sensor_not_found", sensor=sensor)
             if not sensor.startswith("sensor."):
-                raise ValueError("Bitte einen Temperatursensor (sensor.*) waehlen.")
+                raise CulMaxError("sensor_not_temperature")
         previous = device.external_sensor
         current_wt = self._device_wall_thermostat(device) if previous else None
         target_wt = self._allocate_wall_thermostat(sensor, exclude=normalized) if sensor else None
         if target_wt != current_wt:
             if current_wt is not None and target_wt is not None:
                 if not await self._relink_wall_thermostat(device, current_wt, target_wt):
-                    raise ValueError(
-                        "Der Thermostat hat den neuen virtuellen Wandthermostaten abgelehnt."
-                    )
+                    raise CulMaxError("wall_thermostat_link_rejected")
             elif target_wt is not None:
                 await self._link_wall_thermostat(normalized, target_wt, add=True)
                 device.wall_thermostat_address = f"{target_wt:06X}"
@@ -2453,9 +2447,7 @@ class CulMaxCoordinator:
         if wanted is not None:
             unknown = wanted - {d.address for d in devices}
             if unknown:
-                raise ValueError(
-                    "Keine angemeldeten MAX!-Thermostate: " + ", ".join(sorted(unknown))
-                )
+                raise CulMaxError("no_thermostats_listed", addresses=", ".join(sorted(unknown)))
         return sorted(devices, key=lambda d: (d.device_type != DEVICE_WALL_THERMOSTAT, d.name.lower()))
 
     def get_vacation_status(self) -> dict[str, Any]:
@@ -2547,21 +2539,16 @@ class CulMaxCoordinator:
         if preheat_hours is not None:
             self._vacation["preheat_hours"] = max(0.0, float(preheat_hours))
         if self._summer.get("active"):
-            raise ValueError(
-                "Der Sommermodus ist aktiv – die Heizung ist ohnehin aus. "
-                "Für einen Urlaub erst den Sommermodus beenden."
-            )
+            raise CulMaxError("summer_blocks_vacation")
         end_dt = self._vacation_end_datetime()
         if end_dt is None:
-            raise ValueError("Bitte zuerst das Urlaubsende (Rückkehr) setzen.")
+            raise CulMaxError("vacation_end_missing")
         device_end = self._compute_device_end(end_dt, float(self._vacation.get("preheat_hours") or 0.0))
         if device_end <= dt_util.now() + timedelta(minutes=5):
-            raise ValueError(
-                "Das Urlaubsende (abzüglich Vorheizen) muss mindestens ein paar Minuten in der Zukunft liegen."
-            )
+            raise CulMaxError("vacation_end_past")
         targets = self._vacation_targets(addresses)
         if not targets:
-            raise ValueError("Keine angemeldeten MAX!-Thermostate gefunden.")
+            raise CulMaxError("no_thermostats")
 
         was_active = bool(self._vacation.get("active"))
         records: dict[str, dict[str, Any]] = (
@@ -2843,7 +2830,7 @@ class CulMaxCoordinator:
     async def async_set_summer_valve(self, valve: str) -> None:
         """Choose "closed" (off) or "open" (on); a running summer mode is re-sent."""
         if valve not in SUMMER_TEMPERATURES:
-            raise ValueError(f"Unbekannte Ventilstellung {valve!r} (closed oder open).")
+            raise CulMaxError("summer_valve_invalid", valve=valve)
         if valve == self._summer.get("valve"):
             return
         self._summer["valve"] = valve
@@ -2861,13 +2848,13 @@ class CulMaxCoordinator:
         """Park all (or the given) thermostats for the summer."""
         if valve is not None:
             if valve not in SUMMER_TEMPERATURES:
-                raise ValueError(f"Unbekannte Ventilstellung {valve!r} (closed oder open).")
+                raise CulMaxError("summer_valve_invalid", valve=valve)
             self._summer["valve"] = valve
         if self._vacation.get("active"):
-            raise ValueError("Bitte zuerst den Urlaubsmodus beenden.")
+            raise CulMaxError("vacation_blocks_summer")
         targets = self._vacation_targets(addresses)
         if not targets:
-            raise ValueError("Keine angemeldeten MAX!-Thermostate gefunden.")
+            raise CulMaxError("no_thermostats")
         was_active = bool(self._summer.get("active"))
         records: dict[str, dict[str, Any]] = dict(self._summer.get("devices") or {}) if was_active else {}
         for device in targets:
@@ -3260,7 +3247,7 @@ class CulMaxCoordinator:
     async def async_start_pairing(self, duration: int = PAIRING_DURATION) -> None:
         """Enter pairing mode for the requested number of seconds."""
         if duration < 1:
-            raise ValueError("Pairing-Dauer muss mindestens 1 Sekunde betragen.")
+            raise CulMaxError("pairing_duration")
         _LOGGER.info("MAX! pairing mode active for %d seconds", duration)
         if not self._pairing_mode:
             self._pairing_session = {
@@ -3523,9 +3510,9 @@ class CulMaxCoordinator:
         """Send one combined ConfigTemperatures command and persist the values."""
         device = self.get_device(address)
         if device is None:
-            raise ValueError(f"Unbekannte Geraeteadresse {address}")
+            raise CulMaxError("unknown_device", address=address)
         if device.device_type not in CLIMATE_DEVICE_TYPES:
-            raise ValueError(f"Geraet {address} unterstuetzt keine Temperatur-Konfiguration.")
+            raise CulMaxError("no_temperature_config", address=address)
         self._require_paired_for_write(address)
 
         comfort = (
@@ -3634,7 +3621,7 @@ class CulMaxCoordinator:
         """
         device = self.get_device(address)
         if device is None:
-            raise ValueError(f"Unbekannte Geraeteadresse {address}")
+            raise CulMaxError("unknown_device", address=address)
         if device.device_type in CLIMATE_DEVICE_TYPES:
             _LOGGER.debug(
                 "Skipping automatic WakeUp before config write for %s",
@@ -3892,13 +3879,13 @@ class CulMaxCoordinator:
         normalized = address.upper()
         device = self.get_device(normalized)
         if device is None:
-            raise ValueError(f"Unbekannte Geraeteadresse {address}")
+            raise CulMaxError("unknown_device", address=address)
         others = [
             d for a in dict.fromkeys(x.upper() for x in room_addresses)
             if a != normalized and (d := self.get_device(a)) is not None and not d.superseded_by
         ]
         if not others:
-            raise ValueError("Im gewählten Bereich gibt es keine weiteren MAX!-Geräte.")
+            raise CulMaxError("area_no_devices")
         groups = [d.group_id for d in others if d.group_id]
         group_id = max(set(groups), key=groups.count) if groups else self.get_next_free_group_id()
         result: dict[str, Any] = {"group_id": group_id, "linked": [], "skipped": []}
@@ -4046,7 +4033,7 @@ class CulMaxCoordinator:
         """Deliver one queued shutter-contact config command inside an activity window."""
         device = self.get_device(address)
         if device is None:
-            raise ValueError(f"Unbekannte Geraeteadresse {address}")
+            raise CulMaxError("unknown_device", address=address)
         counter = self._next_counter()
         if command.op == "set_group_id":
             assert command.group_id is not None
@@ -4057,7 +4044,7 @@ class CulMaxCoordinator:
             assert command.partner_address is not None
             partner = self.get_device(command.partner_address)
             if partner is None:
-                raise ValueError(f"Unbekannte Partneradresse {command.partner_address}")
+                raise CulMaxError("unknown_partner", address=command.partner_address)
             cmd = build_add_link_partner(
                 counter,
                 self.own_address,
@@ -4073,7 +4060,7 @@ class CulMaxCoordinator:
             elif command.partner_type is not None:
                 partner_type = command.partner_type  # stale link to an unknown device
             else:
-                raise ValueError(f"Unbekannte Partneradresse {command.partner_address}")
+                raise CulMaxError("unknown_partner", address=command.partner_address)
             cmd = build_remove_link_partner(
                 counter,
                 self.own_address,
@@ -4324,10 +4311,10 @@ class CulMaxCoordinator:
         """Create a persisted virtual MAX! shutter contact."""
         normalized = address.upper()
         if len(normalized) != 6 or any(ch not in "0123456789ABCDEF" for ch in normalized):
-            raise ValueError("Adresse muss 6-stellig hexadezimal sein.")
+            raise CulMaxError("address_invalid")
         existing = self.get_device(normalized)
         if existing is not None:
-            raise ValueError(f"Geraeteadresse {normalized} existiert bereits.")
+            raise CulMaxError("address_exists", address=normalized)
 
         device = KnownDevice(
             address=normalized,
@@ -4369,9 +4356,9 @@ class CulMaxCoordinator:
         """Delete a persisted virtual MAX! device."""
         device = self.get_device(address)
         if device is None:
-            raise ValueError(f"Unbekannte Geraeteadresse {address}")
+            raise CulMaxError("unknown_device", address=address)
         if not device.is_virtual:
-            raise ValueError(f"Geraet {address} ist kein virtuelles Geraet.")
+            raise CulMaxError("not_virtual", address=address)
         del self._devices[address.upper()]
         await self._save_devices()
         _LOGGER.info("Deleted virtual device %s", self._format_device_identity(address))
@@ -4403,9 +4390,9 @@ class CulMaxCoordinator:
         normalized = address.upper()
         device = self.get_device(normalized)
         if device is None:
-            raise ValueError(f"Unbekannte Geraeteadresse {address}")
+            raise CulMaxError("unknown_device", address=address)
         if not device.is_virtual or device.device_type != DEVICE_SHUTTER_CONTACT:
-            raise ValueError(f"Geraet {address} ist kein virtueller Fensterkontakt.")
+            raise CulMaxError("not_virtual_contact", address=address)
 
         lock = self._virtual_contact_locks.setdefault(normalized, asyncio.Lock())
         async with lock:
@@ -4558,7 +4545,7 @@ class CulMaxCoordinator:
         """Assign a MAX! group ID to one device."""
         device = self.get_device(address)
         if device is None:
-            raise ValueError(f"Unbekannte Geraeteadresse {address}")
+            raise CulMaxError("unknown_device", address=address)
         self._require_paired_for_write(address)
 
         if device.is_virtual:
@@ -4603,7 +4590,7 @@ class CulMaxCoordinator:
         """Remove a MAX! group ID from one device."""
         device = self.get_device(address)
         if device is None:
-            raise ValueError(f"Unbekannte Geraeteadresse {address}")
+            raise CulMaxError("unknown_device", address=address)
         self._require_paired_for_write(address)
 
         if device.is_virtual:
@@ -4648,9 +4635,9 @@ class CulMaxCoordinator:
         device = self.get_device(address)
         partner = self.get_device(partner_address)
         if device is None:
-            raise ValueError(f"Unbekannte Geraeteadresse {address}")
+            raise CulMaxError("unknown_device", address=address)
         if partner is None:
-            raise ValueError(f"Unbekannte Partneradresse {partner_address}")
+            raise CulMaxError("unknown_partner", address=partner_address)
         self._require_paired_for_write(address)
         self._require_paired_for_write(partner_address)
         self._validate_link_supported(address, partner_address)
@@ -4732,13 +4719,10 @@ class CulMaxCoordinator:
         device = self.get_device(address)
         partner = self.get_device(partner_address)
         if device is None:
-            raise ValueError(f"Unbekannte Geraeteadresse {address}")
+            raise CulMaxError("unknown_device", address=address)
         if partner is None:
             if partner_type is None:
-                raise ValueError(
-                    f"Unbekannte Partneradresse {partner_address}. "
-                    "Fuer eine veraltete Verknuepfung zu einem unbekannten Geraet bitte partner_type angeben."
-                )
+                raise CulMaxError("unknown_partner_type_hint", address=partner_address)
             return await self._remove_stale_link_partner(address, partner_address.upper(), partner_type)
         self._require_paired_for_write(address)
         self._require_paired_for_write(partner_address)
@@ -4811,9 +4795,9 @@ class CulMaxCoordinator:
         assert device is not None
         self._require_paired_for_write(address)
         if device.is_virtual:
-            raise ValueError("Virtuelle Geraete haben keine Verknuepfungen auf dem Geraet.")
+            raise CulMaxError("virtual_no_links")
         if partner_type not in DEVICE_TYPE_NAMES:
-            raise ValueError(f"Unbekannter partner_type {partner_type}.")
+            raise CulMaxError("partner_type_invalid", type=partner_type)
         description = (
             f"RemoveLinkPartner {self.format_device_label(address)} -> {partner_address} "
             f"(unbekannt, {DEVICE_TYPE_NAMES[partner_type]})"
@@ -4857,13 +4841,13 @@ class CulMaxCoordinator:
         """Assign one group ID and create link-partner relations for multiple devices."""
         unique_addresses = list(dict.fromkeys(address.upper() for address in addresses))
         if len(unique_addresses) < 2:
-            raise ValueError("Mindestens zwei Geraete werden fuer eine Assoziation benoetigt.")
+            raise CulMaxError("associate_two_devices")
         if group_id < 1 or group_id > 255:
-            raise ValueError("group_id muss zwischen 1 und 255 liegen.")
+            raise CulMaxError("group_id_range")
 
         for address in unique_addresses:
             if self.get_device(address) is None:
-                raise ValueError(f"Unbekannte Geraeteadresse {address}")
+                raise CulMaxError("unknown_device", address=address)
             self._require_paired_for_write(address)
 
         for address in unique_addresses:
@@ -5174,11 +5158,11 @@ class CulMaxCoordinator:
         """Remove link-partner relations for multiple devices and optionally clear the group ID."""
         unique_addresses = list(dict.fromkeys(address.upper() for address in addresses))
         if len(unique_addresses) < 2:
-            raise ValueError("Mindestens zwei Geraete werden fuer eine Deassoziation benoetigt.")
+            raise CulMaxError("deassociate_two_devices")
 
         for address in unique_addresses:
             if self.get_device(address) is None:
-                raise ValueError(f"Unbekannte Geraeteadresse {address}")
+                raise CulMaxError("unknown_device", address=address)
             self._require_paired_for_write(address)
 
         for index, address in enumerate(unique_addresses):
@@ -5233,15 +5217,15 @@ class CulMaxCoordinator:
         windows = list(dict.fromkeys(address.upper() for address in (window_addresses or [])))
 
         if not climates:
-            raise ValueError("Mindestens ein Klima-Geraet wird fuer einen Raum benoetigt.")
+            raise CulMaxError("room_needs_climate")
         for address in climates + windows:
             if self.get_device(address) is None:
-                raise ValueError(f"Unbekannte Geraeteadresse {address}")
+                raise CulMaxError("unknown_device", address=address)
             self._require_paired_for_write(address)
 
         resolved_group_id = group_id or self.get_next_free_group_id()
         if resolved_group_id < 1 or resolved_group_id > 255:
-            raise ValueError("group_id muss zwischen 1 und 255 liegen.")
+            raise CulMaxError("group_id_range")
         _LOGGER.info(
             "Creating room association '%s' with climates=%s windows=%s requested_group_id=%s",
             room_name,
@@ -5266,7 +5250,7 @@ class CulMaxCoordinator:
 
         all_addresses = climates + windows
         if len(all_addresses) < 2:
-            raise ValueError("Ein Raum braucht mindestens zwei beteiligte Geraete.")
+            raise CulMaxError("room_two_devices")
 
         errors: list[dict[str, Any]] = []
 
@@ -5426,10 +5410,10 @@ class CulMaxCoordinator:
         all_addresses = climates + windows
 
         if len(all_addresses) < 2:
-            raise ValueError("Ein Raumabbau braucht mindestens zwei beteiligte Geraete.")
+            raise CulMaxError("room_teardown_two_devices")
         for address in all_addresses:
             if self.get_device(address) is None:
-                raise ValueError(f"Unbekannte Geraeteadresse {address}")
+                raise CulMaxError("unknown_device", address=address)
             self._require_paired_for_write(address)
         _LOGGER.info(
             "Deleting room association '%s' for devices=%s",
@@ -5501,9 +5485,9 @@ class CulMaxCoordinator:
         """Parse, upload and persist a week profile for one thermostat."""
         device = self.get_device(address)
         if device is None:
-            raise ValueError(f"Unbekannte Geraeteadresse {address}")
+            raise CulMaxError("unknown_device", address=address)
         if device.device_type not in CLIMATE_DEVICE_TYPES:
-            raise ValueError(f"Geraet {address} unterstuetzt kein Wochenprofil")
+            raise CulMaxError("no_week_profile_support", address=address)
         self._require_paired_for_write(address)
 
         updates = parse_week_profile_text(profile_text)
@@ -5735,9 +5719,9 @@ class CulMaxCoordinator:
         normalized = address.upper()
         device = self.get_device(normalized)
         if device is None:
-            raise ValueError(f"Unbekannte Geraeteadresse {normalized}")
+            raise CulMaxError("unknown_device", address=normalized)
         if device.device_type not in CLIMATE_DEVICE_TYPES:
-            raise ValueError(f"Geraet {normalized} unterstuetzt keine Zeitsynchronisation.")
+            raise CulMaxError("no_time_sync_support", address=normalized)
         self._require_paired_for_write(normalized)
 
         _LOGGER.info("Sending TimeInformation to %s", self._format_device_identity(normalized))
@@ -6311,7 +6295,7 @@ class CulMaxCoordinator:
         for group_id in range(1, 256):
             if group_id not in used:
                 return group_id
-        raise ValueError("Keine freie MAX!-Gruppen-ID mehr verfuegbar.")
+        raise CulMaxError("no_free_group")
 
     def get_next_virtual_address(self) -> str:
         """Return the next free address in the virtual device range A00000-AFFFFF."""
@@ -6327,7 +6311,7 @@ class CulMaxCoordinator:
             address = f"{value:06X}"
             if address not in used:
                 return address
-        raise ValueError("Keine freie virtuelle MAX!-Adresse mehr verfuegbar.")
+        raise CulMaxError("no_free_virtual_address")
 
     def format_device_label(self, address: str) -> str:
         """Return one human-friendly device label for logs."""
@@ -6476,7 +6460,7 @@ class CulMaxCoordinator:
                     continue
                 normalized.append({"address": address, **entry})
             return normalized
-        raise ValueError("Topologie-JSON enthaelt keine gueltige 'devices'-Liste.")
+        raise CulMaxError("topology_devices_list")
 
     async def async_import_topology(
         self,
@@ -6490,20 +6474,20 @@ class CulMaxCoordinator:
     ) -> dict[str, Any]:
         """Import a MAX! topology snapshot into the current coordinator state."""
         if not isinstance(topology, dict):
-            raise ValueError("Topologie muss ein JSON-Objekt sein.")
+            raise CulMaxError("topology_object")
 
         entries = self._normalize_topology_devices(topology)
         if not entries:
-            raise ValueError("Topologie enthaelt keine Geraete.")
+            raise CulMaxError("topology_empty")
 
         normalized_entries: list[dict[str, Any]] = []
         seen_addresses: set[str] = set()
         for entry in entries:
             address = str(entry.get("address", "")).upper()
             if len(address) != 6 or any(ch not in "0123456789ABCDEF" for ch in address):
-                raise ValueError(f"Ungueltige Geraeteadresse im Import: {address or entry!r}")
+                raise CulMaxError("import_address_invalid", address=address or repr(entry))
             if address in seen_addresses:
-                raise ValueError(f"Doppelte Geraeteadresse im Import: {address}")
+                raise CulMaxError("import_address_duplicate", address=address)
             seen_addresses.add(address)
             normalized_entries.append({**entry, "address": address})
 

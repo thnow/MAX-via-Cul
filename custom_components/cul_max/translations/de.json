@@ -894,6 +894,248 @@
       }
     }
   },
+  "exceptions": {
+    "unknown_device": {
+      "message": "Unbekannte MAX!-Geräteadresse {address}."
+    },
+    "unknown_partner": {
+      "message": "Unbekannte Partneradresse {address}."
+    },
+    "unknown_partner_type_hint": {
+      "message": "Unbekannte Partneradresse {address}. Für eine veraltete Verknüpfung zu einem unbekannten Gerät bitte partner_type angeben."
+    },
+    "association_not_supported": {
+      "message": "Diese MAX!-Verknüpfung wird nicht unterstützt: {source} -> {partner}. Erlaubte Partner für {type}: {allowed}."
+    },
+    "not_paired": {
+      "message": "{device} ist nur entdeckt, aber nicht angelernt. Bitte das Gerät erst sauber anlernen, bevor Konfiguration oder Raum-Verknüpfungen geschrieben werden."
+    },
+    "external_sensor_wall_thermostat": {
+      "message": "Ein externer Raumfühler ist nur für Heizkörperthermostate möglich (Wandthermostate haben einen eigenen Fühler)."
+    },
+    "sensor_not_found": {
+      "message": "Sensor {sensor} nicht gefunden."
+    },
+    "sensor_not_temperature": {
+      "message": "Bitte einen Temperatursensor (sensor.*) wählen."
+    },
+    "wall_thermostat_link_rejected": {
+      "message": "Der Thermostat hat den neuen virtuellen Wandthermostaten abgelehnt."
+    },
+    "no_thermostats_listed": {
+      "message": "Keine angemeldeten MAX!-Thermostate: {addresses}"
+    },
+    "no_thermostats": {
+      "message": "Keine angemeldeten MAX!-Thermostate gefunden."
+    },
+    "summer_blocks_vacation": {
+      "message": "Der Sommermodus ist aktiv – die Heizung ist ohnehin aus. Für einen Urlaub erst den Sommermodus beenden."
+    },
+    "vacation_blocks_summer": {
+      "message": "Bitte zuerst den Urlaubsmodus beenden."
+    },
+    "vacation_end_missing": {
+      "message": "Bitte zuerst das Urlaubsende (Rückkehr) setzen."
+    },
+    "vacation_end_past": {
+      "message": "Das Urlaubsende (abzüglich Vorheizen) muss mindestens ein paar Minuten in der Zukunft liegen."
+    },
+    "return_in_future": {
+      "message": "Die Rückkehr muss in der Zukunft liegen."
+    },
+    "summer_valve_invalid": {
+      "message": "Unbekannte Ventilstellung {valve} (closed oder open)."
+    },
+    "pairing_duration": {
+      "message": "Die Pairing-Dauer muss mindestens 1 Sekunde betragen."
+    },
+    "no_temperature_config": {
+      "message": "Gerät {address} unterstützt keine Temperatur-Konfiguration."
+    },
+    "no_week_profile_support": {
+      "message": "Gerät {address} unterstützt kein Wochenprofil."
+    },
+    "no_time_sync_support": {
+      "message": "Gerät {address} unterstützt keine Zeitsynchronisation."
+    },
+    "area_no_devices": {
+      "message": "Im gewählten Bereich gibt es keine weiteren MAX!-Geräte."
+    },
+    "address_invalid": {
+      "message": "Die Adresse muss 6-stellig hexadezimal sein."
+    },
+    "address_exists": {
+      "message": "Geräteadresse {address} existiert bereits."
+    },
+    "not_virtual": {
+      "message": "Gerät {address} ist kein virtuelles Gerät."
+    },
+    "not_virtual_contact": {
+      "message": "Gerät {address} ist kein virtueller Fensterkontakt."
+    },
+    "virtual_no_links": {
+      "message": "Virtuelle Geräte haben keine Verknüpfungen auf dem Gerät."
+    },
+    "partner_type_invalid": {
+      "message": "Unbekannter partner_type {type}."
+    },
+    "associate_two_devices": {
+      "message": "Für eine Verknüpfung werden mindestens zwei Geräte benötigt."
+    },
+    "deassociate_two_devices": {
+      "message": "Zum Entfernen einer Verknüpfung werden mindestens zwei Geräte benötigt."
+    },
+    "group_id_range": {
+      "message": "Die Gruppen-ID muss zwischen 1 und 255 liegen."
+    },
+    "room_needs_climate": {
+      "message": "Ein Raum braucht mindestens ein Klima-Gerät."
+    },
+    "room_two_devices": {
+      "message": "Ein Raum braucht mindestens zwei beteiligte Geräte."
+    },
+    "room_teardown_two_devices": {
+      "message": "Ein Raumabbau braucht mindestens zwei beteiligte Geräte."
+    },
+    "no_free_group": {
+      "message": "Keine freie MAX!-Gruppen-ID mehr verfügbar."
+    },
+    "no_free_virtual_address": {
+      "message": "Keine freie virtuelle MAX!-Adresse mehr verfügbar."
+    },
+    "topology_devices_list": {
+      "message": "Das Topologie-JSON enthält keine gültige 'devices'-Liste."
+    },
+    "topology_object": {
+      "message": "Die Topologie muss ein JSON-Objekt sein."
+    },
+    "topology_empty": {
+      "message": "Die Topologie enthält keine Geräte."
+    },
+    "import_address_invalid": {
+      "message": "Ungültige Geräteadresse im Import: {address}"
+    },
+    "import_address_duplicate": {
+      "message": "Doppelte Geräteadresse im Import: {address}"
+    },
+    "until_empty": {
+      "message": "Leerer until-Wert."
+    },
+    "until_format": {
+      "message": "Until bitte als ISO-Zeit oder im Format TT.MM.JJJJ HH:MM angeben."
+    },
+    "until_half_hour": {
+      "message": "Until-Zeiten müssen bei MAX! auf :00 oder :30 liegen."
+    },
+    "until_future": {
+      "message": "Der Until-Zeitpunkt muss in der Zukunft liegen."
+    },
+    "return_format": {
+      "message": "Rückkehr als ISO-Zeit oder im Format TT.MM.JJJJ HH:MM angeben."
+    },
+    "gateway_none": {
+      "message": "Kein MAX!-Gateway geladen."
+    },
+    "gateway_unknown": {
+      "message": "Unbekanntes MAX!-Gateway: {gateway}"
+    },
+    "gateway_mixed": {
+      "message": "Die Geräte dieses Aufrufs gehören zu verschiedenen MAX!-Gateways."
+    },
+    "gateway_choose": {
+      "message": "Mehrere MAX!-Gateways eingerichtet – bitte im Feld „Gateway“ eines auswählen."
+    },
+    "thermostat_not_found": {
+      "message": "Thermostat nicht gefunden."
+    },
+    "areas_no_thermostats": {
+      "message": "In den gewählten Bereichen gibt es keine MAX!-Thermostate."
+    },
+    "temperature_needed_until": {
+      "message": "Mit until wird eine Temperatur benötigt."
+    },
+    "temperature_needed_manual": {
+      "message": "Der manuelle Modus braucht eine Temperatur."
+    },
+    "temperature_or_mode": {
+      "message": "Bitte eine Temperatur oder einen Modus angeben."
+    },
+    "command_not_confirmed": {
+      "message": "{device}: {command} wurde nicht bestätigt ({error})"
+    },
+    "profile_line_invalid": {
+      "message": "Ungültige Zeile '{line}'. Erwartet: Tag und Profil."
+    },
+    "day_unknown": {
+      "message": "Unbekannter Tag '{day}'."
+    },
+    "day_twice": {
+      "message": "Tag '{day}' wurde mehrfach angegeben."
+    },
+    "profile_invalid": {
+      "message": "Ungültiges Profil für {day}. Format: temp,HH:MM,temp,HH:MM,temp"
+    },
+    "profile_times": {
+      "message": "Schaltzeiten für {day} müssen streng aufsteigend und vor 24:00 liegen."
+    },
+    "profile_too_many": {
+      "message": "Zu viele Schaltpunkte für {day} (höchstens 13)."
+    },
+    "profile_empty": {
+      "message": "Kein Wochenprofil übergeben."
+    },
+    "temperature_invalid": {
+      "message": "Ungültige Temperatur '{value}'."
+    },
+    "temperature_range": {
+      "message": "Temperatur '{value}' ist ungültig. Erlaubt sind 4,5 bis 30,5 in 0,5er-Schritten."
+    },
+    "offset_invalid": {
+      "message": "Ungültiger Temperatur-Offset '{value}'."
+    },
+    "offset_range": {
+      "message": "Offset '{value}' ist ungültig. Erlaubt sind -3,5 bis 3,5 in 0,5er-Schritten."
+    },
+    "window_duration_invalid": {
+      "message": "Ungültige Fenster-offen-Dauer '{value}'."
+    },
+    "window_duration_range": {
+      "message": "Die Fenster-offen-Dauer muss zwischen 0 und 60 Minuten liegen."
+    },
+    "window_duration_step": {
+      "message": "Die Fenster-offen-Dauer muss in 5-Minuten-Schritten angegeben werden."
+    },
+    "time_invalid_format": {
+      "message": "Ungültige Zeit '{value}'. Erwartet HH:MM."
+    },
+    "time_invalid": {
+      "message": "Ungültige Zeit '{value}'."
+    },
+    "time_step": {
+      "message": "Zeit '{value}' ist ungültig. MAX! nutzt 5-Minuten-Schritte."
+    },
+    "weekday_range": {
+      "message": "Der Wochentag muss zwischen 0 (Samstag) und 6 (Freitag) liegen."
+    },
+    "day_points": {
+      "message": "Ein Tagesprofil muss zwischen 1 und 13 Schaltpunkten enthalten."
+    },
+    "day_end_2400": {
+      "message": "Ein Tagesprofil muss um 24:00 enden."
+    },
+    "times_ascending": {
+      "message": "Schaltzeiten müssen streng aufsteigend sein."
+    },
+    "times_range": {
+      "message": "Schaltzeiten müssen zwischen 00:00 und 24:00 in 5-Minuten-Schritten liegen."
+    },
+    "until_year": {
+      "message": "Das Until-Jahr muss zwischen 2000 und 2063 liegen."
+    },
+    "until_time_half_hour": {
+      "message": "Die Until-Zeit muss auf :00 oder :30 liegen."
+    }
+  },
   "issues": {
     "paired_elsewhere": {
       "title": "{name} ist noch an einer anderen Zentrale angemeldet",

@@ -12,10 +12,10 @@ from homeassistant.components.number import (
 )
 from homeassistant.const import EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .errors import ha_error
 from . import CulMaxConfigEntry
 from .const import CLIMATE_DEVICE_TYPES, DOMAIN
 from .coordinator import CulMaxCoordinator, KnownDevice
@@ -233,4 +233,4 @@ class CulMaxVacationNumber(NumberEntity):
             else:
                 await self._coordinator.async_set_vacation_settings(preheat_hours=value)
         except ValueError as err:
-            raise HomeAssistantError(str(err)) from err
+            raise ha_error(err) from err

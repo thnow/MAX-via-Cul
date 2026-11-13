@@ -4,10 +4,10 @@ from __future__ import annotations
 from homeassistant.components.select import SelectEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .errors import ha_error
 from . import CulMaxConfigEntry
 from .const import DOMAIN
 from .coordinator import SUMMER_VALVE_CLOSED, SUMMER_VALVE_OPEN, CulMaxCoordinator
@@ -53,4 +53,4 @@ class CulMaxSummerValveSelect(SelectEntity):
         try:
             await self._coordinator.async_set_summer_valve(option)
         except ValueError as err:
-            raise HomeAssistantError(str(err)) from err
+            raise ha_error(err) from err

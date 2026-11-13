@@ -23,6 +23,7 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass
 from typing import Any
 
+from .errors import CulMaxError
 from .const import (
     DEFAULT_WEEK_PROFILE,
     MODE_AUTO,
@@ -199,21 +200,19 @@ def parse_week_profile_text(profile_text: str) -> dict[int, list[tuple[float, in
             continue
         parts = line.split(maxsplit=1)
         if len(parts) != 2:
-            raise ValueError(f"Ungueltige Zeile '{line}'. Erwartet: Tag und Profil.")
+            raise CulMaxError("profile_line_invalid", line=line)
 
         day_key = parts[0].strip().lower()
         if day_key not in WEEK_PROFILE_DAY_MAP:
-            raise ValueError(f"Unbekannter Tag '{parts[0]}'.")
+            raise CulMaxError("day_unknown", day=parts[0])
         day = WEEK_PROFILE_DAY_MAP[day_key]
 
         if day in updates:
-            raise ValueError(f"Tag '{parts[0]}' wurde mehrfach angegeben.")
+            raise CulMaxError("day_twice", day=parts[0])
 
         tokens = [token.strip() for token in parts[1].split(",")]
         if any(not token for token in tokens) or len(tokens) % 2 == 0:
-            raise ValueError(
-                f"Ungueltiges Profil fuer {parts[0]}. Format: temp,HH:MM,temp,HH:MM,temp"
-            )
+            raise CulMaxError("profile_invalid", day=parts[0])
 
         schedule: list[tuple[float, int]] = []
         end_times: list[int] = []
@@ -227,20 +226,18 @@ def parse_week_profile_text(profile_text: str) -> dict[int, list[tuple[float, in
         last_end = 0
         for idx, end_minute in enumerate(end_times):
             if end_minute <= last_end or end_minute >= 24 * 60:
-                raise ValueError(
-                    f"Schaltzeiten fuer {parts[0]} muessen streng aufsteigend und vor 24:00 liegen."
-                )
+                raise CulMaxError("profile_times", day=parts[0])
             schedule[idx] = (schedule[idx][0], end_minute)
             last_end = end_minute
 
         schedule[-1] = (schedule[-1][0], 24 * 60)
         if len(schedule) > 13:
-            raise ValueError(f"Zu viele Schaltpunkte fuer {parts[0]} (maximal 13).")
+            raise CulMaxError("profile_too_many", day=parts[0])
 
         updates[day] = schedule
 
     if not updates:
-        raise ValueError("Kein Wochenprofil uebergeben.")
+        raise CulMaxError("profile_empty")
 
     return updates
 
@@ -255,11 +252,9 @@ def parse_max_temperature(value: str) -> float:
     try:
         temp = float(lowered)
     except ValueError as err:
-        raise ValueError(f"Ungueltige Temperatur '{value}'.") from err
+        raise CulMaxError("temperature_invalid", value=value) from err
     if temp < TEMP_MIN or temp > TEMP_MAX or (temp * 2) % 1 != 0:
-        raise ValueError(
-            f"Temperatur '{value}' ist ungueltig. Erlaubt sind 4.5 bis 30.5 in 0.5-Schritten."
-        )
+        raise CulMaxError("temperature_range", value=value)
     return temp
 
 
@@ -268,11 +263,9 @@ def parse_measurement_offset(value: float | str) -> float:
     try:
         offset = float(value)
     except (TypeError, ValueError) as err:
-        raise ValueError(f"Ungueltiger Temperatur-Offset '{value}'.") from err
+        raise CulMaxError("offset_invalid", value=value) from err
     if offset < -3.5 or offset > 3.5 or (offset * 2) % 1 != 0:
-        raise ValueError(
-            f"Offset '{value}' ist ungueltig. Erlaubt sind -3.5 bis 3.5 in 0.5-Schritten."
-        )
+        raise CulMaxError("offset_range", value=value)
     return offset
 
 
@@ -281,11 +274,11 @@ def parse_window_open_duration(value: int | str) -> int:
     try:
         duration = int(value)
     except (TypeError, ValueError) as err:
-        raise ValueError(f"Ungueltige Fenster-offen-Dauer '{value}'.") from err
+        raise CulMaxError("window_duration_invalid", value=value) from err
     if duration < 0 or duration > 60:
-        raise ValueError("Fenster-offen-Dauer muss zwischen 0 und 60 Minuten liegen.")
+        raise CulMaxError("window_duration_range")
     if duration % 5 != 0:
-        raise ValueError("Fenster-offen-Dauer muss in 5-Minuten-Schritten angegeben werden.")
+        raise CulMaxError("window_duration_step")
     return duration
 
 
@@ -311,15 +304,15 @@ def parse_week_profile_time(value: str) -> int:
     """Parse a HH:MM time into minutes since midnight."""
     match = re.fullmatch(r"(\d{1,2}):(\d{2})", value.strip())
     if not match:
-        raise ValueError(f"Ungueltige Zeit '{value}'. Erwartet HH:MM.")
+        raise CulMaxError("time_invalid_format", value=value)
     hour = int(match.group(1))
     minute = int(match.group(2))
     if hour == 24 and minute == 0:
         return 24 * 60
     if hour < 0 or hour > 23 or minute < 0 or minute > 59:
-        raise ValueError(f"Ungueltige Zeit '{value}'.")
+        raise CulMaxError("time_invalid", value=value)
     if minute % 5 != 0:
-        raise ValueError(f"Zeit '{value}' ist ungueltig. MAX! nutzt 5-Minuten-Schritte.")
+        raise CulMaxError("time_step", value=value)
     return hour * 60 + minute
 
 
@@ -329,7 +322,7 @@ def encode_week_profile(updates: dict[int, list[tuple[float, int]]], base_hex: s
     days = [profile_hex[idx * 52:(idx + 1) * 52] for idx in range(7)]
     for day, schedule in updates.items():
         if day not in WEEK_PROFILE_DAY_NAMES:
-            raise ValueError("Wochentag muss zwischen 0 (Samstag) und 6 (Freitag) liegen.")
+            raise CulMaxError("weekday_range")
         days[day] = encode_week_profile_day(schedule)
     return "".join(days)
 
@@ -337,14 +330,14 @@ def encode_week_profile(updates: dict[int, list[tuple[float, int]]], base_hex: s
 def encode_week_profile_day(schedule: list[tuple[float, int]]) -> str:
     """Encode one day of a MAX! week profile to 52 hex chars."""
     if not 1 <= len(schedule) <= 13:
-        raise ValueError("Ein Tagesprofil muss zwischen 1 und 13 Schaltpunkten enthalten.")
+        raise CulMaxError("day_points")
     if schedule[-1][1] != 24 * 60:
-        raise ValueError("Ein Tagesprofil muss um 24:00 enden.")
+        raise CulMaxError("day_end_2400")
     encoded_points: list[str] = []
     last_end = 0
     for temp, end_minute in schedule:
         if end_minute <= last_end:
-            raise ValueError("Schaltzeiten muessen streng aufsteigend sein.")
+            raise CulMaxError("times_ascending")
         encoded_points.append(encode_week_profile_point(temp, end_minute))
         last_end = end_minute
 
@@ -359,7 +352,7 @@ def encode_week_profile_day(schedule: list[tuple[float, int]]) -> str:
 def encode_week_profile_point(temp: float, end_minute: int) -> str:
     """Encode one MAX! week profile control point."""
     if end_minute < 0 or end_minute > 24 * 60 or end_minute % 5 != 0:
-        raise ValueError("Schaltzeiten muessen zwischen 00:00 und 24:00 in 5-Minuten-Schritten liegen.")
+        raise CulMaxError("times_range")
     temp = parse_max_temperature(str(temp))
     # FHEM/Homegear encode 24:00 as slot 288 (0x120), not as 0.
     encoded_time = end_minute // 5
@@ -371,7 +364,7 @@ def encode_week_profile_point(temp: float, end_minute: int) -> str:
 def split_week_profile_for_send(profile_hex: str, day: int) -> list[tuple[int, str]]:
     """Split one day profile into the two ConfigWeekProfile payload chunks."""
     if day not in WEEK_PROFILE_DAY_NAMES:
-        raise ValueError("Wochentag muss zwischen 0 (Samstag) und 6 (Freitag) liegen.")
+        raise CulMaxError("weekday_range")
     day_hex = normalize_week_profile_hex(profile_hex)[day * 52:(day + 1) * 52]
     chunks: list[tuple[int, str]] = [(0, day_hex[:28])]
     second_chunk = day_hex[28:]
@@ -551,9 +544,9 @@ def encode_max_until_datetime(until: datetime) -> str:
     hour = local_until.hour
     minute = local_until.minute
     if year < 2000 or year > 2063:
-        raise ValueError("Until-Jahr muss zwischen 2000 und 2063 liegen.")
+        raise CulMaxError("until_year")
     if minute not in (0, 30):
-        raise ValueError("Until-Zeit muss auf :00 oder :30 liegen.")
+        raise CulMaxError("until_time_half_hour")
     value = (
         ((month & 0xE) << 20)
         | (day << 16)

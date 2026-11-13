@@ -103,14 +103,16 @@ async def test_end_keeps_thermostat_changed_by_hand(coordinator, fake_cul, heati
 
 async def test_vacation_and_summer_exclude_each_other(coordinator, fake_cul, heating_season) -> None:
     await coordinator.async_start_summer()
-    with pytest.raises(ValueError, match="Sommermodus"):
+    with pytest.raises(ValueError) as blocked:
         await coordinator.async_start_vacation(end=dt_util.now() + timedelta(days=3))
+    assert blocked.value.key == "summer_blocks_vacation"
     await coordinator.async_end_summer()
     await wait_summer(coordinator, "restored")
 
     await coordinator.async_start_vacation(end=dt_util.now() + timedelta(days=3))
-    with pytest.raises(ValueError, match="Urlaubsmodus"):
+    with pytest.raises(ValueError) as blocked:
         await coordinator.async_start_summer()
+    assert blocked.value.key == "vacation_blocks_summer"
     await coordinator.async_end_vacation()
 
 

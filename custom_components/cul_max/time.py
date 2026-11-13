@@ -5,11 +5,11 @@ import datetime as dt
 
 from homeassistant.components.time import TimeEntity
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
+from .errors import CulMaxError, ha_error
 from . import CulMaxConfigEntry
 from .const import DOMAIN
 from .coordinator import CulMaxCoordinator
@@ -63,8 +63,8 @@ class CulMaxVacationEndTime(TimeEntity):
             if new_end <= dt_util.now():
                 new_end = combine_local(today + dt.timedelta(days=1), value)
         if new_end <= dt_util.now():
-            raise HomeAssistantError("Die Rückkehr muss in der Zukunft liegen.")
+            raise ha_error(CulMaxError("return_in_future"))
         try:
             await self._coordinator.async_set_vacation_settings(end=new_end)
         except ValueError as err:
-            raise HomeAssistantError(str(err)) from err
+            raise ha_error(err) from err
