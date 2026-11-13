@@ -1290,8 +1290,9 @@ meldet:
 Das Budget wird beim Verbinden, bei Bedarf und alle 5 Minuten per `X`
 abgefragt (das benutzt keinen Funk). Aus aufeinanderfolgenden Werten misst die
 Integration, wie schnell der CUL Budget zurueckgewinnt. Der Diagnose-Sensor
-`Send Budget` am Geraet `MAX! CUL` zeigt den aktuellen Kredit sowie als
-Attribute Maximum, Erholungsrate, aktives Profil und Warteschlangenlaenge.
+`Sendebudget` am Geraet `MAX! CUL` zeigt die verbleibende Sendezeit in Sekunden
+(Kredit geteilt durch 100) sowie als Attribute den Rohwert `credit_10ms`,
+Maximum, Erholungsrate, aktives Profil und Warteschlangenlaenge.
 
 Das erweiterte Profil beschleunigt vor allem die Fehlerbehandlung bei
 verlorenen Paketen. Die 1-s-Weckpraeambel pro Paket an ein schlafendes

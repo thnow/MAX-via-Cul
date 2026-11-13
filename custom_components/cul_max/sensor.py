@@ -5,7 +5,7 @@ from datetime import timedelta
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
-from homeassistant.const import PERCENTAGE, UnitOfTemperature
+from homeassistant.const import PERCENTAGE, UnitOfTemperature, UnitOfTime
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
@@ -57,14 +57,16 @@ async def async_setup_entry(
 
 
 class CulMaxSendBudgetSensor(SensorEntity):
-    """Remaining CUL send credit (culfw credit_10ms) and the active send profile."""
+    """Remaining CUL send time in seconds (culfw credit_10ms / 100) and the send profile."""
 
     _attr_has_entity_name = True
     _attr_translation_key = "send_budget"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:radio-tower"
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = "credit_10ms"
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_suggested_display_precision = 0
 
     def __init__(self, coordinator: CulMaxCoordinator) -> None:
         self._coordinator = coordinator
@@ -93,15 +95,16 @@ class CulMaxSendBudgetSensor(SensorEntity):
         self.async_write_ha_state()
 
     @property
-    def native_value(self) -> int | None:
+    def native_value(self) -> float | None:
         status = self._coordinator.get_cul_credit_status()
-        return status["credit_10ms"] if status["credit_known"] else None
+        return round(status["credit_10ms"] / 100, 1) if status["credit_known"] else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         status = self._coordinator.get_cul_credit_status()
         profile = self._coordinator.send_profile
         return {
+            "credit_10ms": status["credit_10ms"],
             "credit_max": status["credit_max"],
             "budget_seconds": round(status["credit_max"] / 100, 1),
             "recovery_per_second": status["recovery_per_second"],

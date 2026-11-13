@@ -884,8 +884,9 @@ The integration adapts to the budget reported by the CUL:
 The budget is queried with `X` on connect, when needed and every 5 minutes
 (this does not use the radio). From consecutive values the integration
 measures how fast the CUL regains budget. The diagnostic sensor `Send Budget`
-on the `MAX! CUL` device shows the current credit and, as attributes, the
-maximum, recovery rate, active profile and queue length.
+on the `MAX! CUL` device shows the remaining send time in seconds (credit
+divided by 100) and, as attributes, the raw `credit_10ms`, maximum, recovery
+rate, active profile and queue length.
 
 The extended profile mainly speeds up recovery from lost packets. Each packet
 to a sleeping thermostat still needs its 1 s wake-up preamble, so weekly

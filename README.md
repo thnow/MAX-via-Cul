@@ -464,10 +464,17 @@ Repository layout:
 
 ### Unreleased
 
-- English and German throughout: entity names, services, dashboard cards and
-  error messages follow the language of the Home Assistant user profile
-  (German for German, English for every other language). More languages can
-  be added as `translations/<lang>.json`.
+- English and German throughout: dashboard cards and error messages follow
+  the language of the user profile, entity and service names the server
+  language of Home Assistant (German for German, English for every other
+  language). More languages can be added as `translations/<lang>.json`.
+- Errors of services and entity actions always reach the UI as a readable,
+  translated message (some services used to end in "unknown error").
+- Diagnostic sensors "Kommunikation" and "Wochenprofil-Prüfung" show
+  translated states instead of raw values; the send budget sensor shows
+  seconds of send time instead of `credit_10ms` (Home Assistant asks once to
+  update the statistics unit – choose to delete the old statistics).
+- Summer mode switch shows a crossed-out sun while off.
 
 ### 0.6.5
 
