@@ -1064,13 +1064,13 @@
       "message": "{device}: {command} was not confirmed ({error})"
     },
     "profile_line_invalid": {
-      "message": "Invalid line '{line}'. Expected: day and profile."
+      "message": "Invalid line \"{line}\". Expected: day and profile."
     },
     "day_unknown": {
-      "message": "Unknown day '{day}'."
+      "message": "Unknown day \"{day}\"."
     },
     "day_twice": {
-      "message": "Day '{day}' was given twice."
+      "message": "Day \"{day}\" was given twice."
     },
     "profile_invalid": {
       "message": "Invalid profile for {day}. Format: temp,HH:MM,temp,HH:MM,temp"
@@ -1085,19 +1085,19 @@
       "message": "No week profile given."
     },
     "temperature_invalid": {
-      "message": "Invalid temperature '{value}'."
+      "message": "Invalid temperature \"{value}\"."
     },
     "temperature_range": {
-      "message": "Temperature '{value}' is invalid. Allowed are 4.5 to 30.5 in steps of 0.5."
+      "message": "Temperature \"{value}\" is invalid. Allowed are 4.5 to 30.5 in steps of 0.5."
     },
     "offset_invalid": {
-      "message": "Invalid temperature offset '{value}'."
+      "message": "Invalid temperature offset \"{value}\"."
     },
     "offset_range": {
-      "message": "Offset '{value}' is invalid. Allowed are -3.5 to 3.5 in steps of 0.5."
+      "message": "Offset \"{value}\" is invalid. Allowed are -3.5 to 3.5 in steps of 0.5."
     },
     "window_duration_invalid": {
-      "message": "Invalid window-open duration '{value}'."
+      "message": "Invalid window-open duration \"{value}\"."
     },
     "window_duration_range": {
       "message": "The window-open duration must be between 0 and 60 minutes."
@@ -1106,13 +1106,13 @@
       "message": "The window-open duration must be given in steps of 5 minutes."
     },
     "time_invalid_format": {
-      "message": "Invalid time '{value}'. Expected HH:MM."
+      "message": "Invalid time \"{value}\". Expected HH:MM."
     },
     "time_invalid": {
-      "message": "Invalid time '{value}'."
+      "message": "Invalid time \"{value}\"."
     },
     "time_step": {
-      "message": "Time '{value}' is invalid. MAX! uses steps of 5 minutes."
+      "message": "Time \"{value}\" is invalid. MAX! uses steps of 5 minutes."
     },
     "weekday_range": {
       "message": "The weekday must be between 0 (Saturday) and 6 (Friday)."

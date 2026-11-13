@@ -1064,13 +1064,13 @@
       "message": "{device}: {command} wurde nicht bestätigt ({error})"
     },
     "profile_line_invalid": {
-      "message": "Ungültige Zeile '{line}'. Erwartet: Tag und Profil."
+      "message": "Ungültige Zeile \"{line}\". Erwartet: Tag und Profil."
     },
     "day_unknown": {
-      "message": "Unbekannter Tag '{day}'."
+      "message": "Unbekannter Tag \"{day}\"."
     },
     "day_twice": {
-      "message": "Tag '{day}' wurde mehrfach angegeben."
+      "message": "Tag \"{day}\" wurde mehrfach angegeben."
     },
     "profile_invalid": {
       "message": "Ungültiges Profil für {day}. Format: temp,HH:MM,temp,HH:MM,temp"
@@ -1085,19 +1085,19 @@
       "message": "Kein Wochenprofil übergeben."
     },
     "temperature_invalid": {
-      "message": "Ungültige Temperatur '{value}'."
+      "message": "Ungültige Temperatur \"{value}\"."
     },
     "temperature_range": {
-      "message": "Temperatur '{value}' ist ungültig. Erlaubt sind 4,5 bis 30,5 in 0,5er-Schritten."
+      "message": "Temperatur \"{value}\" ist ungültig. Erlaubt sind 4,5 bis 30,5 in 0,5er-Schritten."
     },
     "offset_invalid": {
-      "message": "Ungültiger Temperatur-Offset '{value}'."
+      "message": "Ungültiger Temperatur-Offset \"{value}\"."
     },
     "offset_range": {
-      "message": "Offset '{value}' ist ungültig. Erlaubt sind -3,5 bis 3,5 in 0,5er-Schritten."
+      "message": "Offset \"{value}\" ist ungültig. Erlaubt sind -3,5 bis 3,5 in 0,5er-Schritten."
     },
     "window_duration_invalid": {
-      "message": "Ungültige Fenster-offen-Dauer '{value}'."
+      "message": "Ungültige Fenster-offen-Dauer \"{value}\"."
     },
     "window_duration_range": {
       "message": "Die Fenster-offen-Dauer muss zwischen 0 und 60 Minuten liegen."
@@ -1106,13 +1106,13 @@
       "message": "Die Fenster-offen-Dauer muss in 5-Minuten-Schritten angegeben werden."
     },
     "time_invalid_format": {
-      "message": "Ungültige Zeit '{value}'. Erwartet HH:MM."
+      "message": "Ungültige Zeit \"{value}\". Erwartet HH:MM."
     },
     "time_invalid": {
-      "message": "Ungültige Zeit '{value}'."
+      "message": "Ungültige Zeit \"{value}\"."
     },
     "time_step": {
-      "message": "Zeit '{value}' ist ungültig. MAX! nutzt 5-Minuten-Schritte."
+      "message": "Zeit \"{value}\" ist ungültig. MAX! nutzt 5-Minuten-Schritte."
     },
     "weekday_range": {
       "message": "Der Wochentag muss zwischen 0 (Samstag) und 6 (Freitag) liegen."
