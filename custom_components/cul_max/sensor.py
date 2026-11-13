@@ -404,6 +404,8 @@ class CulMaxCommunicationStatusSensor(SensorEntity):
     _attr_has_entity_name = True
     _attr_translation_key = "communication"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["ok", "error"]
 
     def __init__(self, coordinator: CulMaxCoordinator, device: KnownDevice) -> None:
         self._coordinator = coordinator
@@ -430,7 +432,7 @@ class CulMaxCommunicationStatusSensor(SensorEntity):
         elif success or self._device.last_seen:
             self._attr_native_value = "ok"
         else:
-            self._attr_native_value = "unknown"
+            self._attr_native_value = None  # nothing heard yet
 
     @callback
     def _on_diagnostics_update(self) -> None:
@@ -574,6 +576,17 @@ class CulMaxWeekProfileValidationSensor(SensorEntity):
     _attr_translation_key = "week_profile_validation"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:calendar-check"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = [
+        "likely_applied",
+        "pending",
+        "mismatch",
+        "temporary_change",
+        "temporary_override",
+        "manual_override",
+        "boost",
+        "window_open",
+    ]
 
     def __init__(self, coordinator: CulMaxCoordinator, device: KnownDevice) -> None:
         self._coordinator = coordinator
@@ -590,7 +603,8 @@ class CulMaxWeekProfileValidationSensor(SensorEntity):
 
     def _sync_from_device(self) -> None:
         validation = self._coordinator.get_week_profile_validation(self._address)
-        self._attr_native_value = validation.get("state")
+        state = validation.get("state")
+        self._attr_native_value = state if state in self._attr_options else None
         self._attrs = {
             "validation_reason": validation.get("reason"),
             "expected_temperature_now": validation.get("expected_temperature_now"),
