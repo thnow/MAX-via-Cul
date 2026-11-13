@@ -962,6 +962,19 @@
       "vacation_end_time": {
         "name": "Urlaub: Rückkehr (Uhrzeit)"
       }
+    },
+    "event": {
+      "push_button": {
+        "name": "Taste",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "auto": "Auto",
+              "eco": "Eco"
+            }
+          }
+        }
+      }
     }
   }
 }

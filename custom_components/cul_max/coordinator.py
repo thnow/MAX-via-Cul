@@ -30,6 +30,7 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    EVENT_PUSH_BUTTON,
     CULFW_CMD_MORITZ_RX,
     DEFAULT_OWN_ADDRESS,
     DEFAULT_PORT,
@@ -47,6 +48,7 @@ from .const import (
     MSG_PAIR_PING,
     MSG_ACK,
     MSG_SET_TEMPERATURE,
+    MSG_PUSH_BUTTON_STATE,
     MSG_TIME_INFORMATION,
     PAIRING_DURATION,
     STORAGE_KEY,
@@ -69,6 +71,7 @@ from .topology import (
 from .protocol import (
     MaxMessage,
     ThermostatState,
+    PushButtonState,
     ShutterContactState,
     build_add_link_partner,
     build_config_temperatures,
@@ -89,6 +92,7 @@ from .protocol import (
     parse_credit_report,
     thermostat_state_from_dict,
     WALL_CONTROL_STATE_FIELDS,
+    decode_push_button_state,
     decode_shutter_contact_state,
     decode_thermostat_state,
     encode_week_profile,
@@ -123,6 +127,9 @@ WEEK_PROFILE_ACK_RETRIES = 5
 WEEK_PROFILE_PART_DELAY = 0.35
 WEEK_PROFILE_DAY_DELAY = 0.75
 RECONNECT_WAIT_TIMEOUT = 12.0
+# A push button repeats an unacknowledged telegram within ~1-2 s and sends
+# one copy per link partner; copies with the same counter are one press.
+PUSH_BUTTON_REPEAT_WINDOW = 5.0
 # a-culfw keeps a 1% duty-cycle budget in credit_10ms (rf_send.h: MAX_CREDIT
 # 900, +1 per second in clock.c). A "Zs" send with its 1 s wake-up preamble
 # costs 100 + bits/10. Packets sent without enough credit are dropped with
@@ -629,6 +636,8 @@ class CulMaxCoordinator:
         self._connection_ready = False
         self._cul_credit_lock = asyncio.Lock()
         self._pending_ack: PendingAck | None = None
+        # Last PushButtonState counter per button, to drop radio repeats.
+        self._push_button_last: dict[str, tuple[int, float]] = {}
         self._pending_shutter_config: dict[str, list[PendingShutterCommand]] = {}
         self._pending_shutter_tasks: dict[str, asyncio.Task] = {}
         self._pending_climate_config: dict[str, list[PendingClimateCommand]] = {}
@@ -1879,6 +1888,9 @@ class CulMaxCoordinator:
                 await self._update_device_group(msg.src_hex, msg.group)
                 await self._update_device_state(msg.src_hex, decoded.__dict__)
 
+        elif msg.msg_type == MSG_PUSH_BUTTON_STATE:  # Eco Taster pressed
+            decoded = await self._handle_push_button(msg)
+
         elif msg.msg_type == MSG_TIME_INFORMATION:
             await self._handle_time_information(msg)
 
@@ -1901,6 +1913,47 @@ class CulMaxCoordinator:
             self._schedule_climate_config_processing(msg.src_hex, trigger=f"rx:{msg.msg_type:02X}")
 
         self._dispatch(msg, decoded)
+
+    async def _handle_push_button(self, msg: MaxMessage) -> PushButtonState | None:
+        """Turn a PushButtonState telegram into one HA event per press.
+
+        A button repeats its telegram with the same counter when an ACK is
+        lost, and sends one copy to every link partner. Only the first copy
+        of a counter within a few seconds counts as a press.
+        """
+        decoded = decode_push_button_state(msg)
+        if decoded is None:
+            _LOGGER.warning("Failed to decode push button state from %s", msg.raw)
+            return None
+        now = self.hass.loop.time()
+        key = msg.src_hex
+        last = self._push_button_last.get(key)
+        self._push_button_last[key] = (msg.counter, now)
+        await self._update_device_state(
+            msg.src_hex,
+            {
+                "battery_low": decoded.battery_low,
+                "rf_error": decoded.rf_error,
+                "last_button": decoded.button,
+            },
+        )
+        if last is not None and last[0] == msg.counter and now - last[1] < PUSH_BUTTON_REPEAT_WINDOW:
+            _LOGGER.debug("Repeated push button telegram from %s ignored", msg.src_hex)
+            return None
+        device = self.get_device(msg.src_hex)
+        _LOGGER.info(
+            "Push button %s pressed: %s", self._format_device_identity(msg.src_hex), decoded.button
+        )
+        self.hass.bus.async_fire(
+            EVENT_PUSH_BUTTON,
+            {
+                "address": msg.src_hex,
+                "name": device.name if device else msg.src_hex,
+                "button": decoded.button,
+                "battery_low": decoded.battery_low,
+            },
+        )
+        return decoded
 
     async def _handle_time_information(self, msg: MaxMessage) -> None:
         """Process incoming MAX! TimeInformation telegrams."""

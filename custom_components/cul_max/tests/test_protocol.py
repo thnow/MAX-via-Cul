@@ -38,6 +38,7 @@ class _Platform(StrEnum):
     BUTTON = "button"
     CLIMATE = "climate"
     DATE = "date"
+    EVENT = "event"
     IMAGE = "image"
     BINARY_SENSOR = "binary_sensor"
     NUMBER = "number"
