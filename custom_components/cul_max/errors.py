@@ -66,7 +66,7 @@ MESSAGES: dict[str, str] = {
     'temperature_needed_manual': 'Manual mode needs a temperature.',
     'temperature_or_mode': 'Give a temperature or an explicit mode.',
     'command_not_confirmed': '{device}: {command} was not confirmed ({error})',
-    'command_no_answer': '{device} did not answer by radio – the change was not applied. Please check the batteries and the radio range of the thermostat.',
+    'command_no_answer': '{device} did not answer by radio – the change was not applied. If the thermostat shows the change anyway, restart it briefly (take one battery out and put it back in); otherwise check its batteries and radio range.',
     'command_rejected': '{device} rejected the change.',
     'command_no_credit': 'The CUL has no send time left right now (1 % rule). Please try again in a few minutes.',
     'profile_line_invalid': 'Invalid line "{line}". Expected: day and profile.',
