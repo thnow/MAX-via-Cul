@@ -36,6 +36,72 @@ COLORS = {
     "wall_border": "#a475f9",
 }
 
+# Texts in the picture, by server language (see TRANSLATING.md). Entries
+# missing in a language fall back to English.
+TOPOLOGY_TEXT: dict[str, dict[str, str]] = {
+    "de": {
+        "title": "MAX! Topologie · {devices} Geräte in {rooms} Räumen",
+        "legend": "Linien = Verknüpfung auf den Geräten · gestrichelt = virtuell · rot = Handlungsbedarf",
+        "no_room": "Ohne Raum",
+        "open": "offen",
+        "closed": "geschlossen",
+        "unknown": "unbekannt",
+        "off": "Aus",
+        "auto": "Auto",
+        "manual": "Manuell",
+        "vacation": "Urlaub",
+        "boost": "Boost",
+        "measured": "ist {temperature}",
+        "room_sensor": "Raumfühler: {sensor}",
+        "foreign_central": "andere Zentrale ({central})",
+        "no_contact": "keine Meldung seit {days} Tagen",
+        "battery_low": "Batterie schwach",
+        "config_pending": "Konfiguration ausstehend",
+    },
+    "en": {
+        "title": "MAX! topology · {devices} devices in {rooms} rooms",
+        "legend": "Lines = links stored on the devices · dashed = virtual · red = needs attention",
+        "no_room": "No room",
+        "open": "open",
+        "closed": "closed",
+        "unknown": "unknown",
+        "off": "Off",
+        "auto": "Auto",
+        "manual": "Manual",
+        "vacation": "Vacation",
+        "boost": "Boost",
+        "measured": "is {temperature}",
+        "room_sensor": "Room sensor: {sensor}",
+        "foreign_central": "other controller ({central})",
+        "no_contact": "no message for {days} days",
+        "battery_low": "Battery low",
+        "config_pending": "Configuration pending",
+    },
+}
+
+
+def topology_texts(language: str | None) -> dict[str, str]:
+    """Texts for a language like 'de' or 'pl-PL'; English for anything missing."""
+    lang = str(language or "en").lower()
+    base = lang.split("-")[0]
+    chosen = TOPOLOGY_TEXT.get(lang) or TOPOLOGY_TEXT.get(base) or {}
+    return {**TOPOLOGY_TEXT["en"], **chosen}
+
+
+# languages that write 20,5° instead of 20.5°
+DECIMAL_COMMA_LANGUAGES = {
+    "bg", "cs", "da", "de", "es", "fi", "fr", "hr", "hu", "it", "lt", "lv",
+    "nb", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "tr", "uk",
+}
+
+
+def format_temperature(value: float, language: str | None) -> str:
+    """20.5 → '20,5°' or '20.5°' depending on the language."""
+    text = f"{value:.1f}°"
+    base = str(language or "en").lower().split("-")[0]
+    return text.replace(".", ",") if base in DECIMAL_COMMA_LANGUAGES else text
+
+
 KIND_CONTACT = "contact"
 KIND_THERMOSTAT = "thermostat"
 KIND_WALL = "wall"
@@ -113,13 +179,20 @@ def _strip_room(name: str, room: str) -> str:
     return name
 
 
-def render_topology_svg(nodes: list[TopologyNode], edges: list[TopologyEdge], *, title: str) -> str:
+def render_topology_svg(
+    nodes: list[TopologyNode],
+    edges: list[TopologyEdge],
+    *,
+    title: str,
+    texts: dict[str, str] | None = None,
+) -> str:
     """Return an SVG document showing rooms, devices and their links."""
+    texts = texts or topology_texts("en")
     by_key = {node.key: node for node in nodes}
     rooms: dict[str, list[TopologyNode]] = {}
     for node in nodes:
         rooms.setdefault(node.room, []).append(node)
-    room_names = sorted(rooms, key=lambda r: (r == "Ohne Raum", r.lower()))
+    room_names = sorted(rooms, key=lambda r: (r == texts["no_room"], r.lower()))
 
     # cross-room links become notes instead of lines
     local_edges: list[TopologyEdge] = []
@@ -174,7 +247,7 @@ def render_topology_svg(nodes: list[TopologyNode], edges: list[TopologyEdge], *,
         f'<rect width="100%" height="100%" fill="{COLORS["background"]}"/>',
         f'<text x="{ROOM_GAP}" y="30" font-size="18" font-weight="600" fill="{COLORS["text"]}">{escape(title)}</text>',
         f'<text x="{ROOM_GAP}" y="50" font-size="12" fill="{COLORS["muted"]}">'
-        "Linien = Verknüpfung auf den Geräten · gestrichelt = virtuell · rot = Handlungsbedarf</text>",
+        f"{escape(texts['legend'])}</text>",
     ]
     for room in room_names:
         rx, ry = room_pos[room]

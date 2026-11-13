@@ -10,6 +10,7 @@ beyond copying a block and replacing the texts.
 |---|---|---|
 | Entity names, services, setup dialog, error messages | `custom_components/cul_max/translations/<lang>.json` | names: the **server language** of Home Assistant (*Settings → System → General*); error messages: the **profile language** of the user |
 | Dashboard cards | the `*_TEXT` block at the top of each file in `custom_components/cul_max/frontend/` | the **profile language** of the user |
+| Topology picture | `TOPOLOGY_TEXT` in `custom_components/cul_max/topology.py` | the **server language** |
 
 Anything you do not translate falls back to English, so a partial
 translation already works.
@@ -64,7 +65,15 @@ const Q_TEXT = {
 The cards pick the block that matches the profile language (`pl` for
 `pl` or `pl-PL`); without a matching block they show English.
 
-## 3. Check your work
+## 3. Topology picture
+
+The texts inside the topology picture (states, notes, legend) are in
+`TOPOLOGY_TEXT` at the top of `custom_components/cul_max/topology.py`. Add a
+block for your language next to `de` and `en` and keep the placeholders such
+as `{days}`. The picture is drawn on the server, so it follows the **server
+language** of Home Assistant.
+
+## 4. Check your work
 
 From the repository root:
 
@@ -81,7 +90,7 @@ English one (a text stays a text, a function takes the same values). It needs
 To see the cards, copy `custom_components/cul_max` into your Home Assistant,
 restart, set your profile language and reload the browser.
 
-## 4. Send it
+## 5. Send it
 
 Open a pull request on GitHub with your files – or, if that is too much
 hassle, attach them to an issue. Thank you!

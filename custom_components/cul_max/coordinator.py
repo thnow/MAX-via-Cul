@@ -67,7 +67,9 @@ from .topology import (
     KIND_WALL,
     TopologyEdge,
     TopologyNode,
+    format_temperature,
     render_topology_svg,
+    topology_texts,
 )
 from .protocol import (
     MaxMessage,
@@ -3029,6 +3031,12 @@ class CulMaxCoordinator:
         nodes: list[TopologyNode] = []
         keys: set[str] = set()
         now = datetime.now(UTC)
+        language = self.hass.config.language
+        t = topology_texts(language)
+
+        def temp(value: float) -> str:
+            return format_temperature(value, language)
+
         for device in self.get_all_devices():
             if device.superseded_by:
                 continue
@@ -3046,7 +3054,7 @@ class CulMaxCoordinator:
             state = device.last_state or {}
             if kind == KIND_CONTACT:
                 is_open = state.get("is_open")
-                status = "offen" if is_open else "geschlossen" if is_open is not None else "unbekannt"
+                status = t["open"] if is_open else t["closed"] if is_open is not None else t["unknown"]
             else:
                 mode = state.get("mode")
                 target = state.get("desired_temperature")
@@ -3054,13 +3062,13 @@ class CulMaxCoordinator:
                 parts = []
                 if mode is not None:
                     parts.append(
-                        "Aus" if mode == MODE_MANUAL and target is not None and target <= 4.5
-                        else {0: "Auto", 1: "Manuell", 2: "Urlaub", 3: "Boost"}.get(int(mode), "?")
+                        t["off"] if mode == MODE_MANUAL and target is not None and target <= 4.5
+                        else {0: t["auto"], 1: t["manual"], 2: t["vacation"], 3: t["boost"]}.get(int(mode), "?")
                     )
                 if target is not None and not (mode == MODE_MANUAL and target <= 4.5):
-                    parts.append(f"{target:.1f}°".replace(".", ","))
+                    parts.append(temp(target))
                 if measured is not None:
-                    parts.append(f"ist {measured:.1f}°".replace(".", ","))
+                    parts.append(t["measured"].format(temperature=temp(measured)))
                 status = " · ".join(parts)
             notes: list[str] = []
             problems: list[str] = []
@@ -3071,9 +3079,9 @@ class CulMaxCoordinator:
                     if sensor_state is not None
                     else device.external_sensor
                 )
-                notes.append(f"Raumfühler: {sensor_name}")
+                notes.append(t["room_sensor"].format(sensor=sensor_name))
             if device.foreign_central:
-                problems.append(f"andere Zentrale ({device.foreign_central})")
+                problems.append(t["foreign_central"].format(central=device.foreign_central))
             if not device.is_virtual and device.last_seen:
                 try:
                     last_seen = datetime.fromisoformat(device.last_seen)
@@ -3081,15 +3089,15 @@ class CulMaxCoordinator:
                     last_seen = None
                 limit = STALE_TIMEOUT_SHUTTER_CONTACT if kind == KIND_CONTACT else STALE_TIMEOUT_CLIMATE
                 if last_seen is not None and now - last_seen > limit:
-                    problems.append(f"keine Meldung seit {(now - last_seen).days} Tagen")
+                    problems.append(t["no_contact"].format(days=(now - last_seen).days))
             if state.get("battery_low"):
-                problems.append("Batterie schwach")
+                problems.append(t["battery_low"])
             if device.pending_config:
-                problems.append("Konfiguration ausstehend")
+                problems.append(t["config_pending"])
             nodes.append(
                 TopologyNode(
                     key=device.address,
-                    room=area.name if area is not None else "Ohne Raum",
+                    room=area.name if area is not None else t["no_room"],
                     kind=kind,
                     name=name,
                     status=status,
@@ -3114,18 +3122,18 @@ class CulMaxCoordinator:
                     edges.append(TopologyEdge(device.address, partner.upper()))
         by_key = {node.key: node for node in nodes}
         for node in nodes:
-            if node.virtual and node.room == "Ohne Raum":
+            if node.virtual and node.room == t["no_room"]:
                 partner_rooms = {
                     by_key[other].room
                     for edge in edges
                     for other in ((edge.b,) if edge.a == node.key else (edge.a,) if edge.b == node.key else ())
-                    if other in by_key and by_key[other].room != "Ohne Raum"
+                    if other in by_key and by_key[other].room != t["no_room"]
                 }
                 if len(partner_rooms) == 1:
                     node.room = partner_rooms.pop()
         rooms = {node.room for node in nodes}
-        title = f"MAX! Topologie · {len(nodes)} Geräte in {len(rooms)} Räumen"
-        return render_topology_svg(nodes, edges, title=title)
+        title = t["title"].format(devices=len(nodes), rooms=len(rooms))
+        return render_topology_svg(nodes, edges, title=title, texts=t)
 
     def _check_foreign_central(self, msg: MaxMessage, device: KnownDevice) -> None:
         """Detect devices that still report to another controller (e.g. old Cube).

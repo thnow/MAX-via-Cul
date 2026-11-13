@@ -128,3 +128,17 @@ def test_card_texts_fit_the_english_texts(card: str) -> None:
         for lang, texts in languages.items():
             assert not _mismatches(english, texts), f"{card} {name}.{lang}: {_mismatches(english, texts)}"
         assert not _missing(english, languages["de"]), f"{card} {name}.de missing {_missing(english, languages['de'])}"
+
+
+def test_topology_texts_fit_the_english_texts() -> None:
+    """Texts in the topology picture: same keys and placeholders as English."""
+    from custom_components.cul_max.topology import TOPOLOGY_TEXT, topology_texts
+
+    english = TOPOLOGY_TEXT["en"]
+    assert set(TOPOLOGY_TEXT["de"]) == set(english)
+    for lang, texts in TOPOLOGY_TEXT.items():
+        assert not set(texts) - set(english), f"{lang}: unknown {set(texts) - set(english)}"
+        for key, text in texts.items():
+            assert _placeholders(text) == _placeholders(english[key]), f"{lang}: {key}"
+    assert topology_texts("de-AT")["closed"] == "geschlossen"
+    assert topology_texts("pl")["closed"] == "closed"
