@@ -1064,7 +1064,7 @@
       "message": "{device}: {command} wurde nicht bestätigt ({error})"
     },
     "command_no_answer": {
-      "message": "{device} hat per Funk nicht geantwortet – die Änderung wurde nicht übernommen. Bitte Batterien und Funkreichweite des Thermostats prüfen."
+      "message": "{device} hat per Funk nicht geantwortet – die Änderung wurde nicht übernommen. Zeigt der Thermostat die Änderung trotzdem an, ihn kurz neu starten (eine Batterie heraus und wieder einsetzen); sonst Batterien und Funkreichweite prüfen."
     },
     "command_rejected": {
       "message": "{device} hat die Änderung abgelehnt."

@@ -1064,7 +1064,7 @@
       "message": "{device}: {command} was not confirmed ({error})"
     },
     "command_no_answer": {
-      "message": "{device} did not answer by radio – the change was not applied. Please check the batteries and the radio range of the thermostat."
+      "message": "{device} did not answer by radio – the change was not applied. If the thermostat shows the change anyway, restart it briefly (take one battery out and put it back in); otherwise check its batteries and radio range."
     },
     "command_rejected": {
       "message": "{device} rejected the change."

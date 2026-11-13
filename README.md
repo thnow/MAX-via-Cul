@@ -470,8 +470,10 @@ Repository layout:
 ### Unreleased
 
 - A thermostat that does not answer now ends in a readable message with the
-  room name ("Thermostat Büro did not answer by radio – check batteries and
-  range") instead of the internal radio log line.
+  room name instead of the internal radio log line. If the thermostat shows
+  the change anyway, the message suggests a short restart (one battery out and
+  back in): a thermostat that still receives but no longer transmits recovers
+  that way.
 
 ### 0.6.7
 
