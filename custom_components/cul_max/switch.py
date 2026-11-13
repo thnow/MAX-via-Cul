@@ -113,7 +113,7 @@ class CulMaxSummerSwitch(SwitchEntity):
 
     @property
     def icon(self) -> str:
-        return "mdi:white-balance-sunny" if self.is_on else "mdi:radiator"
+        return "mdi:white-balance-sunny" if self.is_on else "mdi:weather-sunny-off"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
