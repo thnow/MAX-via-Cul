@@ -46,6 +46,11 @@ FRONTEND_MODULES = [
         "filename": "cul-max-pairing-card.js",
         "version": _frontend_version("cul-max-pairing-card.js"),
     },
+    {
+        "name": "CUL MAX Topology Card",
+        "filename": "cul-max-topology-card.js",
+        "version": _frontend_version("cul-max-topology-card.js"),
+    },
 ]
 
 # TCP connection defaults (CULFW on MAX! Cube or CUNO)

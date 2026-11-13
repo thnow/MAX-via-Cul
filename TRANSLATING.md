@@ -36,6 +36,7 @@ Each card has one text table near the top:
 | Vacation / summer mode | `cul-max-vacation-card.js` | `V_TEXT` |
 | Radio queue | `cul-max-queue-card.js` | `Q_TEXT` |
 | Pairing | `cul-max-pairing-card.js` | `P_TEXT` |
+| Topology | `cul-max-topology-card.js` | `T_TEXT` |
 
 Add a block for your language next to `de` and `en`, e.g.:
 

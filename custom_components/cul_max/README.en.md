@@ -216,8 +216,17 @@ contacts. Lines show the links stored on the devices, dashed frames virtual
 devices, green an external room sensor. Red marks things to act on: links into
 another room (often a wrong area), "paired with another controller", no
 contact, low battery or pending configuration. Virtual devices without an area
-are shown in the room of their linked thermostat. Use the image in dashboards
-like any other image entity.
+are shown in the room of their linked thermostat. Every device also shows its
+MAX! address and serial number.
+
+On a dashboard the card `custom:cul-max-topology-card` shows the picture; a
+click on it or on "Open in new tab" opens it in full size in a new browser
+tab, where it is readable and can be zoomed freely.
+
+```yaml
+type: custom:cul-max-topology-card
+# entity: image.max_cul_topology   # optional, otherwise all CULs
+```
 
 ![Topology](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/topology.png)
 

@@ -311,8 +311,17 @@ Geraeten, gestrichelte Rahmen virtuelle Geraete, gruen einen externen
 Raumfuehler. Rot markiert Handlungsbedarf: Verknuepfungen in einen anderen
 Raum (oft ein falsch zugeordneter Bereich), „an anderer Zentrale angemeldet“,
 keine Meldung, schwache Batterie oder ausstehende Konfiguration. Virtuelle
-Geraete ohne Bereich erscheinen im Raum ihres verknuepften Thermostats. Das
-Bild laesst sich wie jedes Bild in Dashboards verwenden (z. B. Bildkarte).
+Geraete ohne Bereich erscheinen im Raum ihres verknuepften Thermostats. Jedes
+Geraet zeigt ausserdem seine MAX!-Adresse und Seriennummer.
+
+Im Dashboard zeigt die Karte `custom:cul-max-topology-card` das Bild; ein
+Klick darauf oder auf „In neuem Tab oeffnen“ oeffnet es in voller Groesse in
+einem neuen Browser-Tab, wo es lesbar ist und sich beliebig zoomen laesst.
+
+```yaml
+type: custom:cul-max-topology-card
+# entity: image.max_cul_topologie   # optional, sonst alle CULs
+```
 
 ![Topologie](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/topology.png)
 

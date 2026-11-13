@@ -312,6 +312,7 @@ they appear in the card picker. After an update reload the browser
 | `custom:cul-max-vacation-card` | Vacation for the whole flat: return date/time, temperature, preheating | `title` |
 | `custom:cul-max-pairing-card` | Pairing with countdown, name suggestion, area and room links | `title` |
 | `custom:cul-max-queue-card` | What waits for radio time, send budget, estimated time; remove queued commands | `title` |
+| `custom:cul-max-topology-card` | Topology picture; a click opens it in full size in a new tab | `entity` (default: all CULs), `title` |
 
 ### Recommended dashboard
 
@@ -469,6 +470,9 @@ Repository layout:
 
 - Topology picture: every device also shows its MAX! address and serial
   number (suggested by [@adampr1](https://github.com/adampr1), #3).
+- New **topology card** (`custom:cul-max-topology-card`): shows the topology
+  picture and opens it in full size in a new browser tab, where it is
+  readable and can be zoomed.
 - Removed the outdated `ROADMAP.md`; ideas and requests live in the GitHub
   issues.
 
