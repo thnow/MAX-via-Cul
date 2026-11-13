@@ -31,6 +31,7 @@ from .const import (
     MSG_ACK,
     MSG_TIME_INFORMATION,
     MSG_SET_TEMPERATURE,
+    MSG_PUSH_BUTTON_STATE,
     MSG_SHUTTER_CONTACT_STATE,
     MSG_THERMOSTAT_STATE,
     MSG_WALL_THERMOSTAT_CONTROL,
@@ -155,6 +156,16 @@ class ShutterContactState:
     """Decoded shutter/window contact state."""
     address: str
     is_open: bool
+    battery_low: bool
+    rf_error: bool
+
+
+@dataclass
+class PushButtonState:
+    """Decoded press of a MAX! PushButton (Eco Taster)."""
+    address: str
+    button: str  # "auto" or "eco"
+    raw: int
     battery_low: bool
     rf_error: bool
 
@@ -899,24 +910,45 @@ def decode_shutter_contact_state(msg: MaxMessage) -> ShutterContactState | None:
     """
     Decode a ShutterContactState (0x30) message.
 
-    Real MAX! contacts encode open/closed in the first payload byte:
-      0x10 = closed
-      0x12 = open
-    RF error and battery low are still reflected in the message flags.
+    The single payload byte carries the whole status (FHEM 10_MAX.pm):
+      bits 0-1  open (0 = closed)        0x10 = closed, 0x12 = open
+      bit 6     RF error (no ACK from a link partner)
+      bit 7     battery low
+    The header flags byte (0x04/0x06) holds no battery information.
     """
     if msg.msg_type != MSG_SHUTTER_CONTACT_STATE:
         return None
 
     payload_byte = msg.payload[0] if msg.payload else 0x10
-    is_open   = bool(payload_byte & 0x02)
-    rf_error  = bool(msg.flags & 0x40)
-    bat_low   = bool(msg.flags & 0x80)
+    is_open   = bool(payload_byte & 0x03)
+    rf_error  = bool(payload_byte & 0x40)
+    bat_low   = bool(payload_byte & 0x80)
 
     return ShutterContactState(
         address=msg.src_hex,
         is_open=is_open,
         battery_low=bat_low,
         rf_error=rf_error,
+    )
+
+
+def decode_push_button_state(msg: MaxMessage) -> PushButtonState | None:
+    """Decode a PushButtonState (0x50) sent by a MAX! Eco Taster.
+
+    Payload (two bytes, as captured from a real button and as in FHEM):
+      byte 0  status: bit 6 RF error, bit 7 battery low (0x10 = normal)
+      byte 1  pressed button: 0x01 = Auto (comfort), 0x00 = Eco
+    """
+    if msg.msg_type != MSG_PUSH_BUTTON_STATE or len(msg.payload) < 2:
+        return None
+    status, value = msg.payload[0], msg.payload[1]
+    button = {1: "auto", 0: "eco"}.get(value, f"unknown_{value}")
+    return PushButtonState(
+        address=msg.src_hex,
+        button=button,
+        raw=value,
+        battery_low=bool(status & 0x80),
+        rf_error=bool(status & 0x40),
     )
 
 

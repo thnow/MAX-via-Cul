@@ -132,6 +132,7 @@ Aktuell ausgelegt fuer:
 - MAX! Heizkoerperthermostat+
 - MAX! Wandthermostate
 - MAX! Fensterkontakte
+- MAX! Eco-Taster (PushButton): Tastendruecke als Ereignis-Entitaet
 - virtuelle MAX!-Fensterkontakte innerhalb dieser Integration
 
 ## Einrichtung
@@ -493,6 +494,29 @@ So funktioniert es:
 Fuer echte und virtuelle MAX!-Fensterkontakte:
 
 - `binary_sensor` fuer offen/geschlossen
+
+### Eco-Taster
+
+Fuer jeden angelernten MAX! Eco-Taster gibt es eine Ereignis-Entitaet (z. B.
+`event.eco_taster_flur_taste`) mit den Ereignissen `auto` und `eco`. Jeder
+Tastendruck zaehlt genau einmal, auch wenn der Taster sein Telegramm wegen
+eines verlorenen ACKs wiederholt. Die Batterie erscheint wie bei den anderen
+Geraeten als Batterie-Sensor.
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: event.eco_taster_flur_taste
+    attribute: event_type
+    to: eco
+actions:
+  - action: cul_max.start_vacation
+```
+
+Zusaetzlich feuert jeder Tastendruck das HA-Ereignis `cul_max_push_button`
+mit `address`, `name`, `button` (`auto`/`eco`) und `battery_low`. Ist der
+Taster direkt mit Thermostaten verknuepft, schaltet er diese weiterhin selbst
+per Funk; Home Assistant erfaehrt nur zusaetzlich davon.
 
 ### Diagnose
 

@@ -69,6 +69,8 @@ Its main components are:
 - MAX! radiator thermostat+
 - MAX! wall thermostats
 - MAX! window contacts (shutter contacts)
+- MAX! push button (Eco Taster): presses as an event entity (`auto` / `eco`)
+  and as the HA event `cul_max_push_button`
 - Virtual MAX! window contacts created by this integration
 
 ## Setup

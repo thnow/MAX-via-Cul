@@ -158,6 +158,19 @@
       "vacation_end_time": {
         "name": "Vacation: return time"
       }
+    },
+    "event": {
+      "push_button": {
+        "name": "Button",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "auto": "Auto",
+              "eco": "Eco"
+            }
+          }
+        }
+      }
     }
   }
 }

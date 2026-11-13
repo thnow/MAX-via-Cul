@@ -157,10 +157,14 @@ CLIMATE_DEVICE_TYPES = {
     DEVICE_WALL_THERMOSTAT,
 }
 
+# Fired on the HA bus for every press of a MAX! PushButton (Eco Taster)
+EVENT_PUSH_BUTTON = "cul_max_push_button"
+
 PLATFORMS: list[Platform] = [
     Platform.BUTTON,
     Platform.CLIMATE,
     Platform.DATE,
+    Platform.EVENT,
     Platform.IMAGE,
     Platform.BINARY_SENSOR,
     Platform.NUMBER,

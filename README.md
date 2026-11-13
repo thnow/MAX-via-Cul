@@ -76,6 +76,7 @@ itself, fully local.
 - MAX! heating thermostat+
 - MAX! wall thermostat
 - MAX! shutter contact
+- MAX! push button (Eco Taster): presses arrive as an event entity
 - Virtual MAX! shutter contacts created by this integration
 
 ## Requirements
@@ -237,6 +238,31 @@ return date and time, temperature and preheat and press "Urlaub starten"
 confirms the command and returns to its week program at the return time by
 itself; switching it off ends the vacation early. For automations use
 `cul_max.start_vacation` / `cul_max.end_vacation`.
+
+### Use the Eco push button in automations
+
+Each paired MAX! push button (Eco Taster) gets an event entity, e.g.
+`event.eco_taster_flur_taste`, with the event types `auto` and `eco`. Every
+press updates it once – also when the button repeats its telegram because an
+ACK got lost. Its battery shows up as the usual battery sensor.
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: event.eco_taster_flur_taste
+    attribute: event_type
+    to: eco
+actions:
+  - action: cul_max.start_vacation
+```
+
+For a state trigger on the same button twice in a row, trigger on the entity
+without `to:` and check `trigger.to_state.attributes.event_type`. Every press
+is also fired as the HA event `cul_max_push_button` with `address`, `name`,
+`button` (`auto`/`eco`) and `battery_low`.
+
+A button that is also linked to thermostats keeps switching them by radio on
+its own; Home Assistant only gets told about the press.
 
 ### Back up the MAX! topology
 
@@ -407,6 +433,15 @@ Repository layout:
 - no generated Python caches committed
 
 ## Changelog
+
+### Unreleased
+
+- MAX! push button (Eco Taster): presses of Auto and Eco are available as an
+  event entity and as the HA event `cul_max_push_button`; repeated telegrams
+  of one press count once (thanks [@Buelo77](https://github.com/Buelo77) for
+  the captured telegrams, #5).
+- Fix: battery low and RF error of window contacts were read from the wrong
+  byte and never reported. They come from the status byte of the telegram.
 
 ### 0.6.4
 
