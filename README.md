@@ -462,12 +462,13 @@ Repository layout:
 
 ## Changelog
 
-### Unreleased
+### 0.6.5
 
 - Summer mode: all thermostats off (valve closed) or fully open until it is
   ended by hand, previous states restored afterwards; in the vacation card,
   as a switch with a valve select, and as `start_summer` / `end_summer`
-  (suggested by [@adampr1](https://github.com/adampr1), #3).
+  (suggested by [@adampr1](https://github.com/adampr1), #3). The week
+  profile card says *Sommermodus* instead of just "off".
 - MAX! push button (Eco Taster): presses of Auto and Eco are available as an
   event entity and as the HA event `cul_max_push_button`; repeated telegrams
   of one press count once (thanks [@Buelo77](https://github.com/Buelo77) for
