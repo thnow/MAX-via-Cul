@@ -470,6 +470,8 @@ Repository layout:
 
 - Topology picture: every device also shows its MAX! address and serial
   number (suggested by [@adampr1](https://github.com/adampr1), #3).
+- Texts inside the topology picture follow the server language (German or
+  English, more via `TOPOLOGY_TEXT`, see TRANSLATING.md).
 - New **topology card** (`custom:cul-max-topology-card`): shows the topology
   picture and opens it in full size in a new browser tab, where it is
   readable and can be zoomed.
