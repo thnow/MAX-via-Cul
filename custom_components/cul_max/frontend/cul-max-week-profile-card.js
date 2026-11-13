@@ -28,6 +28,211 @@ const MODE_LABELS = {
   boost: "Boost",
 };
 
+// UI language: German for "de*", English for everything else. DAYS and
+// MODE_LABELS are switched in place so all code using them follows.
+const DAY_NAMES = {
+  de: { monday: ["Mo", "Montag"], tuesday: ["Di", "Dienstag"], wednesday: ["Mi", "Mittwoch"], thursday: ["Do", "Donnerstag"],
+    friday: ["Fr", "Freitag"], saturday: ["Sa", "Samstag"], sunday: ["So", "Sonntag"] },
+  en: { monday: ["Mon", "Monday"], tuesday: ["Tue", "Tuesday"], wednesday: ["Wed", "Wednesday"], thursday: ["Thu", "Thursday"],
+    friday: ["Fri", "Friday"], saturday: ["Sat", "Saturday"], sunday: ["Sun", "Sunday"] },
+};
+const MODE_NAMES = {
+  de: { auto: "Automatik", manual: "Manuell", vacation: "Urlaub", boost: "Boost" },
+  en: { auto: "Auto", manual: "Manual", vacation: "Vacation", boost: "Boost" },
+};
+let wLang = "de";
+let wLocale = "de-DE";
+const wSetLang = (hass) => {
+  const language = String(hass?.locale?.language || hass?.language || "en");
+  const lang = language.toLowerCase().startsWith("de") ? "de" : "en";
+  wLocale = lang === "de" ? "de-DE" : language.includes("-") ? language : "en-GB";
+  if (lang === wLang) return;
+  wLang = lang;
+  DAYS.forEach((day) => {
+    [day[1], day[2]] = DAY_NAMES[lang][day[0]];
+  });
+  Object.assign(MODE_LABELS, MODE_NAMES[lang]);
+};
+const W_TEXT = {
+  de: {
+    off: "Aus",
+    needSegment: "Mindestens ein Abschnitt ist nötig.",
+    maxSegments: (n) => `Höchstens ${n} Abschnitte pro Tag.`,
+    badTemp: (t) => `Temperatur ${t} ist ungültig (4,5–30,5 °C in 0,5er-Schritten).`,
+    fillTimes: "Bitte alle Uhrzeiten ausfüllen.",
+    fiveMinutes: (t) => `${t}: nur 5-Minuten-Schritte möglich.`,
+    ascending: (t) => `${t}: Uhrzeiten müssen aufsteigend sein.`,
+    before24: "Die letzte Schaltzeit muss vor 24:00 liegen.",
+    title: "Wochenprofil",
+    tomorrow: "morgen",
+    windowOpen: (partners) => `Fenster offen${partners ? ` (${partners})` : ""} – Absenkung aktiv`,
+    deviates: (thermostat, plan) => `Weicht vom Plan ab: Thermostat ${thermostat}, Plan ${plan}`,
+    pairedElsewhere: (central) => `Noch an einer anderen Zentrale angemeldet (${central}) – Gerät zurücksetzen und neu anlernen`,
+    vacationUntil: (d, m, time) => ` bis ${d}.${m}. ${time}`,
+    vacation: (until, temp) => `Urlaub${until} – ${temp}, danach wieder Wochenprogramm`,
+    summer: (open) => `Sommermodus – ${open ? "Ventil ganz offen" : "Heizung aus"}, Wochenprogramm pausiert bis zum Ende des Sommermodus`,
+    programInactive: (mode, target) => `Wochenprogramm nicht aktiv – Modus ${mode}${target}`,
+    uploading: (n) => `Übertragung zum Thermostat: noch ${n} Paket(e)`,
+    sendingCmd: (cmd) => `Sende: ${cmd} …`,
+    notConfirmed: (cmd) => `Nicht bestätigt: ${cmd}`,
+    fromWallThermostat: "Profil vom verknüpften Wandthermostat – dort bearbeiten",
+    entityMissing: (ids) => `Entität nicht gefunden: ${ids}`,
+    incompatible: (ids) => `<b>Inkompatible Entität</b><br>Diese Karte funktioniert nur mit <code>cul_max</code>-Climate-Entitäten.<br>Gewählt: <code>${ids}</code>`,
+    details: "Details",
+    programUnknown: "Wochenprogramm unbekannt",
+    programUnknownFor: (days) => `Programm unbekannt für ${days}`,
+    cannotReport: "MAX!-Geräte können ihr Programm nicht melden (z. B. wenn es mit dem Cube eingestellt wurde).",
+    tapToSet: "Tag antippen, um ihn hier festzulegen; mit „Auch übernehmen für“ gleich für mehrere Tage.",
+    profilesDiffer: (days) => `Profile unterscheiden sich: ${days} – ein bearbeiteter Tag wird für alle Thermostate übernommen`,
+    profilesDifferShort: "Profile unterscheiden sich",
+    unknown: "unbekannt",
+    editDay: (day) => `${day} bearbeiten`,
+    nextSwitch: (next) => `Nächster Wechsel: ${next}`,
+    tapToEdit: "Tag antippen zum Bearbeiten",
+    untilThen: (when, temp) => `bis ${when}, danach ${temp} laut Plan`,
+    untilNext: "bis zum nächsten Schaltpunkt",
+    sendingSoon: "wird gleich gesendet …",
+    temporary: (until) => `vorübergehend – ${until}`,
+    byPlan: (until) => `laut Plan ${until}`,
+    thermostatsDiffer: "Thermostate unterschiedlich",
+    colder: "0,5 °C kälter bis zum nächsten Schaltpunkt",
+    warmer: "0,5 °C wärmer bis zum nächsten Schaltpunkt",
+    backToPlan: "Zurück zum Plan",
+    confirmedAt: (at) => `bestätigt ${at}`,
+    sending: "wird übertragen …",
+    unconfirmed: "vom Thermostat nicht bestätigt, neuer Versuch folgt",
+    sensorStale: "Sensor liefert keine aktuellen Werte – Thermostat regelt selbst",
+    sensorMissing: "Sensor nicht verfügbar – Thermostat regelt selbst",
+    regulateOn: "Regelung nach",
+    ownSensor: "Fühler am Thermostat",
+    sameRoom: "gleicher Raum",
+    ownSensorDefault: "Fühler am Thermostat (Standard)",
+    sensorNote: (multi) => `Das Thermostat regelt dann nach diesem Sensor statt nach seinem Fühler am Heizkörper (virtuelles Wandthermostat). Das Wochenprogramm bleibt auf dem Thermostat.${multi ? " Gilt für alle Thermostate dieser Karte." : ""}`,
+    cancel: "Abbrechen",
+    settingUp: "Wird eingerichtet …",
+    apply: "Übernehmen",
+    change: "ändern",
+    offOption: "Aus (4,5)",
+    untilLabel: "bis (hh:mm)",
+    removeSegment: "Abschnitt entfernen",
+    editTitle: (day) => `${day} bearbeiten`,
+    forTargets: (names) => `für ${names}`,
+    addPoint: "Schaltpunkt",
+    alsoApply: "Auch übernehmen für:",
+    workdays: "Mo–Fr",
+    weekend: "Sa–So",
+    all: "Alle",
+    none: "Keine",
+    uploadingProgress: (p) => `Wird übertragen${p ? ` (${p})` : ""} …`,
+    upload: "Übertragen",
+    radioNote: "Jeder Tag braucht 1–2 Funkpakete. Thermostate übernehmen das Profil, sobald sie es empfangen haben; der Fortschritt erscheint oben.",
+    fromOtherRoom: "Aus anderem Raum übernehmen …",
+    noOtherThermostat: "Kein anderes MAX!-Thermostat mit bekanntem Wochenprogramm.",
+    close: "Schließen",
+    noArea: "Ohne Bereich",
+    weekNote: (targets, unknown) => `Überträgt die ganze Woche${targets > 1 ? ` an ${targets} Thermostate` : ""} – bis zu 14 Funkpakete pro Thermostat, das dauert einige Minuten.${unknown ? ` Unbekannt und übersprungen: ${unknown}.` : ""}`,
+    onlyDay: (day) => `nur ${day}`,
+    wholeWeek: "ganze Woche",
+    sendWholeWeek: "Ganze Woche übertragen",
+    intoEditor: "In den Editor übernehmen",
+    dayUnknownThere: "Für diesen Tag ist das Programm dort unbekannt.",
+    pick: "Bitte wählen",
+    moreThermostats: "Weitere Thermostate im selben Raum (gemeinsame Karte)",
+    titleLabel: "Titel",
+    showCurrent: "Ist-Temperatur anzeigen",
+    allowEdit: "Bearbeiten in der Karte erlauben",
+  },
+  en: {
+    off: "Off",
+    needSegment: "At least one segment is needed.",
+    maxSegments: (n) => `At most ${n} segments per day.`,
+    badTemp: (t) => `Temperature ${t} is invalid (4.5–30.5 °C in steps of 0.5).`,
+    fillTimes: "Please fill in all times.",
+    fiveMinutes: (t) => `${t}: only steps of 5 minutes are possible.`,
+    ascending: (t) => `${t}: times must be ascending.`,
+    before24: "The last switching time must be before 24:00.",
+    title: "Week program",
+    tomorrow: "tomorrow",
+    windowOpen: (partners) => `Window open${partners ? ` (${partners})` : ""} – lowered`,
+    deviates: (thermostat, plan) => `Differs from the schedule: thermostat ${thermostat}, schedule ${plan}`,
+    pairedElsewhere: (central) => `Still paired with another central (${central}) – reset the device and pair it again`,
+    vacationUntil: (d, m, time) => ` until ${d}/${m} ${time}`,
+    vacation: (until, temp) => `Vacation${until} – ${temp}, then back to the week program`,
+    summer: (open) => `Summer mode – ${open ? "valve fully open" : "heating off"}, week program paused until summer mode ends`,
+    programInactive: (mode, target) => `Week program not active – mode ${mode}${target}`,
+    uploading: (n) => `Sending to the thermostat: ${n} packet(s) left`,
+    sendingCmd: (cmd) => `Sending: ${cmd} …`,
+    notConfirmed: (cmd) => `Not confirmed: ${cmd}`,
+    fromWallThermostat: "Profile of the linked wall thermostat – edit it there",
+    entityMissing: (ids) => `Entity not found: ${ids}`,
+    incompatible: (ids) => `<b>Incompatible entity</b><br>This card only works with <code>cul_max</code> climate entities.<br>Selected: <code>${ids}</code>`,
+    details: "Details",
+    programUnknown: "Week program unknown",
+    programUnknownFor: (days) => `Program unknown for ${days}`,
+    cannotReport: "MAX! devices cannot report their program (e.g. when it was set with the Cube).",
+    tapToSet: "Tap a day to set it here; use \"Also apply to\" for several days at once.",
+    profilesDiffer: (days) => `Profiles differ: ${days} – an edited day is applied to all thermostats`,
+    profilesDifferShort: "Profiles differ",
+    unknown: "unknown",
+    editDay: (day) => `Edit ${day}`,
+    nextSwitch: (next) => `Next change: ${next}`,
+    tapToEdit: "Tap a day to edit",
+    untilThen: (when, temp) => `until ${when}, then ${temp} per schedule`,
+    untilNext: "until the next switching point",
+    sendingSoon: "sending shortly …",
+    temporary: (until) => `temporary – ${until}`,
+    byPlan: (until) => `per schedule ${until}`,
+    thermostatsDiffer: "thermostats differ",
+    colder: "0.5 °C colder until the next switching point",
+    warmer: "0.5 °C warmer until the next switching point",
+    backToPlan: "Back to schedule",
+    confirmedAt: (at) => `confirmed ${at}`,
+    sending: "sending …",
+    unconfirmed: "not confirmed by the thermostat, retrying",
+    sensorStale: "sensor reports no current values – thermostat regulates itself",
+    sensorMissing: "sensor unavailable – thermostat regulates itself",
+    regulateOn: "Regulating on",
+    ownSensor: "sensor at the thermostat",
+    sameRoom: "same room",
+    ownSensorDefault: "Sensor at the thermostat (default)",
+    sensorNote: (multi) => `The thermostat then regulates on this sensor instead of its sensor at the radiator (virtual wall thermostat). The week program stays on the thermostat.${multi ? " Applies to all thermostats of this card." : ""}`,
+    cancel: "Cancel",
+    settingUp: "Setting up …",
+    apply: "Apply",
+    change: "change",
+    offOption: "Off (4.5)",
+    untilLabel: "until (hh:mm)",
+    removeSegment: "Remove segment",
+    editTitle: (day) => `Edit ${day}`,
+    forTargets: (names) => `for ${names}`,
+    addPoint: "Switching point",
+    alsoApply: "Also apply to:",
+    workdays: "Mon–Fri",
+    weekend: "Sat–Sun",
+    all: "All",
+    none: "None",
+    uploadingProgress: (p) => `Sending${p ? ` (${p})` : ""} …`,
+    upload: "Send",
+    radioNote: "Each day needs 1–2 radio packets. Thermostats take over the profile once they have received it; progress shows above.",
+    fromOtherRoom: "Copy from another room …",
+    noOtherThermostat: "No other MAX! thermostat with a known week program.",
+    close: "Close",
+    noArea: "No area",
+    weekNote: (targets, unknown) => `Sends the whole week${targets > 1 ? ` to ${targets} thermostats` : ""} – up to 14 radio packets per thermostat, this takes a few minutes.${unknown ? ` Unknown and skipped: ${unknown}.` : ""}`,
+    onlyDay: (day) => `only ${day}`,
+    wholeWeek: "whole week",
+    sendWholeWeek: "Send whole week",
+    intoEditor: "Copy into the editor",
+    dayUnknownThere: "The program of this day is unknown there.",
+    pick: "Please choose",
+    moreThermostats: "More thermostats in the same room (shared card)",
+    titleLabel: "Title",
+    showCurrent: "Show current temperature",
+    allowEdit: "Allow editing in the card",
+  },
+};
+const WT = () => W_TEXT[wLang];
+
 const esc = (value) =>
   String(value ?? "").replace(/[&<>"']/g, (ch) => ({
     "&": "&amp;",
@@ -53,8 +258,8 @@ const toHHMM = (minutes) => {
 const fmtTemp = (temp) => {
   const value = Number(temp);
   if (!Number.isFinite(value)) return "–";
-  if (value <= TEMP_MIN) return "Aus";
-  return `${value.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 1 })} °C`;
+  if (value <= TEMP_MIN) return WT().off;
+  return `${value.toLocaleString(wLocale, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} °C`;
 };
 
 /** Colour bands: off grey, frost/eco blues, comfort amber → orange → red. */
@@ -114,19 +319,19 @@ const serializeDay = (segments) => {
 };
 
 const validateDay = (segments) => {
-  if (!segments.length) return "Mindestens ein Abschnitt ist nötig.";
-  if (segments.length > MAX_POINTS) return `Höchstens ${MAX_POINTS} Abschnitte pro Tag.`;
+  if (!segments.length) return WT().needSegment;
+  if (segments.length > MAX_POINTS) return WT().maxSegments(MAX_POINTS);
   let previous = 0;
   for (let i = 0; i < segments.length; i += 1) {
     const seg = segments[i];
     if (!(seg.temp >= TEMP_MIN && seg.temp <= TEMP_MAX) || (seg.temp * 2) % 1 !== 0) {
-      return `Temperatur ${seg.temp} ist ungültig (4,5–30,5 °C in 0,5er-Schritten).`;
+      return WT().badTemp(seg.temp);
     }
     if (i < segments.length - 1) {
-      if (!Number.isFinite(seg.until)) return "Bitte alle Uhrzeiten ausfüllen.";
-      if (seg.until % 5 !== 0) return `${toHHMM(seg.until)}: nur 5-Minuten-Schritte möglich.`;
-      if (seg.until <= previous) return `${toHHMM(seg.until)}: Uhrzeiten müssen aufsteigend sein.`;
-      if (seg.until >= 24 * 60) return "Die letzte Schaltzeit muss vor 24:00 liegen.";
+      if (!Number.isFinite(seg.until)) return WT().fillTimes;
+      if (seg.until % 5 !== 0) return WT().fiveMinutes(toHHMM(seg.until));
+      if (seg.until <= previous) return WT().ascending(toHHMM(seg.until));
+      if (seg.until >= 24 * 60) return WT().before24;
       previous = seg.until;
     }
   }
@@ -148,7 +353,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
       Object.keys(hass?.states || {}).find((entityId) =>
         CulMaxWeekProfileCard._isCulMaxClimate(entityId, hass.states[entityId])
       ) || "";
-    return { entity, title: "Wochenprofil", show_current_temp: true, editable: true };
+    return { entity, show_current_temp: true, editable: true };
   }
 
   static getConfigElement() {
@@ -169,7 +374,6 @@ class CulMaxWeekProfileCard extends HTMLElement {
       throw new Error("Entity required");
     }
     this._config = {
-      title: "Wochenprofil",
       show_current_temp: true,
       editable: true,
       ...config,
@@ -180,9 +384,12 @@ class CulMaxWeekProfileCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    const langBefore = wLang;
+    wSetLang(hass);
     const states = this._entityIds().map((id) => hass?.states?.[id]);
     // Only re-render when one of our entities changed; keeps an open editor intact.
     const changed =
+      langBefore !== wLang ||
       !this._lastStates ||
       states.length !== this._lastStates.length ||
       states.some((st, idx) => st !== this._lastStates[idx]);
@@ -250,7 +457,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
       for (const seg of segments) {
         if (seg.from === 0) continue;
         if (offset === 0 && seg.from <= minutes) continue;
-        const when = offset === 0 ? "" : offset === 1 ? "morgen " : `${longLabel} `;
+        const when = offset === 0 ? "" : offset === 1 ? `${WT().tomorrow} ` : `${longLabel} `;
         return `${when}${toHHMM(seg.from)} → ${fmtTemp(seg.temp)}`;
       }
     }
@@ -267,7 +474,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
       items.push({
         level: "warn",
         icon: "mdi:window-open-variant",
-        text: `${who}Fenster offen${partners ? ` (${esc(partners)})` : ""} – Absenkung aktiv`,
+        text: `${who}${WT().windowOpen(partners ? esc(partners) : "")}`,
       });
     } else if (
       mode === "auto" &&
@@ -278,44 +485,38 @@ class CulMaxWeekProfileCard extends HTMLElement {
       items.push({
         level: "warn",
         icon: "mdi:alert-outline",
-        text: `${who}Weicht vom Plan ab: Thermostat ${fmtTemp(attrs.temperature)}, Plan ${fmtTemp(
-          attrs.expected_week_profile_temperature
-        )}`,
+        text: `${who}${WT().deviates(fmtTemp(attrs.temperature), fmtTemp(attrs.expected_week_profile_temperature))}`,
       });
     }
     if (attrs.pairing_state === "paired_elsewhere") {
       items.push({
         level: "error",
         icon: "mdi:link-off",
-        text: `${who}Noch an einer anderen Zentrale angemeldet (${esc(
-          attrs.paired_elsewhere_central || "?"
-        )}) – Gerät zurücksetzen und neu anlernen`,
+        text: `${who}${WT().pairedElsewhere(esc(attrs.paired_elsewhere_central || "?"))}`,
       });
     }
     const scheduleOff = attrs.week_profile_source !== undefined || attrs.week_profile_monday !== undefined;
     if (mode === "vacation") {
       const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2})/.exec(attrs.until || "");
-      const until = m ? ` bis ${m[3]}.${m[2]}. ${m[4]}` : "";
+      const until = m ? WT().vacationUntil(m[3], m[2], m[4]) : "";
       items.push({
         level: "info",
         icon: "mdi:airplane",
-        text: `${who}Urlaub${until} – ${fmtTemp(attrs.temperature)}, danach wieder Wochenprogramm`,
+        text: `${who}${WT().vacation(until, fmtTemp(attrs.temperature))}`,
       });
     } else if (attrs.summer_mode) {
       items.push({
         level: "info",
         icon: "mdi:white-balance-sunny",
-        text: `${who}Sommermodus – ${
-          attrs.summer_mode === "open" ? "Ventil ganz offen" : "Heizung aus"
-        }, Wochenprogramm pausiert bis zum Ende des Sommermodus`,
+        text: `${who}${WT().summer(attrs.summer_mode === "open")}`,
       });
     } else if (scheduleOff && mode && mode !== "auto") {
-      const label = stateObj.state === "off" ? "Aus" : MODE_LABELS[mode] || mode;
+      const label = stateObj.state === "off" ? WT().off : MODE_LABELS[mode] || mode;
       const target = attrs.temperature != null && stateObj.state !== "off" ? ` ${fmtTemp(attrs.temperature)}` : "";
       items.push({
         level: "info",
         icon: "mdi:pause-circle-outline",
-        text: `${who}Wochenprogramm nicht aktiv – Modus ${esc(label)}${target}`,
+        text: `${who}${WT().programInactive(esc(label), target)}`,
       });
     }
     if (attrs.pending_queue_type === "climate" && attrs.pending_queue_length > 0) {
@@ -323,18 +524,18 @@ class CulMaxWeekProfileCard extends HTMLElement {
       items.push({
         level: attrs.pending_queue_last_error ? "warn" : "info",
         icon: "mdi:upload-network-outline",
-        text: `${who}Übertragung zum Thermostat: noch ${attrs.pending_queue_length} Paket(e)${
+        text: `${who}${WT().uploading(attrs.pending_queue_length)}${
           attrs.pending_queue_active ? " …" : ""
         }${error}`,
       });
     }
     if (attrs.command_status === "sending") {
-      items.push({ level: "info", icon: "mdi:radio-tower", text: `${who}Sende: ${esc(attrs.command_requested)} …` });
+      items.push({ level: "info", icon: "mdi:radio-tower", text: `${who}${WT().sendingCmd(esc(attrs.command_requested))}` });
     } else if (attrs.command_status === "failed") {
       items.push({
         level: "error",
         icon: "mdi:alert-circle-outline",
-        text: `${who}Nicht bestätigt: ${esc(attrs.command_requested)}${
+        text: `${who}${WT().notConfirmed(esc(attrs.command_requested))}${
           attrs.command_error ? ` (${esc(attrs.command_error)})` : ""
         }`,
       });
@@ -343,7 +544,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
       items.push({
         level: "info",
         icon: "mdi:link-variant",
-        text: `${who}Profil vom verknüpften Wandthermostat – dort bearbeiten`,
+        text: `${who}${WT().fromWallThermostat}`,
       });
     }
     return items;
@@ -365,17 +566,13 @@ class CulMaxWeekProfileCard extends HTMLElement {
     const stateObjs = ids.map((id) => this._hass.states[id]);
     const missing = ids.filter((id, idx) => !stateObjs[idx]);
     if (missing.length) {
-      root.innerHTML = `<ha-card><div class="msg">Entität nicht gefunden: ${esc(missing.join(", "))}</div></ha-card>${this._styles()}`;
+      root.innerHTML = `<ha-card><div class="msg">${WT().entityMissing(esc(missing.join(", ")))}</div></ha-card>${this._styles()}`;
       return;
     }
     const incompatible = ids.filter((id, idx) => !CulMaxWeekProfileCard._isCulMaxClimate(id, stateObjs[idx]));
     if (incompatible.length) {
       root.innerHTML = `
-        <ha-card><div class="msg">
-          <b>Inkompatible Entität</b><br>
-          Diese Karte funktioniert nur mit <code>cul_max</code>-Climate-Entitäten.<br>
-          Gewählt: <code>${esc(incompatible.join(", "))}</code>
-        </div></ha-card>${this._styles()}`;
+        <ha-card><div class="msg">${WT().incompatible(esc(incompatible.join(", ")))}</div></ha-card>${this._styles()}`;
       return;
     }
 
@@ -398,7 +595,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
     const chipsFor = (st) => {
       const a = st.attributes || {};
       const chips = [];
-      const modeLabel = st.state === "off" ? "Aus" : MODE_LABELS[a.mode_detail] || st.state;
+      const modeLabel = st.state === "off" ? WT().off : MODE_LABELS[a.mode_detail] || st.state;
       chips.push(`<span class="chip mode">${esc(modeLabel)}</span>`);
       if (a.temperature != null) {
         chips.push(`<span class="chip"><ha-icon icon="mdi:target"></ha-icon>${fmtTemp(a.temperature)}</span>`);
@@ -418,7 +615,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
           .map(
             (st, idx) =>
               `<div class="chips pick" role="button" tabindex="0" data-entity="${esc(st.entity_id)}"
-                    title="${esc(st.attributes.friendly_name || st.entity_id)} – Details"><span class="who">${esc(
+                    title="${esc(st.attributes.friendly_name || st.entity_id)} – ${WT().details}"><span class="who">${esc(
                 shortNames[idx]
               )}</span>${chipsFor(st)}</div>`
           )
@@ -441,23 +638,19 @@ class CulMaxWeekProfileCard extends HTMLElement {
     if (unknownDays.length) {
       const which =
         unknownDays.length === DAYS.length
-          ? "Wochenprogramm unbekannt"
-          : `Programm unbekannt für ${unknownDays.map(([, short]) => short).join(", ")}`;
+          ? WT().programUnknown
+          : WT().programUnknownFor(unknownDays.map(([, short]) => short).join(", "));
       statusItems.push({
         level: "info",
         icon: "mdi:help-circle-outline",
-        text: `${which} – MAX!-Geräte können ihr Programm nicht melden (z. B. wenn es mit dem Cube eingestellt wurde). ${
-          editable ? "Tag antippen, um ihn hier festzulegen; mit „Auch übernehmen für“ gleich für mehrere Tage." : ""
-        }`,
+        text: `${which} – ${WT().cannotReport} ${editable ? esc(WT().tapToSet) : ""}`,
       });
     }
     if (multi && differingDays.length) {
       statusItems.push({
         level: "info",
         icon: "mdi:call-split",
-        text: `Profile unterscheiden sich: ${differingDays
-          .map(([, short]) => short)
-          .join(", ")} – ein bearbeiteter Tag wird für alle Thermostate übernommen`,
+        text: WT().profilesDiffer(differingDays.map(([, short]) => short).join(", ")),
       });
     }
     const status = statusItems
@@ -481,7 +674,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
                 </div>`;
             })
             .join("")
-        : `<div class="empty">unbekannt</div>`;
+        : `<div class="empty">${WT().unknown}</div>`;
       const marker = isToday ? `<div class="now" style="left:${(nowMinutes / 1440) * 100}%"></div>` : "";
       // switching times below the bar; labels that would overlap the previous
       // one on the same line move to a second line
@@ -511,8 +704,8 @@ class CulMaxWeekProfileCard extends HTMLElement {
       const editingThis = this._editing?.day === key;
       return `
         <div class="day-row${isToday ? " today" : ""}${editable ? " editable" : ""}${editingThis ? " editing" : ""}"
-             data-day="${key}" ${editable ? `role="button" tabindex="0" aria-label="${long} bearbeiten"` : ""}>
-          <div class="label">${short}${differs ? `<span class="diff" title="Profile unterscheiden sich">≠</span>` : ""}</div>
+             data-day="${key}" ${editable ? `role="button" tabindex="0" aria-label="${esc(WT().editDay(long))}"` : ""}>
+          <div class="label">${short}${differs ? `<span class="diff" title="${WT().profilesDifferShort}">≠</span>` : ""}</div>
           <div class="track">${track}</div>
         </div>
         ${editingThis ? this._editorHtml(key, long, multi ? shortNames : null) : ""}`;
@@ -523,13 +716,16 @@ class CulMaxWeekProfileCard extends HTMLElement {
         <div class="wrapper">
           <div class="header">
             <div class="titles">
-              <div class="title">${esc(this._config.title)}</div>
+              <div class="title">${esc(
+                // the old default title was stored in the card config: translate it too
+                !this._config.title || this._config.title === W_TEXT.de.title ? WT().title : this._config.title
+              )}</div>
               <div class="subtitle">${esc(
                 multi ? stateObjs.map((st) => st.attributes.friendly_name).join(" · ") : attrs.friendly_name || ""
               )}</div>
             </div>
             <div class="more-wrap">
-              <ha-icon-button class="more" label="Details"><ha-icon icon="mdi:dots-vertical"></ha-icon></ha-icon-button>
+              <ha-icon-button class="more" label="${WT().details}"><ha-icon icon="mdi:dots-vertical"></ha-icon></ha-icon-button>
               ${
                 multi
                   ? `<div class="more-menu" hidden>${stateObjs
@@ -545,12 +741,12 @@ class CulMaxWeekProfileCard extends HTMLElement {
             </div>
           </div>
           ${chipsHtml}
-          ${quickHtml || (next ? `<div class="next"><ha-icon icon="mdi:clock-outline"></ha-icon>Nächster Wechsel: ${next}</div>` : "")}
+          ${quickHtml || (next ? `<div class="next"><ha-icon icon="mdi:clock-outline"></ha-icon>${WT().nextSwitch(next)}</div>` : "")}
           ${status}
           ${this._sensorRowHtml(stateObjs, shortNames)}
           <div class="axis"><span>0</span><span>6</span><span>12</span><span>18</span><span>24</span></div>
           <div class="days">${rows}</div>
-          ${editable && !this._editing ? `<div class="hint">Tag antippen zum Bearbeiten</div>` : ""}
+          ${editable && !this._editing ? `<div class="hint">${WT().tapToEdit}</div>` : ""}
         </div>
       </ha-card>
       ${this._styles()}`;
@@ -575,26 +771,26 @@ class CulMaxWeekProfileCard extends HTMLElement {
     let until = "";
     if (nextAt) {
       const sameDay = nextAt.toDateString() === new Date().toDateString();
-      const time = nextAt.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-      const day = sameDay ? "" : `${nextAt.toLocaleDateString("de-DE", { weekday: "short" })} `;
-      until = `bis ${day}${time}, danach ${fmtTemp(nextTemp)} laut Plan`;
+      const time = nextAt.toLocaleTimeString(wLocale, { hour: "2-digit", minute: "2-digit" });
+      const day = sameDay ? "" : `${nextAt.toLocaleDateString(wLocale, { weekday: "short" })} `;
+      until = WT().untilThen(`${day}${time}`, fmtTemp(nextTemp));
     } else {
-      until = "bis zum nächsten Schaltpunkt";
+      until = WT().untilNext;
     }
     const label = this._quick
-      ? "wird gleich gesendet …"
+      ? WT().sendingSoon
       : temporary
-        ? `vorübergehend – ${until}`
+        ? WT().temporary(until)
         : same
-          ? until.replace(/^bis/, "laut Plan bis")
-          : "Thermostate unterschiedlich";
+          ? WT().byPlan(until)
+          : WT().thermostatsDiffer;
     return `<div class="quick${temporary || this._quick ? " active" : ""}">
         <ha-icon icon="${temporary ? "mdi:clock-edit-outline" : "mdi:clock-outline"}"></ha-icon>
-        <button class="qbtn" data-quick="-0.5" title="0,5 °C kälter bis zum nächsten Schaltpunkt"><ha-icon icon="mdi:minus"></ha-icon></button>
+        <button class="qbtn" data-quick="-0.5" title="${WT().colder}"><ha-icon icon="mdi:minus"></ha-icon></button>
         <span class="qval">${same || this._quick ? fmtTemp(shown) : "–"}</span>
-        <button class="qbtn" data-quick="0.5" title="0,5 °C wärmer bis zum nächsten Schaltpunkt"><ha-icon icon="mdi:plus"></ha-icon></button>
+        <button class="qbtn" data-quick="0.5" title="${WT().warmer}"><ha-icon icon="mdi:plus"></ha-icon></button>
         <span class="qtext">${esc(label)}</span>
-        ${temporary && !this._quick ? `<button class="text qreset">Zurück zum Plan</button>` : ""}
+        ${temporary && !this._quick ? `<button class="text qreset">${WT().backToPlan}</button>` : ""}
       </div>`;
   }
 
@@ -647,10 +843,10 @@ class CulMaxWeekProfileCard extends HTMLElement {
         return {
           id,
           name: st.attributes.friendly_name || id,
-          area: (areaId && this._hass.areas?.[areaId]?.name) || "Ohne Bereich",
+          area: (areaId && this._hass.areas?.[areaId]?.name) || WT().noArea,
         };
       })
-      .sort((a, b) => a.area.localeCompare(b.area, "de") || a.name.localeCompare(b.name, "de"));
+      .sort((a, b) => a.area.localeCompare(b.area, "de") || a.name.localeCompare(b.name, wLocale));
   }
 
   _areaOf(entityId) {
@@ -675,7 +871,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
         unit: st.attributes.unit_of_measurement,
         sameArea: Boolean(areaId) && this._areaOf(st.entity_id) === areaId,
       }))
-      .sort((a, b) => Number(b.sameArea) - Number(a.sameArea) || a.name.localeCompare(b.name, "de"));
+      .sort((a, b) => Number(b.sameArea) - Number(a.sameArea) || a.name.localeCompare(b.name, wLocale));
   }
 
   _sensorRowHtml(stateObjs, shortNames) {
@@ -687,33 +883,33 @@ class CulMaxWeekProfileCard extends HTMLElement {
     const sensorName = (id) => this._hass.states[id]?.attributes?.friendly_name || id;
     const statusText = (a) => {
       const at = a.external_temperature_sent_at
-        ? new Date(a.external_temperature_sent_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })
+        ? new Date(a.external_temperature_sent_at).toLocaleTimeString(wLocale, { hour: "2-digit", minute: "2-digit" })
         : "";
       switch (a.external_temperature_status) {
         case "active":
-          return { level: "ok", text: `bestätigt ${at}` };
+          return { level: "ok", text: WT().confirmedAt(at) };
         case "waiting":
-          return { level: "info", text: "wird übertragen …" };
+          return { level: "info", text: WT().sending };
         case "unconfirmed":
-          return { level: "warn", text: "vom Thermostat nicht bestätigt, neuer Versuch folgt" };
+          return { level: "warn", text: WT().unconfirmed };
         case "sensor_stale":
-          return { level: "warn", text: "Sensor liefert keine aktuellen Werte – Thermostat regelt selbst" };
+          return { level: "warn", text: WT().sensorStale };
         default:
-          return { level: "warn", text: "Sensor nicht verfügbar – Thermostat regelt selbst" };
+          return { level: "warn", text: WT().sensorMissing };
       }
     };
     const sensors = [...new Set(supported.map(({ st }) => st.attributes.external_temperature_sensor || ""))];
     let body;
     if (sensors.length === 1 && !sensors[0]) {
-      body = `<span>Regelung nach: <b>Fühler am Thermostat</b></span>`;
+      body = `<span>${WT().regulateOn}: <b>${WT().ownSensor}</b></span>`;
     } else {
       body = supported
         .map(({ st, name }) => {
           const a = st.attributes;
           const who = supported.length > 1 ? `${esc(name)}: ` : "";
-          if (!a.external_temperature_sensor) return `<div>${who}<b>Fühler am Thermostat</b></div>`;
+          if (!a.external_temperature_sensor) return `<div>${who}<b>${WT().ownSensor}</b></div>`;
           const stat = statusText(a);
-          return `<div>${who}Regelung nach <b>${esc(sensorName(a.external_temperature_sensor))}</b>${
+          return `<div>${who}${WT().regulateOn} <b>${esc(sensorName(a.external_temperature_sensor))}</b>${
             a.external_temperature != null ? ` ${fmtTemp(a.external_temperature)}` : ""
           } <span class="reg-state ${stat.level}">${esc(stat.text)}</span></div>`;
         })
@@ -728,23 +924,20 @@ class CulMaxWeekProfileCard extends HTMLElement {
           (x) =>
             `<option value="${esc(x.id)}" ${x.id === ed.value ? "selected" : ""}>${esc(x.name)} (${esc(x.value)} ${esc(
               x.unit
-            )})${x.sameArea ? " · gleicher Raum" : ""}</option>`
+            )})${x.sameArea ? ` · ${WT().sameRoom}` : ""}</option>`
         )
         .join("");
       editor = `
         <div class="reg-editor">
           <select class="reg-select" ${ed.busy ? "disabled" : ""}>
-            <option value="" ${!ed.value ? "selected" : ""}>Fühler am Thermostat (Standard)</option>
+            <option value="" ${!ed.value ? "selected" : ""}>${WT().ownSensorDefault}</option>
             ${options}
           </select>
-          <div class="ed-note">Das Thermostat regelt dann nach diesem Sensor statt nach seinem Fühler am
-            Heizkörper (virtuelles Wandthermostat). Das Wochenprogramm bleibt auf dem Thermostat.${
-              supported.length > 1 ? " Gilt für alle Thermostate dieser Karte." : ""
-            }</div>
+          <div class="ed-note">${WT().sensorNote(supported.length > 1)}</div>
           ${ed.error ? `<div class="status error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><span>${esc(ed.error)}</span></div>` : ""}
           <div class="ed-actions">
-            <button class="text reg-cancel" ${ed.busy ? "disabled" : ""}>Abbrechen</button>
-            <button class="primary reg-save" ${ed.busy ? "disabled" : ""}>${ed.busy ? "Wird eingerichtet …" : "Übernehmen"}</button>
+            <button class="text reg-cancel" ${ed.busy ? "disabled" : ""}>${WT().cancel}</button>
+            <button class="primary reg-save" ${ed.busy ? "disabled" : ""}>${ed.busy ? WT().settingUp : WT().apply}</button>
           </div>
         </div>`;
     }
@@ -752,7 +945,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
       <div class="reg">
         <ha-icon icon="mdi:home-thermometer-outline"></ha-icon>
         <div class="reg-body">${body}</div>
-        ${canEdit && !ed ? `<button class="text reg-edit">ändern</button>` : ""}
+        ${canEdit && !ed ? `<button class="text reg-edit">${WT().change}</button>` : ""}
       </div>
       ${editor}`;
   }
@@ -787,7 +980,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
     const tempOptions = (selected) => {
       const options = [];
       for (let t = TEMP_MIN; t <= TEMP_MAX + 0.001; t += 0.5) {
-        const label = t <= TEMP_MIN ? "Aus (4,5)" : t.toLocaleString("de-DE", { minimumFractionDigits: 1 });
+        const label = t <= TEMP_MIN ? WT().offOption : t.toLocaleString(wLocale, { minimumFractionDigits: 1 });
         options.push(`<option value="${t}" ${Math.abs(t - selected) < 0.01 ? "selected" : ""}>${label}</option>`);
       }
       return options.join("");
@@ -803,11 +996,11 @@ class CulMaxWeekProfileCard extends HTMLElement {
               last
                 ? `<span class="ed-until fixed">24:00</span>`
                 : `<input class="ed-until" type="text" inputmode="numeric" maxlength="5" placeholder="hh:mm"
-                     aria-label="bis (hh:mm)" value="${Number.isFinite(seg.until) ? toHHMM(seg.until) : ""}" ${ed.busy ? "disabled" : ""}>`
+                     aria-label="${WT().untilLabel}" value="${Number.isFinite(seg.until) ? toHHMM(seg.until) : ""}" ${ed.busy ? "disabled" : ""}>`
             }
             <select class="ed-temp" ${ed.busy ? "disabled" : ""}>${tempOptions(seg.temp)}</select>
             <span class="ed-unit">°C</span>
-            <button class="icon ed-remove" title="Abschnitt entfernen" ${
+            <button class="icon ed-remove" title="${WT().removeSegment}" ${
               ed.segments.length <= 1 || ed.busy ? "disabled" : ""
             }><ha-icon icon="mdi:close"></ha-icon></button>
           </div>`;
@@ -823,43 +1016,43 @@ class CulMaxWeekProfileCard extends HTMLElement {
       .join("");
     return `
       <div class="editor">
-        <div class="ed-title">${longLabel} bearbeiten${
-          targetNames ? `<span class="ed-targets">für ${esc(targetNames.join(" + "))}</span>` : ""
+        <div class="ed-title">${esc(WT().editTitle(longLabel))}${
+          targetNames ? `<span class="ed-targets">${esc(WT().forTargets(targetNames.join(" + ")))}</span>` : ""
         }</div>
         <div class="ed-list">${segRows}</div>
         <button class="text ed-add" ${ed.segments.length >= MAX_POINTS || ed.busy ? "disabled" : ""}>
-          <ha-icon icon="mdi:plus"></ha-icon>Schaltpunkt
+          <ha-icon icon="mdi:plus"></ha-icon>${WT().addPoint}
         </button>
         <div class="ed-copy">
-          <span>Auch übernehmen für:</span>
+          <span>${WT().alsoApply}</span>
           <div class="copy-days">${copyBoxes}</div>
           <div class="copy-presets">
-            <button class="text" data-preset="workdays" ${ed.busy ? "disabled" : ""}>Mo–Fr</button>
-            <button class="text" data-preset="weekend" ${ed.busy ? "disabled" : ""}>Sa–So</button>
-            <button class="text" data-preset="all" ${ed.busy ? "disabled" : ""}>Alle</button>
-            <button class="text" data-preset="none" ${ed.busy ? "disabled" : ""}>Keine</button>
+            <button class="text" data-preset="workdays" ${ed.busy ? "disabled" : ""}>${WT().workdays}</button>
+            <button class="text" data-preset="weekend" ${ed.busy ? "disabled" : ""}>${WT().weekend}</button>
+            <button class="text" data-preset="all" ${ed.busy ? "disabled" : ""}>${WT().all}</button>
+            <button class="text" data-preset="none" ${ed.busy ? "disabled" : ""}>${WT().none}</button>
           </div>
         </div>
         ${this._sourceHtml(ed, longLabel)}
         ${ed.error ? `<div class="status error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><span>${esc(ed.error)}</span></div>` : ""}
         <div class="ed-actions">
-          <button class="text ed-cancel" ${ed.busy ? "disabled" : ""}>Abbrechen</button>
+          <button class="text ed-cancel" ${ed.busy ? "disabled" : ""}>${WT().cancel}</button>
           <button class="primary ed-save" ${ed.busy ? "disabled" : ""}>
-            ${ed.busy ? `Wird übertragen${ed.progress ? ` (${ed.progress})` : ""} …` : "Übertragen"}
+            ${ed.busy ? WT().uploadingProgress(ed.progress) : WT().upload}
           </button>
         </div>
-        <div class="ed-note">Jeder Tag braucht 1–2 Funkpakete. Thermostate übernehmen das Profil, sobald sie es empfangen haben; der Fortschritt erscheint oben.</div>
+        <div class="ed-note">${WT().radioNote}</div>
       </div>`;
   }
 
   _sourceHtml(ed, longLabel) {
     if (!ed.source) {
-      return `<button class="text small ed-src-open" ${ed.busy ? "disabled" : ""}>Aus anderem Raum übernehmen …</button>`;
+      return `<button class="text small ed-src-open" ${ed.busy ? "disabled" : ""}>${WT().fromOtherRoom}</button>`;
     }
     const sources = this._copySources();
     if (!sources.length) {
-      return `<div class="ed-src"><span class="muted">Kein anderes MAX!-Thermostat mit bekanntem Wochenprogramm.</span>
-        <button class="text small ed-src-close">Schließen</button></div>`;
+      return `<div class="ed-src"><span class="muted">${WT().noOtherThermostat}</span>
+        <button class="text small ed-src-close">${WT().close}</button></div>`;
     }
     const src = ed.source;
     if (!src.entity || !sources.some((s) => s.id === src.entity)) src.entity = sources[0].id;
@@ -889,25 +1082,24 @@ class CulMaxWeekProfileCard extends HTMLElement {
                   )}"></div>`
               )
               .join("")
-          : `<div class="mempty">unbekannt</div>`;
+          : `<div class="mempty">${WT().unknown}</div>`;
         return `<div class="mrow"><span>${short}</span><div class="mbar">${inner}</div></div>`;
       }).join("");
       const targets = this._entityIds().length;
       preview = `<div class="mini">${bars}</div>
-        <div class="muted">Überträgt die ganze Woche${targets > 1 ? ` an ${targets} Thermostate` : ""} – bis zu 14 Funkpakete pro
-          Thermostat, das dauert einige Minuten.${unknown.length ? ` Unbekannt und übersprungen: ${unknown.join(", ")}.` : ""}</div>`;
+        <div class="muted">${WT().weekNote(targets, unknown.join(", "))}</div>`;
     }
     return `<div class="ed-src">
         <div class="ed-src-row">
           <select class="ed-src-entity" ${ed.busy ? "disabled" : ""}>${groups}</select>
-          <label><input type="radio" name="srcscope" value="day" ${src.scope !== "week" ? "checked" : ""}> nur ${esc(longLabel)}</label>
-          <label><input type="radio" name="srcscope" value="week" ${src.scope === "week" ? "checked" : ""}> ganze Woche</label>
+          <label><input type="radio" name="srcscope" value="day" ${src.scope !== "week" ? "checked" : ""}> ${esc(WT().onlyDay(longLabel))}</label>
+          <label><input type="radio" name="srcscope" value="week" ${src.scope === "week" ? "checked" : ""}> ${WT().wholeWeek}</label>
         </div>
         ${preview}
         <div class="ed-src-row end">
-          <button class="text small ed-src-close" ${ed.busy ? "disabled" : ""}>Abbrechen</button>
+          <button class="text small ed-src-close" ${ed.busy ? "disabled" : ""}>${WT().cancel}</button>
           <button class="text small ed-src-apply" ${ed.busy ? "disabled" : ""}>${
-      src.scope === "week" ? "Ganze Woche übertragen" : "In den Editor übernehmen"
+      src.scope === "week" ? WT().sendWholeWeek : WT().intoEditor
     }</button>
         </div>
       </div>`;
@@ -921,7 +1113,7 @@ class CulMaxWeekProfileCard extends HTMLElement {
     if (src.scope !== "week") {
       const segments = parseDay(attrs[`week_profile_${ed.day}`]);
       if (!segments.length) {
-        ed.error = "Für diesen Tag ist das Programm dort unbekannt.";
+        ed.error = WT().dayUnknownThere;
       } else {
         ed.segments = segments.map((seg) => ({ ...seg }));
         ed.source = null;
@@ -1391,7 +1583,7 @@ if (!customElements.get("cul-max-week-profile-card")) {
 
 class CulMaxWeekProfileCardEditor extends HTMLElement {
   setConfig(config) {
-    const cfg = { title: "Wochenprofil", show_current_temp: true, editable: true, ...config };
+    const cfg = { show_current_temp: true, editable: true, ...config };
     // normalise: first thermostat in "entity", further ones in "entities"
     if (Array.isArray(cfg.entities) && cfg.entities.length) {
       const ids = cfg.entities.map((e) => (typeof e === "string" ? e : e?.entity)).filter(Boolean);
@@ -1416,6 +1608,7 @@ class CulMaxWeekProfileCardEditor extends HTMLElement {
   set hass(hass) {
     const first = !this._hass;
     this._hass = hass;
+    wSetLang(hass);
     if (first) this._render();
   }
 
@@ -1423,7 +1616,7 @@ class CulMaxWeekProfileCardEditor extends HTMLElement {
     return Object.entries(this._hass?.states || {})
       .filter(([entityId, state]) => CulMaxWeekProfileCard._isCulMaxClimate(entityId, state))
       .map(([entityId, state]) => ({ entity_id: entityId, label: state.attributes.friendly_name || entityId }))
-      .sort((a, b) => a.label.localeCompare(b.label, "de"));
+      .sort((a, b) => a.label.localeCompare(b.label, wLocale));
   }
 
   _emitConfig(config) {
@@ -1444,9 +1637,9 @@ class CulMaxWeekProfileCardEditor extends HTMLElement {
     this.innerHTML = `
       <div class="cmwp-editor">
         <label><span>Thermostat</span>
-          <select data-field="entity"><option value="">Bitte wählen</option>${options}</select>
+          <select data-field="entity"><option value="">${WT().pick}</option>${options}</select>
         </label>
-        <div class="extras"><span>Weitere Thermostate im selben Raum (gemeinsame Karte)</span>
+        <div class="extras"><span>${WT().moreThermostats}</span>
           ${this._availableEntities()
             .filter((entry) => entry.entity_id !== this._config.entity)
             .map(
@@ -1456,16 +1649,16 @@ class CulMaxWeekProfileCardEditor extends HTMLElement {
             )
             .join("")}
         </div>
-        <label><span>Titel</span>
+        <label><span>${WT().titleLabel}</span>
           <input data-field="title" type="text" value="${esc(this._config.title || "")}" />
         </label>
         <label class="checkbox">
           <input data-field="show_current_temp" type="checkbox" ${this._config.show_current_temp ? "checked" : ""} />
-          <span>Ist-Temperatur anzeigen</span>
+          <span>${WT().showCurrent}</span>
         </label>
         <label class="checkbox">
           <input data-field="editable" type="checkbox" ${this._config.editable !== false ? "checked" : ""} />
-          <span>Bearbeiten in der Karte erlauben</span>
+          <span>${WT().allowEdit}</span>
         </label>
       </div>
       <style>
@@ -1519,7 +1712,7 @@ if (!window.customCards.some((card) => card.type === "cul-max-week-profile-card"
   window.customCards.push({
     type: "cul-max-week-profile-card",
     name: "CUL MAX Week Profile",
-    description: "Wochenplan-Karte für MAX!-Thermostate mit Zeitleiste, Status und Bearbeitung",
+    description: "Week program card for MAX! thermostats with timeline, status and editing",
     preview: true,
     documentationURL: "https://github.com/thnow/MAX-via-Cul/blob/main/README.md",
   });

@@ -17,19 +17,96 @@ const pEsc = (value) =>
     "'": "&#39;",
   })[ch]);
 
-const TYPE_INFO = {
-  HeatingThermostat: { label: "Thermostat", icon: "mdi:radiator", hint: "Boost-Taste ca. 3 s drücken" },
-  HeatingThermostatPlus: { label: "Thermostat", icon: "mdi:radiator", hint: "Boost-Taste ca. 3 s drücken" },
-  WallMountedThermostat: { label: "Wandthermostat", icon: "mdi:thermostat", hint: "Boost-Taste ca. 3 s drücken" },
-  ShutterContact: { label: "Fensterkontakt", icon: "mdi:window-closed-variant", hint: "Anlerntaste ca. 3 s drücken" },
-  PushButton: { label: "Taster", icon: "mdi:gesture-tap-button", hint: "beide Tasten ca. 3 s drücken" },
+const TYPE_ICONS = {
+  HeatingThermostat: "mdi:radiator",
+  HeatingThermostatPlus: "mdi:radiator",
+  WallMountedThermostat: "mdi:thermostat",
+  ShutterContact: "mdi:window-closed-variant",
+  PushButton: "mdi:gesture-tap-button",
 };
+
+// UI language: German for "de*", English for everything else.
+const P_TEXT = {
+  de: {
+    types: {
+      HeatingThermostat: "Thermostat",
+      HeatingThermostatPlus: "Thermostat",
+      WallMountedThermostat: "Wandthermostat",
+      ShutterContact: "Fensterkontakt",
+      PushButton: "Taster",
+    },
+    device: "Gerät",
+    title: "MAX! anlernen",
+    unavailable: "Anlernen nicht verfügbar (Integration ab 0.6.2 nötig)",
+    savedRoom: "Gespeichert – Verknüpfung im Raum läuft (siehe Funk-Warteschlange)",
+    saved: "Gespeichert",
+    noArea: "– kein Bereich –",
+    known: "bereits bekannt",
+    isNew: "neu",
+    serial: "Seriennummer",
+    name: "Name",
+    area: "Bereich",
+    link: "mit den MAX!-Geräten im Bereich verknüpfen (Gruppe und Verknüpfungen)",
+    saving: "Speichert …",
+    apply: "Übernehmen",
+    loading: "Lade …",
+    active: "Anlernmodus aktiv",
+    left: "noch",
+    howTo: "Am Gerät: Thermostat/Wandthermostat Boost-Taste, Fensterkontakt Anlerntaste jeweils ca. 3 s drücken.",
+    stop: "Beenden",
+    start: "Anlernen starten",
+    rejected: (address, central) =>
+      `Gerät <b>${address}</b> gehört noch zu einer anderen Zentrale (${central}) und wurde nicht übernommen. Gerät zurücksetzen (Batterien raus, Boost- bzw. Anlerntaste beim Einlegen gedrückt halten) und erneut anlernen.`,
+    found: "In dieser Sitzung gefunden",
+    nothingYet: "Noch kein Gerät gemeldet …",
+  },
+  en: {
+    types: {
+      HeatingThermostat: "Thermostat",
+      HeatingThermostatPlus: "Thermostat",
+      WallMountedThermostat: "Wall thermostat",
+      ShutterContact: "Window contact",
+      PushButton: "Push button",
+    },
+    device: "Device",
+    title: "Pair MAX!",
+    unavailable: "Pairing not available (integration 0.6.2 or newer needed)",
+    savedRoom: "Saved – linking the room is running (see radio queue)",
+    saved: "Saved",
+    noArea: "– no area –",
+    known: "already known",
+    isNew: "new",
+    serial: "Serial number",
+    name: "Name",
+    area: "Area",
+    link: "link with the MAX! devices in the area (group and links)",
+    saving: "Saving …",
+    apply: "Apply",
+    loading: "Loading …",
+    active: "Pairing mode active",
+    left: "",
+    howTo: "On the device: thermostat/wall thermostat hold Boost, window contact hold the pairing button for about 3 s.",
+    stop: "Stop",
+    start: "Start pairing",
+    rejected: (address, central) =>
+      `Device <b>${address}</b> still belongs to another central (${central}) and was not taken over. Reset the device (remove the batteries, hold Boost or the pairing button while inserting them) and pair it again.`,
+    found: "Found in this session",
+    nothingYet: "No device reported yet …",
+  },
+};
+
+const pLang = (hass) =>
+  String(hass?.locale?.language || hass?.language || "en").toLowerCase().startsWith("de") ? "de" : "en";
 
 const DURATIONS = [60, 120, 300];
 
 class CulMaxPairingCard extends HTMLElement {
   static getStubConfig() {
-    return { title: "MAX! anlernen" };
+    return {};
+  }
+
+  get _t() {
+    return P_TEXT[pLang(this._hass)];
   }
 
   constructor() {
@@ -44,7 +121,7 @@ class CulMaxPairingCard extends HTMLElement {
   }
 
   setConfig(config) {
-    this._config = { title: "MAX! anlernen", ...(config || {}) };
+    this._config = { ...(config || {}) };
     this._render();
   }
 
@@ -106,7 +183,7 @@ class CulMaxPairingCard extends HTMLElement {
         { type: "cul_max/pairing/subscribe" }
       )
       .catch((err) => {
-        this._error = err?.message || "Anlernen nicht verfügbar (Integration ab 0.6.2 nötig)";
+        this._error = err?.message || this._t.unavailable;
         this._unsub = null;
         this._render();
       });
@@ -118,11 +195,11 @@ class CulMaxPairingCard extends HTMLElement {
   }
 
   _areas() {
-    return Object.values(this._hass?.areas || {}).sort((a, b) => a.name.localeCompare(b.name, "de"));
+    return Object.values(this._hass?.areas || {}).sort((a, b) => a.name.localeCompare(b.name, this._hass?.locale?.language || undefined));
   }
 
   _suggestName(type, areaId, deviceId) {
-    const label = (TYPE_INFO[type] || {}).label || type || "Gerät";
+    const label = this._t.types[type] || type || this._t.device;
     const area = areaId ? this._hass.areas?.[areaId]?.name : "";
     const base = area ? `${label} ${area}` : label;
     const taken = new Set(
@@ -185,10 +262,10 @@ class CulMaxPairingCard extends HTMLElement {
         link_room: Boolean(form.link && form.area),
       });
       form.saved = result.room === "started"
-        ? "Gespeichert – Verknüpfung im Raum läuft (siehe Funk-Warteschlange)"
+        ? this._t.savedRoom
         : result.room_error
-          ? `Gespeichert – ${result.room_error}`
-          : "Gespeichert";
+          ? `${this._t.saved} – ${result.room_error}`
+          : this._t.saved;
     } catch (err) {
       form.error = err?.message || String(err);
     } finally {
@@ -206,9 +283,13 @@ class CulMaxPairingCard extends HTMLElement {
   }
 
   _deviceHtml(device) {
-    const info = TYPE_INFO[device.device_type] || { label: device.device_type, icon: "mdi:help-circle-outline" };
+    const T = this._t;
+    const info = {
+      label: T.types[device.device_type] || device.device_type,
+      icon: TYPE_ICONS[device.device_type] || "mdi:help-circle-outline",
+    };
     const form = this._form(device);
-    const areaOptions = [`<option value="">– kein Bereich –</option>`]
+    const areaOptions = [`<option value="">${T.noArea}</option>`]
       .concat(
         this._areas().map(
           (a) => `<option value="${pEsc(a.area_id)}" ${a.area_id === form.area ? "selected" : ""}>${pEsc(a.name)}</option>`
@@ -220,33 +301,34 @@ class CulMaxPairingCard extends HTMLElement {
           <ha-icon icon="${info.icon}"></ha-icon>
           <div>
             <div class="devtitle">${pEsc(info.label)} <span class="badge ${device.already_known ? "known" : "new"}">${
-      device.already_known ? "bereits bekannt" : "neu"
+      device.already_known ? T.known : T.isNew
     }</span></div>
-            <div class="sub">Seriennummer ${pEsc(device.serial_number || "–")}</div>
+            <div class="sub">${T.serial} ${pEsc(device.serial_number || "–")}</div>
           </div>
         </div>
         <div class="grid">
-          <label><span>Name</span><input data-f="name" value="${pEsc(form.name)}" ${form.saving ? "disabled" : ""}></label>
-          <label><span>Bereich</span><select data-f="area" ${form.saving ? "disabled" : ""}>${areaOptions}</select></label>
+          <label><span>${T.name}</span><input data-f="name" value="${pEsc(form.name)}" ${form.saving ? "disabled" : ""}></label>
+          <label><span>${T.area}</span><select data-f="area" ${form.saving ? "disabled" : ""}>${areaOptions}</select></label>
         </div>
         <label class="check"><input type="checkbox" data-f="link" ${form.link ? "checked" : ""} ${
       form.saving || !form.area ? "disabled" : ""
-    }> mit den MAX!-Geräten im Bereich verknüpfen (Gruppe und Verknüpfungen)</label>
+    }> ${T.link}</label>
         <div class="actions">
           ${form.saved ? `<span class="ok">${pEsc(form.saved)}</span>` : ""}
           ${form.error ? `<span class="err">${pEsc(form.error)}</span>` : ""}
-          <button class="primary" data-save ${form.saving ? "disabled" : ""}>${form.saving ? "Speichert …" : "Übernehmen"}</button>
+          <button class="primary" data-save ${form.saving ? "disabled" : ""}>${form.saving ? T.saving : T.apply}</button>
         </div>
       </div>`;
   }
 
   _render() {
     if (!this._config) return;
+    const T = this._t;
     const gateways = this._data?.gateways || [];
     const gw = this._gw();
     let body;
     if (this._error && !this._data) body = `<div class="msg">${pEsc(this._error)}</div>`;
-    else if (!gw) body = `<div class="msg">Lade …</div>`;
+    else if (!gw) body = `<div class="msg">${T.loading}</div>`;
     else {
       const gwSelect =
         gateways.length > 1
@@ -257,33 +339,36 @@ class CulMaxPairingCard extends HTMLElement {
       const control = gw.active
         ? `<div class="active">
              <div class="pulse"></div>
-             <div class="atext"><b>Anlernmodus aktiv</b> – noch <span class="countdown"></span><br>
-               <span class="sub">Am Gerät: Thermostat/Wandthermostat Boost-Taste, Fensterkontakt Anlerntaste jeweils ca. 3 s drücken.</span></div>
-             <button class="ghost" data-stop>Beenden</button>
+             <div class="atext"><b>${T.active}</b> – ${T.left} <span class="countdown"></span><br>
+               <span class="sub">${T.howTo}</span></div>
+             <button class="ghost" data-stop>${T.stop}</button>
            </div>`
         : `<div class="start">
              <select data-duration>${DURATIONS.map(
                (d) => `<option value="${d}" ${d === this._duration ? "selected" : ""}>${d < 120 ? `${d} s` : `${d / 60} min`}</option>`
              ).join("")}</select>
-             <button class="primary" data-start>Anlernen starten</button>
+             <button class="primary" data-start>${T.start}</button>
            </div>`;
       const devices = (gw.devices || []).map((d) => this._deviceHtml(d)).join("");
       const rejected = (gw.rejected || [])
         .map(
-          (r) => `<div class="rej"><ha-icon icon="mdi:link-off"></ha-icon><span>Gerät <b>${pEsc(r.address)}</b> gehört noch zu
-            einer anderen Zentrale (${pEsc(r.central)}) und wurde nicht übernommen. Gerät zurücksetzen (Batterien raus,
-            Boost- bzw. Anlerntaste beim Einlegen gedrückt halten) und erneut anlernen.</span></div>`
+          (r) => `<div class="rej"><ha-icon icon="mdi:link-off"></ha-icon><span>${T.rejected(
+            pEsc(r.address),
+            pEsc(r.central)
+          )}</span></div>`
         )
         .join("");
       const listTitle = gw.started_at
-        ? `<div class="ltitle">In dieser Sitzung gefunden</div>`
+        ? `<div class="ltitle">${T.found}</div>`
         : "";
       body = `${gwSelect}${control}
         ${this._error ? `<div class="err">${pEsc(this._error)}</div>` : ""}
-        ${devices || rejected ? `${listTitle}${devices}${rejected}` : gw.active ? `<div class="msg">Noch kein Gerät gemeldet …</div>` : ""}`;
+        ${devices || rejected ? `${listTitle}${devices}${rejected}` : gw.active ? `<div class="msg">${T.nothingYet}</div>` : ""}`;
     }
     this.shadowRoot.innerHTML = `${this._style()}<ha-card><div class="wrapper">
-        <div class="header"><ha-icon icon="mdi:link-plus"></ha-icon><div class="title">${pEsc(this._config.title)}</div></div>
+        <div class="header"><ha-icon icon="mdi:link-plus"></ha-icon><div class="title">${pEsc(
+          !this._config.title || this._config.title === P_TEXT.de.title ? T.title : this._config.title
+        )}</div></div>
         ${body}</div></ha-card>`;
     this._bind();
     this._updateCountdown();
@@ -379,8 +464,8 @@ window.customCards = window.customCards || [];
 if (!window.customCards.some((card) => card.type === "cul-max-pairing-card")) {
   window.customCards.push({
     type: "cul-max-pairing-card",
-    name: "CUL MAX Anlernen",
-    description: "MAX!-Geräte anlernen: Countdown, gefundene Geräte, Namensvorschlag, Bereich und Verknüpfung",
+    name: "CUL MAX pairing",
+    description: "Pair MAX! devices: countdown, found devices, suggested name, area and room link",
     preview: false,
     documentationURL: "https://github.com/thnow/MAX-via-Cul/blob/main/README.md",
   });
