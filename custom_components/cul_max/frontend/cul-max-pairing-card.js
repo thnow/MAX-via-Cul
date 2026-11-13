@@ -25,7 +25,8 @@ const TYPE_ICONS = {
   PushButton: "mdi:gesture-tap-button",
 };
 
-// UI language: German for "de*", English for everything else.
+// UI language: the profile language if this card has texts for it, else
+// English (see TRANSLATING.md).
 const P_TEXT = {
   de: {
     types: {
@@ -95,8 +96,12 @@ const P_TEXT = {
   },
 };
 
-const pLang = (hass) =>
-  String(hass?.locale?.language || hass?.language || "en").toLowerCase().startsWith("de") ? "de" : "en";
+/** Language of the user profile if this card has texts for it, else English. */
+const pLang = (hass) => {
+  const language = String(hass?.locale?.language || hass?.language || "en").toLowerCase();
+  const base = language.split("-")[0];
+  return P_TEXT[language] ? language : P_TEXT[base] ? base : "en";
+};
 
 const DURATIONS = [60, 120, 300];
 
@@ -106,7 +111,8 @@ class CulMaxPairingCard extends HTMLElement {
   }
 
   get _t() {
-    return P_TEXT[pLang(this._hass)];
+    const lang = pLang(this._hass);
+    return { ...P_TEXT.en, ...(P_TEXT[lang] || {}) };
   }
 
   constructor() {

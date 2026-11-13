@@ -1299,6 +1299,12 @@ verlorenen Paketen. Die 1-s-Weckpraeambel pro Paket an ein schlafendes
 Thermostat bleibt, deshalb wird ein Wochenprofil dadurch nicht wesentlich
 schneller uebertragen.
 
+## Weitere Sprachen
+
+Die Integration ist komplett auf Deutsch und Englisch. Wie man eine weitere
+Sprache ergänzt (eine JSON-Datei plus ein Textblock pro Karte), steht in
+[TRANSLATING.md](https://github.com/thnow/MAX-via-Cul/blob/main/TRANSLATING.md).
+
 ## Tests
 
 Ein kleines Regressionstest-Paket fuer die wichtigsten Protokollpfade liegt
