@@ -2,997 +2,1027 @@
   "config": {
     "step": {
       "user": {
-        "title": "MAX! via CUL einrichten",
-        "description": "Wie ist der CUL angeschlossen?",
+        "title": "Set up MAX! via CUL",
+        "description": "How is the CUL connected?",
         "menu_options": {
-          "network": "Netzwerk (MAX! Cube mit a-culfw, CUNO, ser2net …)",
-          "serial": "USB-Stick / seriell (z. B. CUL, nanoCUL)"
+          "network": "Network (MAX! Cube with a-culfw, CUNO, ser2net …)",
+          "serial": "USB stick / serial (e.g. CUL, nanoCUL)"
         }
       },
       "network": {
-        "title": "MAX! via CUL einrichten",
-        "description": "Verbindung zu einem CULFW-Gerät über TCP.",
+        "title": "Set up MAX! via CUL",
+        "description": "Connect to a CULFW device via TCP.",
         "data": {
-          "host": "IP-Adresse oder Hostname des CULFW-Geräts",
-          "port": "TCP-Port (Standard: 2323)",
-          "own_address": "Eigene CUL-Adresse (6-stellig hex, Standard: 123456)"
+          "host": "IP address or host name of the CULFW device",
+          "port": "TCP port (default: 2323)",
+          "own_address": "Own CUL address (6 hex digits, default: 123456)"
         }
       },
       "serial": {
-        "title": "MAX! via CUL einrichten",
-        "description": "CUL-Stick am USB-Port. Am besten den stabilen Namen unter /dev/serial/by-id/ wählen.",
+        "title": "Set up MAX! via CUL",
+        "description": "CUL stick on a USB port. Prefer the stable name below /dev/serial/by-id/.",
         "data": {
-          "device": "Serielles Gerät",
-          "baudrate": "Baudrate (CUL: 38400)",
-          "own_address": "Eigene CUL-Adresse (6-stellig hex, Standard: 123456)"
+          "device": "Serial device",
+          "baudrate": "Baud rate (CUL: 38400)",
+          "own_address": "Own CUL address (6 hex digits, default: 123456)"
         }
       }
     },
     "error": {
-      "cannot_connect": "Verbindung fehlgeschlagen. Prüfe IP-Adresse, Port und ob das Gerät erreichbar ist.",
-      "cannot_connect_serial": "Kein CULFW an diesem Port gefunden. Prüfe Gerät, Baudrate und ob der Port frei ist."
+      "cannot_connect": "Connection failed. Check IP address, port and whether the device is reachable.",
+      "cannot_connect_serial": "No CULFW found on this port. Check the device, baud rate and that the port is not in use."
     },
     "abort": {
-      "already_configured": "Dieses Gerät ist bereits konfiguriert."
+      "already_configured": "This device is already configured."
+    }
+  },
+  "selector": {
+    "summer_valve": {
+      "options": {
+        "closed": "Off – valve closed",
+        "open": "On – valve fully open"
+      }
     }
   },
   "services": {
     "start_pairing": {
-      "name": "Pairing starten",
-      "description": "Aktiviert den Pairing-Modus fuer eine frei waehbare Dauer. Drücke danach den Pairing-Knopf am MAX!-Gerät um es anzumelden.",
+      "name": "Start pairing",
+      "description": "Opens the pairing window for a chosen time. Then press the pairing button on the MAX! device to add it.",
       "fields": {
         "duration": {
-          "name": "Dauer",
-          "description": "Pairing-Fenster in Sekunden, Standard 60"
+          "name": "Duration",
+          "description": "Pairing window in seconds, default 60"
         },
         "gateway": {
           "name": "Gateway",
-          "description": "Nur bei mehreren CULs nötig – welches Gateway gemeint ist"
+          "description": "Only needed with several CULs – which gateway is meant"
         }
       }
     },
     "set_device_name": {
-      "name": "Gerätename setzen",
-      "description": "Ändert den Anzeigenamen eines bekannten MAX!-Geräts.",
+      "name": "Set device name",
+      "description": "Changes the display name of a known MAX! device.",
       "fields": {
         "address": {
-          "name": "Adresse",
-          "description": "6-stellige Hex-Adresse des Geräts (z.B. 1A2B3C)"
+          "name": "Address",
+          "description": "6-digit hex address of the device (e.g. 1A2B3C)"
         },
         "entity_id": {
           "name": "Thermostat",
-          "description": "Alternativ ein MAX!-Climate-Entity direkt auswählen"
+          "description": "Alternatively pick a MAX! climate entity"
         },
         "device_name": {
-          "name": "Geraetename",
-          "description": "Alternativ den gespeicherten MAX!-Geraetenamen angeben"
+          "name": "Device name",
+          "description": "Alternatively the stored MAX! device name"
         },
         "name": {
           "name": "Name",
-          "description": "Neuer Anzeigename"
+          "description": "New display name"
         }
       }
     },
     "wake_thermostats": {
-      "name": "Thermostate wecken",
-      "description": "Sendet WakeUp-Befehle manuell an alle bekannten Thermostate, um sofortige State-Updates oder Konfigurationsschritte zu triggern. Nicht fuer den Dauerbetrieb gedacht, da haeufiges Wecken Batterielaufzeit und Funklast erhoeht.",
+      "name": "Wake thermostats",
+      "description": "Sends WakeUp to all known thermostats to trigger immediate state updates or configuration steps. Not meant for regular use: frequent wake-ups cost battery and radio time.",
       "fields": {
         "gateway": {
           "name": "Gateway",
-          "description": "Nur bei mehreren CULs nötig – welches Gateway gemeint ist"
+          "description": "Only needed with several CULs – which gateway is meant"
         }
       }
     },
     "sync_time": {
-      "name": "Uhrzeit synchronisieren",
-      "description": "Sendet die aktuelle lokale Uhrzeit an ausgewaehlte oder alle bekannten MAX!-Thermostate und Wandthermostate. Das ist besonders hilfreich, wenn Wochenprogramme nicht zum aktuellen Wochentag oder zur Uhrzeit zu passen scheinen.",
+      "name": "Synchronise time",
+      "description": "Sends the current local time to selected or all known MAX! thermostats and wall thermostats. Helpful when week programs do not seem to match the current weekday or time.",
       "fields": {
         "address": {
-          "name": "Adresse",
-          "description": "6-stellige Hex-Adresse des Geräts (z.B. 1A2B3C)"
+          "name": "Address",
+          "description": "6-digit hex address of the device (e.g. 1A2B3C)"
         },
         "addresses": {
-          "name": "Adressen",
-          "description": "Mehrere 6-stellige Hex-Adressen"
+          "name": "Addresses",
+          "description": "Several 6-digit hex addresses"
         },
         "entity_id": {
           "name": "Thermostat",
-          "description": "Alternativ ein MAX!-Climate-Entity direkt auswählen"
+          "description": "Alternatively pick a MAX! climate entity"
         },
         "entity_ids": {
-          "name": "Thermostate",
-          "description": "Alternativ mehrere MAX!-Climate-Entities auswählen"
+          "name": "Thermostats",
+          "description": "Alternatively pick several MAX! climate entities"
         },
         "device_name": {
-          "name": "Geraetename",
-          "description": "Alternativ den gespeicherten MAX!-Geraetenamen angeben"
+          "name": "Device name",
+          "description": "Alternatively the stored MAX! device name"
         },
         "device_names": {
-          "name": "Geraetenamen",
-          "description": "Alternativ mehrere gespeicherte MAX!-Geraetenamen angeben"
+          "name": "Device names",
+          "description": "Alternatively several stored MAX! device names"
         },
         "gateway": {
           "name": "Gateway",
-          "description": "Nur bei mehreren CULs nötig – welches Gateway gemeint ist"
+          "description": "Only needed with several CULs – which gateway is meant"
         }
       }
     },
     "set_week_profile": {
-      "name": "Wochenprofil setzen",
-      "description": "Setzt ein Wochenprofil fuer ein Thermostat oder Wandthermostat. Format pro Zeile: \"Mon 21,06:00,17,22:00,16\"",
+      "name": "Set week profile",
+      "description": "Sets a week profile for a thermostat or wall thermostat. Format per line: \"Mon 21,06:00,17,22:00,16\"",
       "fields": {
         "address": {
-          "name": "Adresse",
-          "description": "6-stellige Hex-Adresse des Geräts (z.B. 1A2B3C)"
+          "name": "Address",
+          "description": "6-digit hex address of the device (e.g. 1A2B3C)"
         },
         "entity_id": {
           "name": "Thermostat",
-          "description": "Alternativ ein MAX!-Climate-Entity direkt auswählen"
+          "description": "Alternatively pick a MAX! climate entity"
         },
         "device_name": {
-          "name": "Geraetename",
-          "description": "Alternativ den gespeicherten MAX!-Geraetenamen angeben"
+          "name": "Device name",
+          "description": "Alternatively the stored MAX! device name"
         },
         "profile": {
-          "name": "Wochenprofil",
-          "description": "Eine oder mehrere Zeilen im Format \"Mon 21,06:00,17,22:00,16\". Nicht angegebene Tage bleiben unverändert."
+          "name": "Week profile",
+          "description": "One or more lines in the format \"Mon 21,06:00,17,22:00,16\". Days not given stay unchanged."
         }
       }
     },
     "set_week_profile_days": {
-      "name": "Wochenprofil tageweise setzen",
-      "description": "Setzt das Wochenprofil ueber getrennte Felder pro Wochentag. Pro Feld nur den Tagesinhalt eingeben, zum Beispiel \"21,08:00,26,22:00,13\". Leer gelassene Tage bleiben unveraendert.",
+      "name": "Set week profile per day",
+      "description": "Sets the week profile with one field per weekday. Enter only the day, e.g. \"21,08:00,26,22:00,13\". Empty days stay unchanged.",
       "fields": {
         "address": {
-          "name": "Adresse",
-          "description": "6-stellige Hex-Adresse des Geräts (z.B. 1A2B3C)"
+          "name": "Address",
+          "description": "6-digit hex address of the device (e.g. 1A2B3C)"
         },
         "entity_id": {
           "name": "Thermostat",
-          "description": "Alternativ ein MAX!-Climate-Entity direkt auswählen"
+          "description": "Alternatively pick a MAX! climate entity"
         },
         "device_name": {
-          "name": "Geraetename",
-          "description": "Alternativ den gespeicherten MAX!-Geraetenamen angeben"
+          "name": "Device name",
+          "description": "Alternatively the stored MAX! device name"
         },
         "monday": {
-          "name": "Montag",
-          "description": "Format z.B. \"21,08:00,26,22:00,13\""
+          "name": "Monday",
+          "description": "Format e.g. \"21,08:00,26,22:00,13\""
         },
         "tuesday": {
-          "name": "Dienstag",
-          "description": "Format z.B. \"21,08:00,26,22:00,13\""
+          "name": "Tuesday",
+          "description": "Format e.g. \"21,08:00,26,22:00,13\""
         },
         "wednesday": {
-          "name": "Mittwoch",
-          "description": "Format z.B. \"21,08:00,26,22:00,13\""
+          "name": "Wednesday",
+          "description": "Format e.g. \"21,08:00,26,22:00,13\""
         },
         "thursday": {
-          "name": "Donnerstag",
-          "description": "Format z.B. \"21,08:00,26,22:00,13\""
+          "name": "Thursday",
+          "description": "Format e.g. \"21,08:00,26,22:00,13\""
         },
         "friday": {
-          "name": "Freitag",
-          "description": "Format z.B. \"21,08:00,26,22:00,13\""
+          "name": "Friday",
+          "description": "Format e.g. \"21,08:00,26,22:00,13\""
         },
         "saturday": {
-          "name": "Samstag",
-          "description": "Format z.B. \"21,08:00,26,22:00,13\""
+          "name": "Saturday",
+          "description": "Format e.g. \"21,08:00,26,22:00,13\""
         },
         "sunday": {
-          "name": "Sonntag",
-          "description": "Format z.B. \"21,08:00,26,22:00,13\""
+          "name": "Sunday",
+          "description": "Format e.g. \"21,08:00,26,22:00,13\""
         }
       }
     },
     "set_group_id": {
-      "name": "Gruppen-ID setzen",
-      "description": "Schreibt eine MAX!-Gruppen-ID direkt in ein Geraet. Geraete im selben Raum sollten dieselbe Gruppen-ID erhalten.",
+      "name": "Set group ID",
+      "description": "Writes a MAX! group ID directly into a device. Devices in the same room should get the same group ID.",
       "fields": {
         "address": {
-          "name": "Adresse",
-          "description": "6-stellige Hex-Adresse des Geräts (z.B. 1A2B3C)"
+          "name": "Address",
+          "description": "6-digit hex address of the device (e.g. 1A2B3C)"
         },
         "entity_id": {
-          "name": "Geraet",
-          "description": "Alternativ ein MAX!-Entity direkt auswählen"
+          "name": "Device",
+          "description": "Alternatively pick a MAX! entity"
         },
         "device_name": {
-          "name": "Geraetename",
-          "description": "Alternativ den gespeicherten MAX!-Geraetenamen angeben"
+          "name": "Device name",
+          "description": "Alternatively the stored MAX! device name"
         },
         "group_id": {
-          "name": "Gruppen-ID",
-          "description": "Ganzzahl zwischen 1 und 255"
+          "name": "Group ID",
+          "description": "Integer between 1 and 255"
         }
       }
     },
     "set_temperature_config": {
-      "name": "Temperatur-Konfiguration setzen",
-      "description": "Schreibt die gespeicherten Komfort-, Eco- und Fenster-offen-Werte eines Thermostats oder Wandthermostats. Nicht angegebene Felder bleiben unveraendert.",
+      "name": "Set temperature configuration",
+      "description": "Writes the stored comfort, eco and window-open values of a thermostat or wall thermostat. Fields not given stay unchanged.",
       "fields": {
         "address": {
-          "name": "Adresse",
-          "description": "6-stellige Hex-Adresse des Geräts (z.B. 1A2B3C)"
+          "name": "Address",
+          "description": "6-digit hex address of the device (e.g. 1A2B3C)"
         },
         "entity_id": {
           "name": "Thermostat",
-          "description": "Alternativ ein MAX!-Climate-Entity direkt auswählen"
+          "description": "Alternatively pick a MAX! climate entity"
         },
         "device_name": {
-          "name": "Geraetename",
-          "description": "Alternativ den gespeicherten MAX!-Geraetenamen angeben"
+          "name": "Device name",
+          "description": "Alternatively the stored MAX! device name"
         },
         "comfort_temperature": {
-          "name": "Komforttemperatur",
-          "description": "Tag-/Komforttemperatur in Grad Celsius"
+          "name": "Comfort temperature",
+          "description": "Day/comfort temperature in °C"
         },
         "eco_temperature": {
-          "name": "Ecotemperatur",
-          "description": "Nacht-/Absenktemperatur in Grad Celsius"
+          "name": "Eco temperature",
+          "description": "Night/eco temperature in °C"
         },
         "window_open_temperature": {
-          "name": "Fenster-offen-Temperatur",
-          "description": "Zieltemperatur bei offenem Fenster in Grad Celsius"
+          "name": "Window open temperature",
+          "description": "Target temperature while a window is open, in °C"
         },
         "window_open_duration": {
-          "name": "Fenster-offen-Dauer",
-          "description": "Dauer in Minuten, typischerweise in 5-Minuten-Schritten"
+          "name": "Window open duration",
+          "description": "Duration in minutes, usually in steps of 5"
         },
         "measurement_offset": {
-          "name": "Temperatur-Offset",
-          "description": "Offset des internen Temperatursensors in Grad Celsius"
+          "name": "Temperature offset",
+          "description": "Offset of the internal temperature sensor in °C"
         }
       }
     },
     "set_desired_temperature": {
-      "name": "Solltemperatur bewusst setzen",
-      "description": "Setzt eine MAX!-Solltemperatur mit expliziter Modus-Semantik naeher an FHEM: `auto`, `manual`, `boost` oder temporaer bis zu einem `until`-Zeitpunkt. Ohne expliziten Modus kann mit `keep_auto` das aktuelle Wochenprogramm respektiert werden.",
+      "name": "Set target temperature",
+      "description": "Sets a MAX! target temperature with explicit mode semantics, close to FHEM: `auto`, `manual`, `boost` or temporarily until an `until` time. Without a mode, `keep_auto` respects the running week program.",
       "fields": {
         "address": {
-          "name": "Adresse",
-          "description": "6-stellige Hex-Adresse des Geräts (z.B. 1A2B3C)"
+          "name": "Address",
+          "description": "6-digit hex address of the device (e.g. 1A2B3C)"
         },
         "entity_id": {
           "name": "Thermostat",
-          "description": "Alternativ ein MAX!-Climate-Entity direkt auswählen"
+          "description": "Alternatively pick a MAX! climate entity"
         },
         "device_name": {
-          "name": "Geraetename",
-          "description": "Alternativ den gespeicherten MAX!-Geraetenamen angeben"
+          "name": "Device name",
+          "description": "Alternatively the stored MAX! device name"
         },
         "temperature": {
-          "name": "Solltemperatur",
-          "description": "Temperatur in Grad Celsius"
+          "name": "Target temperature",
+          "description": "Temperature in °C"
         },
         "mode": {
-          "name": "Modus",
-          "description": "`auto` fuer Wochenprogramm, `manual` fuer dauerhaft manuell, `boost` fuer Boost. Mit `until` wird intern ein temporaerer MAX!-Modus genutzt."
+          "name": "Mode",
+          "description": "`auto` for the week program, `manual` for permanently manual, `boost` for boost. With `until` a temporary MAX! mode is used."
         },
         "keep_auto": {
-          "name": "Auto beibehalten",
-          "description": "Wenn kein Modus angegeben ist und das Geraet bereits in `auto` laeuft, bleibt bei einer Temperaturaenderung der Auto-Kontext erhalten."
+          "name": "Keep auto",
+          "description": "Without a mode and while the device runs in `auto`, a temperature change keeps the auto context."
         },
         "until": {
-          "name": "Gueltig bis",
-          "description": "Optionaler Zeitpunkt fuer einen temporaeren Sollwert. Format z. B. `2026-04-06 22:30` oder `06.04.2026 22:30`. MAX! erlaubt nur `:00` oder `:30`."
+          "name": "Valid until",
+          "description": "Optional end of a temporary target, e.g. `2026-04-06 22:30` or `06.04.2026 22:30`. MAX! only allows `:00` or `:30`."
         }
       }
     },
     "remove_group_id": {
-      "name": "Gruppen-ID entfernen",
-      "description": "Entfernt die direkte MAX!-Gruppen-ID aus einem Gerät.",
+      "name": "Remove group ID",
+      "description": "Removes the MAX! group ID from a device.",
       "fields": {
         "address": {
-          "name": "Adresse",
-          "description": "6-stellige Hex-Adresse des Geräts (z.B. 1A2B3C)"
+          "name": "Address",
+          "description": "6-digit hex address of the device (e.g. 1A2B3C)"
         },
         "entity_id": {
-          "name": "Geraet",
-          "description": "Alternativ ein MAX!-Entity direkt auswählen"
+          "name": "Device",
+          "description": "Alternatively pick a MAX! entity"
         },
         "device_name": {
-          "name": "Geraetename",
-          "description": "Alternativ den gespeicherten MAX!-Geraetenamen angeben"
+          "name": "Device name",
+          "description": "Alternatively the stored MAX! device name"
         }
       }
     },
     "add_link_partner": {
-      "name": "Link-Partner hinzufügen",
-      "description": "Legt eine direkte MAX!-Assoziation zwischen zwei Geräten an. Für eine saubere Raumkopplung ist meist auch die Gegenrichtung sinnvoll.",
+      "name": "Add link partner",
+      "description": "Creates a direct MAX! association between two devices. For a clean room link the reverse direction is usually needed as well.",
       "fields": {
         "address": {
-          "name": "Quelle Adresse",
-          "description": "6-stellige Hex-Adresse des Quellgeräts"
+          "name": "Source address",
+          "description": "6-digit hex address of the source device"
         },
         "entity_id": {
-          "name": "Quelle Geraet",
-          "description": "Alternativ ein MAX!-Entity direkt auswählen"
+          "name": "Source device",
+          "description": "Alternatively pick a MAX! entity"
         },
         "device_name": {
-          "name": "Quelle Geraetename",
-          "description": "Alternativ den gespeicherten Namen des Quellgeräts angeben"
+          "name": "Source device name",
+          "description": "Alternatively the stored name of the source device"
         },
         "partner_address": {
-          "name": "Partner Adresse",
-          "description": "6-stellige Hex-Adresse des Partnergeräts"
+          "name": "Partner address",
+          "description": "6-digit hex address of the partner device"
         },
         "partner_entity_id": {
-          "name": "Partner Geraet",
-          "description": "Alternativ ein MAX!-Entity direkt auswählen"
+          "name": "Partner device",
+          "description": "Alternatively pick a MAX! entity"
         },
         "partner_name": {
-          "name": "Partner Geraetename",
-          "description": "Alternativ den gespeicherten Namen des Partnergeräts angeben"
-        }
-      }
-    },
-    "remove_link_partner": {
-      "name": "Link-Partner entfernen",
-      "description": "Entfernt eine direkte MAX!-Assoziation zwischen zwei Geräten.",
-      "fields": {
-        "address": {
-          "name": "Quelle Adresse",
-          "description": "6-stellige Hex-Adresse des Quellgeräts"
-        },
-        "entity_id": {
-          "name": "Quelle Geraet",
-          "description": "Alternativ ein MAX!-Entity direkt auswählen"
-        },
-        "device_name": {
-          "name": "Quelle Geraetename",
-          "description": "Alternativ den gespeicherten Namen des Quellgeräts angeben"
-        },
-        "partner_address": {
-          "name": "Partner Adresse",
-          "description": "6-stellige Hex-Adresse des Partnergeräts"
-        },
-        "partner_entity_id": {
-          "name": "Partner Geraet",
-          "description": "Alternativ ein MAX!-Entity direkt auswählen"
-        },
-        "partner_name": {
-          "name": "Partner Geraetename",
-          "description": "Alternativ den gespeicherten Namen des Partnergeräts angeben"
+          "name": "Partner device name",
+          "description": "Alternatively the stored name of the partner device"
         }
       }
     },
     "associate_devices": {
-      "name": "Geräte assoziieren",
-      "description": "Setzt eine gemeinsame Gruppen-ID und legt Link-Partner zwischen allen angegebenen Geräten an. Das bildet eine echte MAX!-Raumkopplung auf Geräteebene ab.",
+      "name": "Associate devices",
+      "description": "Sets a common group ID and creates link partners between all given devices – a real MAX! room link on the devices.",
       "fields": {
         "address": {
-          "name": "Adresse",
-          "description": "Einzelne 6-stellige Hex-Adresse"
+          "name": "Address",
+          "description": "A single 6-digit hex address"
         },
         "addresses": {
-          "name": "Adressen",
-          "description": "Liste der 6-stelligen Hex-Adressen"
+          "name": "Addresses",
+          "description": "List of 6-digit hex addresses"
         },
         "entity_id": {
-          "name": "Geraet",
-          "description": "Alternativ ein einzelnes MAX!-Entity"
+          "name": "Device",
+          "description": "Alternatively a single MAX! entity"
         },
         "entity_ids": {
-          "name": "Geraete",
-          "description": "Alternativ eine Liste von MAX!-Entities"
+          "name": "Devices",
+          "description": "Alternatively a list of MAX! entities"
         },
         "device_name": {
-          "name": "Geraetename",
-          "description": "Optional ein einzelner gespeicherter MAX!-Geraetename"
+          "name": "Device name",
+          "description": "Alternatively the stored MAX! device name"
         },
         "device_names": {
-          "name": "Geraetenamen",
-          "description": "Alternativ eine Liste gespeicherter MAX!-Geraetenamen"
+          "name": "Device names",
+          "description": "Alternatively several stored MAX! device names"
         },
         "group_id": {
-          "name": "Gruppen-ID",
-          "description": "Gemeinsame Gruppen-ID zwischen 1 und 255"
+          "name": "Group ID",
+          "description": "Common group ID between 1 and 255"
         },
         "bidirectional": {
-          "name": "Bidirektional",
-          "description": "Legt die Assoziation in beide Richtungen an"
+          "name": "Bidirectional",
+          "description": "Create the association in both directions"
         }
       }
     },
     "deassociate_devices": {
-      "name": "Geräte deassoziieren",
-      "description": "Entfernt Link-Partner zwischen allen angegebenen Geräten. Optional können die Gruppen-IDs zusätzlich gelöscht werden.",
+      "name": "Deassociate devices",
+      "description": "Removes the link partners between all given devices. Optionally the group IDs are cleared as well.",
       "fields": {
         "address": {
-          "name": "Adresse",
-          "description": "Einzelne 6-stellige Hex-Adresse"
+          "name": "Address",
+          "description": "A single 6-digit hex address"
         },
         "addresses": {
-          "name": "Adressen",
-          "description": "Liste der 6-stelligen Hex-Adressen"
+          "name": "Addresses",
+          "description": "List of 6-digit hex addresses"
         },
         "entity_id": {
-          "name": "Geraet",
-          "description": "Alternativ ein einzelnes MAX!-Entity"
+          "name": "Device",
+          "description": "Alternatively a single MAX! entity"
         },
         "entity_ids": {
-          "name": "Geraete",
-          "description": "Alternativ eine Liste von MAX!-Entities"
+          "name": "Devices",
+          "description": "Alternatively a list of MAX! entities"
         },
         "device_name": {
-          "name": "Geraetename",
-          "description": "Optional ein einzelner gespeicherter MAX!-Geraetename"
+          "name": "Device name",
+          "description": "Alternatively the stored MAX! device name"
         },
         "device_names": {
-          "name": "Geraetenamen",
-          "description": "Alternativ eine Liste gespeicherter MAX!-Geraetenamen"
+          "name": "Device names",
+          "description": "Alternatively several stored MAX! device names"
         },
         "clear_group_id": {
-          "name": "Gruppen-ID entfernen",
-          "description": "Löscht nach dem De-Linken auch die Gruppen-ID der Geräte"
+          "name": "Remove group ID",
+          "description": "Also clears the group ID of the devices after unlinking"
         },
         "bidirectional": {
-          "name": "Bidirektional",
-          "description": "Entfernt die Assoziation in beide Richtungen"
+          "name": "Bidirectional",
+          "description": "Removes the association in both directions"
         }
       }
     },
     "create_virtual_shutter_contact": {
-      "name": "Virtuellen Fensterkontakt anlegen",
-      "description": "Legt einen virtuellen MAX!-Fensterkontakt mit frei waehlbarer Adresse an. Dieser kann anschliessend per Gruppen-ID und Assoziation mit Thermostaten verbunden und von externen Sensoren angesteuert werden.",
+      "name": "Create virtual window contact",
+      "description": "Creates a virtual MAX! window contact with a free address. It can then be linked to thermostats via group ID and association and driven by external sensors.",
       "fields": {
         "address": {
-          "name": "Adresse",
-          "description": "Frei waehlbare 6-stellige Hex-Adresse, z.B. A1B2C3"
+          "name": "Address",
+          "description": "Free 6-digit hex address, e.g. A1B2C3"
         },
         "name": {
           "name": "Name",
-          "description": "Anzeigename des virtuellen Kontakts"
+          "description": "Display name of the virtual contact"
         },
         "group_id": {
-          "name": "Gruppen-ID",
-          "description": "Optionale MAX!-Gruppen-ID zwischen 0 und 255"
+          "name": "Group ID",
+          "description": "Optional MAX! group ID between 0 and 255"
         }
       }
     },
     "delete_virtual_device": {
-      "name": "Virtuelles Gerät löschen",
-      "description": "Löscht ein zuvor angelegtes virtuelles MAX!-Gerät.",
+      "name": "Delete virtual device",
+      "description": "Deletes a previously created virtual MAX! device.",
       "fields": {
         "address": {
-          "name": "Adresse",
-          "description": "6-stellige Hex-Adresse des virtuellen Geräts"
+          "name": "Address",
+          "description": "6-digit hex address of the virtual device"
         },
         "entity_id": {
-          "name": "Geraet",
-          "description": "Alternativ das virtuelle MAX!-Entity auswählen"
+          "name": "Device",
+          "description": "Alternatively pick the virtual MAX! entity"
         },
         "device_name": {
-          "name": "Geraetename",
-          "description": "Alternativ den gespeicherten Namen des virtuellen Geraets angeben"
+          "name": "Device name",
+          "description": "Alternatively the stored name of the virtual device"
         }
       }
     },
     "send_virtual_shutter_contact_state": {
-      "name": "Virtuellen Fensterkontakt senden",
-      "description": "Sendet den Status eines virtuellen MAX!-Fensterkontakts. Bei gesetzter Gruppen-ID wirkt das Telegramm auf die zugeordneten Geräte derselben Gruppe und kann z.B. aus IKEA-Zigbee-Automationen aufgerufen werden.",
+      "name": "Send virtual window contact",
+      "description": "Sends the state of a virtual MAX! window contact. With a group ID it acts on the linked devices of that group – e.g. from a Zigbee contact automation.",
       "fields": {
         "address": {
-          "name": "Adresse",
-          "description": "6-stellige Hex-Adresse des virtuellen Fensterkontakts"
+          "name": "Address",
+          "description": "6-digit hex address of the virtual window contact"
         },
         "entity_id": {
-          "name": "Virtueller Fensterkontakt",
-          "description": "Alternativ das virtuelle MAX!-Entity auswählen"
+          "name": "Virtual window contact",
+          "description": "Alternatively pick the virtual MAX! entity"
         },
         "device_name": {
-          "name": "Geraetename",
-          "description": "Alternativ den gespeicherten Namen des virtuellen Kontakts angeben"
+          "name": "Device name",
+          "description": "Alternatively the stored name of the virtual contact"
         },
         "is_open": {
-          "name": "Fenster offen",
-          "description": "true fuer offen, false fuer geschlossen"
+          "name": "Window open",
+          "description": "true for open, false for closed"
         }
       }
     },
     "create_room_association": {
-      "name": "Raum-Assoziation anlegen",
-      "description": "Legt einen kompletten MAX!-Raum an: gemeinsame Gruppen-ID, Link-Partner zwischen den angegebenen Geräten und optional direkt einen virtuellen Fensterkontakt für externe Sensoren.",
+      "name": "Create room association",
+      "description": "Creates a complete MAX! room: common group ID, link partners between the given devices and optionally a virtual window contact for external sensors.",
       "fields": {
         "room_name": {
-          "name": "Raumname",
-          "description": "Anzeigename fuer Logging und optionale virtuelle Kontakte"
+          "name": "Room name",
+          "description": "Display name for logging and optional virtual contacts"
         },
         "group_id": {
-          "name": "Gruppen-ID",
-          "description": "Optional. Wenn leer, wird die nächste freie Gruppen-ID verwendet"
+          "name": "Group ID",
+          "description": "Optional. If empty, the next free group ID is used"
         },
         "climate_address": {
-          "name": "Klima-Adresse",
-          "description": "Einzelne Heizkoerper- oder Wandthermostat-Adresse"
+          "name": "Climate address",
+          "description": "A single radiator or wall thermostat address"
         },
         "climate_addresses": {
-          "name": "Klima-Adressen",
-          "description": "Liste der beteiligten Heizkoerper- und Wandthermostat-Adressen"
+          "name": "Climate addresses",
+          "description": "List of the radiator and wall thermostat addresses involved"
         },
         "climate_entity_id": {
-          "name": "Klima-Geraet",
-          "description": "Alternativ ein einzelnes Climate-Entity"
+          "name": "Climate device",
+          "description": "Alternatively a single climate entity"
         },
         "climate_entity_ids": {
-          "name": "Klima-Geraete",
-          "description": "Alternativ eine Liste beteiligter Climate-Entities"
+          "name": "Climate devices",
+          "description": "Alternatively a list of the climate entities involved"
         },
         "climate_device_name": {
-          "name": "Klima-Geraetename",
-          "description": "Alternativ ein einzelner gespeicherter MAX!-Geraetename"
+          "name": "Climate device name",
+          "description": "Alternatively a single stored MAX! device name"
         },
         "climate_device_names": {
-          "name": "Klima-Geraetenamen",
-          "description": "Alternativ eine Liste gespeicherter MAX!-Geraetenamen"
+          "name": "Climate device names",
+          "description": "Alternatively a list of stored MAX! device names"
         },
         "window_address": {
-          "name": "Fensterkontakt-Adresse",
-          "description": "Einzelne vorhandene MAX!-Fensterkontakt-Adresse"
+          "name": "Window contact address",
+          "description": "A single existing MAX! window contact address"
         },
         "window_addresses": {
-          "name": "Fensterkontakt-Adressen",
-          "description": "Optionale Liste vorhandener MAX!-Fensterkontakte"
+          "name": "Window contact addresses",
+          "description": "Optional list of existing MAX! window contacts"
         },
         "window_entity_id": {
-          "name": "Fensterkontakt",
-          "description": "Alternativ ein einzelnes Fensterkontakt-Entity"
+          "name": "Window contact",
+          "description": "Alternatively a single window contact entity"
         },
         "window_entity_ids": {
-          "name": "Fensterkontakte",
-          "description": "Alternativ eine Liste vorhandener Fensterkontakt-Entities"
+          "name": "Window contacts",
+          "description": "Alternatively a list of existing window contact entities"
         },
         "window_device_name": {
-          "name": "Fensterkontakt-Name",
-          "description": "Alternativ ein einzelner gespeicherter Fensterkontakt-Name"
+          "name": "Window contact name",
+          "description": "Alternatively a single stored window contact name"
         },
         "window_device_names": {
-          "name": "Fensterkontakt-Namen",
-          "description": "Alternativ eine Liste gespeicherter Fensterkontakt-Namen"
+          "name": "Window contact names",
+          "description": "Alternatively a list of stored window contact names"
         },
         "create_virtual_shutter_contact": {
-          "name": "Virtuellen Kontakt anlegen",
-          "description": "Legt direkt einen virtuellen MAX!-Fensterkontakt an"
+          "name": "Create virtual contact",
+          "description": "Creates a virtual MAX! window contact right away"
         },
         "virtual_shutter_contact_address": {
-          "name": "Virtuelle Adresse",
-          "description": "Optional. Wenn leer, wird automatisch eine freie Adresse erzeugt"
+          "name": "Virtual address",
+          "description": "Optional. If empty, a free address is generated"
         },
         "virtual_shutter_contact_name": {
-          "name": "Virtueller Name",
-          "description": "Optionaler Anzeigename fuer den virtuellen Fensterkontakt"
+          "name": "Virtual name",
+          "description": "Optional display name of the virtual window contact"
         },
         "bidirectional": {
-          "name": "Bidirektional",
-          "description": "Legt die Link-Partner in beide Richtungen an"
+          "name": "Bidirectional",
+          "description": "Creates the link partners in both directions"
         }
       }
     },
     "delete_room_association": {
-      "name": "Raum-Assoziation loeschen",
-      "description": "Baut einen kompletten MAX!-Raum wieder ab: Link-Partner entfernen, optional Gruppen-ID loeschen und virtuelle Fensterkontakte gleich mit entfernen.",
+      "name": "Delete room association",
+      "description": "Takes a complete MAX! room apart: removes link partners, optionally clears the group ID and deletes virtual window contacts as well.",
       "fields": {
         "room_name": {
-          "name": "Raumname",
-          "description": "Nur fuer Logging und Nachvollziehbarkeit"
+          "name": "Room name",
+          "description": "Only for logging and traceability"
         },
         "climate_address": {
-          "name": "Klima-Adresse",
-          "description": "Einzelne Heizkoerper- oder Wandthermostat-Adresse"
+          "name": "Climate address",
+          "description": "A single radiator or wall thermostat address"
         },
         "climate_addresses": {
-          "name": "Klima-Adressen",
-          "description": "Liste der beteiligten Heizkoerper- und Wandthermostat-Adressen"
+          "name": "Climate addresses",
+          "description": "List of the radiator and wall thermostat addresses involved"
         },
         "climate_entity_id": {
-          "name": "Klima-Geraet",
-          "description": "Alternativ ein einzelnes Climate-Entity"
+          "name": "Climate device",
+          "description": "Alternatively a single climate entity"
         },
         "climate_entity_ids": {
-          "name": "Klima-Geraete",
-          "description": "Alternativ eine Liste beteiligter Climate-Entities"
+          "name": "Climate devices",
+          "description": "Alternatively a list of the climate entities involved"
         },
         "climate_device_name": {
-          "name": "Klima-Geraetename",
-          "description": "Alternativ ein einzelner gespeicherter MAX!-Geraetename"
+          "name": "Climate device name",
+          "description": "Alternatively a single stored MAX! device name"
         },
         "climate_device_names": {
-          "name": "Klima-Geraetenamen",
-          "description": "Alternativ eine Liste gespeicherter MAX!-Geraetenamen"
+          "name": "Climate device names",
+          "description": "Alternatively a list of stored MAX! device names"
         },
         "window_address": {
-          "name": "Fensterkontakt-Adresse",
-          "description": "Einzelne vorhandene MAX!-Fensterkontakt-Adresse"
+          "name": "Window contact address",
+          "description": "A single existing MAX! window contact address"
         },
         "window_addresses": {
-          "name": "Fensterkontakt-Adressen",
-          "description": "Optionale Liste vorhandener MAX!-Fensterkontakte"
+          "name": "Window contact addresses",
+          "description": "Optional list of existing MAX! window contacts"
         },
         "window_entity_id": {
-          "name": "Fensterkontakt",
-          "description": "Alternativ ein einzelnes Fensterkontakt-Entity"
+          "name": "Window contact",
+          "description": "Alternatively a single window contact entity"
         },
         "window_entity_ids": {
-          "name": "Fensterkontakte",
-          "description": "Alternativ eine Liste vorhandener Fensterkontakt-Entities"
+          "name": "Window contacts",
+          "description": "Alternatively a list of existing window contact entities"
         },
         "window_device_name": {
-          "name": "Fensterkontakt-Name",
-          "description": "Alternativ ein einzelner gespeicherter Fensterkontakt-Name"
+          "name": "Window contact name",
+          "description": "Alternatively a single stored window contact name"
         },
         "window_device_names": {
-          "name": "Fensterkontakt-Namen",
-          "description": "Alternativ eine Liste gespeicherter Fensterkontakt-Namen"
+          "name": "Window contact names",
+          "description": "Alternatively a list of stored window contact names"
         },
         "clear_group_id": {
-          "name": "Gruppen-ID loeschen",
-          "description": "Entfernt nach dem De-Linken auch die Gruppen-ID"
+          "name": "Clear group ID",
+          "description": "Also clears the group ID after unlinking"
         },
         "delete_virtual_shutter_contacts": {
-          "name": "Virtuelle Kontakte loeschen",
-          "description": "Loescht enthaltene virtuelle Fensterkontakte direkt mit"
+          "name": "Delete virtual contacts",
+          "description": "Deletes included virtual window contacts as well"
         },
         "bidirectional": {
-          "name": "Bidirektional",
-          "description": "Entfernt Link-Partner in beide Richtungen"
+          "name": "Bidirectional",
+          "description": "Removes link partners in both directions"
         }
       }
     },
     "rebuild_room_association": {
-      "name": "Raum-Assoziation neu aufbauen",
-      "description": "Baut einen kompletten MAX!-Raum erst ab und danach mit denselben oder neuen Parametern erneut auf. Praktisch bei Reparaturen oder wenn man Gruppenbeziehungen sauber neu schreiben will.",
+      "name": "Rebuild room association",
+      "description": "Takes a complete MAX! room apart and builds it again with the same or new parameters. Useful for repairs or to rewrite group relations cleanly.",
       "fields": {
         "room_name": {
-          "name": "Raumname",
-          "description": "Anzeigename fuer Logging und optionale virtuelle Kontakte"
+          "name": "Room name",
+          "description": "Display name for logging and optional virtual contacts"
         },
         "group_id": {
-          "name": "Gruppen-ID",
-          "description": "Optional. Wenn leer, wird beim Neuaufbau die nächste freie Gruppen-ID verwendet"
+          "name": "Group ID",
+          "description": "Optional. If empty, the next free group ID is used when rebuilding"
         },
         "climate_address": {
-          "name": "Klima-Adresse",
-          "description": "Einzelne Heizkoerper- oder Wandthermostat-Adresse"
+          "name": "Climate address",
+          "description": "A single radiator or wall thermostat address"
         },
         "climate_addresses": {
-          "name": "Klima-Adressen",
-          "description": "Liste der beteiligten Heizkoerper- und Wandthermostat-Adressen"
+          "name": "Climate addresses",
+          "description": "List of the radiator and wall thermostat addresses involved"
         },
         "climate_entity_id": {
-          "name": "Klima-Geraet",
-          "description": "Alternativ ein einzelnes Climate-Entity"
+          "name": "Climate device",
+          "description": "Alternatively a single climate entity"
         },
         "climate_entity_ids": {
-          "name": "Klima-Geraete",
-          "description": "Alternativ eine Liste beteiligter Climate-Entities"
+          "name": "Climate devices",
+          "description": "Alternatively a list of the climate entities involved"
         },
         "climate_device_name": {
-          "name": "Klima-Geraetename",
-          "description": "Alternativ ein einzelner gespeicherter MAX!-Geraetename"
+          "name": "Climate device name",
+          "description": "Alternatively a single stored MAX! device name"
         },
         "climate_device_names": {
-          "name": "Klima-Geraetenamen",
-          "description": "Alternativ eine Liste gespeicherter MAX!-Geraetenamen"
+          "name": "Climate device names",
+          "description": "Alternatively a list of stored MAX! device names"
         },
         "window_address": {
-          "name": "Fensterkontakt-Adresse",
-          "description": "Einzelne vorhandene MAX!-Fensterkontakt-Adresse"
+          "name": "Window contact address",
+          "description": "A single existing MAX! window contact address"
         },
         "window_addresses": {
-          "name": "Fensterkontakt-Adressen",
-          "description": "Optionale Liste vorhandener MAX!-Fensterkontakte"
+          "name": "Window contact addresses",
+          "description": "Optional list of existing MAX! window contacts"
         },
         "window_entity_id": {
-          "name": "Fensterkontakt",
-          "description": "Alternativ ein einzelnes Fensterkontakt-Entity"
+          "name": "Window contact",
+          "description": "Alternatively a single window contact entity"
         },
         "window_entity_ids": {
-          "name": "Fensterkontakte",
-          "description": "Alternativ eine Liste vorhandener Fensterkontakt-Entities"
+          "name": "Window contacts",
+          "description": "Alternatively a list of existing window contact entities"
         },
         "window_device_name": {
-          "name": "Fensterkontakt-Name",
-          "description": "Alternativ ein einzelner gespeicherter Fensterkontakt-Name"
+          "name": "Window contact name",
+          "description": "Alternatively a single stored window contact name"
         },
         "window_device_names": {
-          "name": "Fensterkontakt-Namen",
-          "description": "Alternativ eine Liste gespeicherter Fensterkontakt-Namen"
+          "name": "Window contact names",
+          "description": "Alternatively a list of stored window contact names"
         },
         "create_virtual_shutter_contact": {
-          "name": "Virtuellen Kontakt anlegen",
-          "description": "Legt beim Neuaufbau direkt einen virtuellen MAX!-Fensterkontakt an"
+          "name": "Create virtual contact",
+          "description": "Creates a virtual MAX! window contact while rebuilding"
         },
         "virtual_shutter_contact_address": {
-          "name": "Virtuelle Adresse",
-          "description": "Optional. Wenn leer, wird automatisch eine freie Adresse erzeugt"
+          "name": "Virtual address",
+          "description": "Optional. If empty, a free address is generated"
         },
         "virtual_shutter_contact_name": {
-          "name": "Virtueller Name",
-          "description": "Optionaler Anzeigename fuer den virtuellen Fensterkontakt"
+          "name": "Virtual name",
+          "description": "Optional display name of the virtual window contact"
         },
         "clear_group_id": {
-          "name": "Gruppen-ID vorab loeschen",
-          "description": "Loescht beim Abbau zuerst die vorhandenen Gruppen-IDs"
+          "name": "Clear group ID first",
+          "description": "Clears the existing group IDs while taking the room apart"
         },
         "delete_virtual_shutter_contacts": {
-          "name": "Virtuelle Kontakte vorab loeschen",
-          "description": "Loescht beim Abbau enthaltene virtuelle Fensterkontakte"
+          "name": "Delete virtual contacts first",
+          "description": "Deletes included virtual window contacts while taking the room apart"
         },
         "bidirectional": {
-          "name": "Bidirektional",
-          "description": "Nutzt Link-Partner in beide Richtungen"
+          "name": "Bidirectional",
+          "description": "Uses link partners in both directions"
         }
       }
     },
     "export_topology": {
-      "name": "MAX!-Topologie exportieren",
-      "description": "Exportiert die bekannte MAX!-Topologie als JSON-Datei. Enthalten sind alle bekannten Geräte, Gruppen-IDs, Link-Partner, Wochenprofile und virtuelle Kontakte.",
+      "name": "Export MAX! topology",
+      "description": "Exports the known MAX! topology as a JSON file: all known devices, group IDs, link partners, week profiles and virtual contacts.",
       "fields": {
         "path": {
-          "name": "Dateipfad",
-          "description": "Optionaler JSON-Zielpfad. Relative Pfade werden unterhalb des Home-Assistant-Konfigurationsverzeichnisses gespeichert."
+          "name": "File path",
+          "description": "Optional JSON target path. Relative paths are saved below the Home Assistant configuration directory."
         },
         "gateway": {
           "name": "Gateway",
-          "description": "Nur bei mehreren CULs nötig – welches Gateway gemeint ist"
+          "description": "Only needed with several CULs – which gateway is meant"
         }
       }
     },
     "import_topology": {
-      "name": "MAX!-Topologie importieren",
-      "description": "Importiert eine zuvor exportierte MAX!-Topologie aus einer JSON-Datei oder direkt aus einem JSON-String. Die erste Version arbeitet bewusst schonend: vorhandene Geräte werden aktualisiert, fehlende virtuelle Kontakte können angelegt werden, unbekannte physische Geräte werden jedoch nicht erzeugt.",
+      "name": "Import MAX! topology",
+      "description": "Imports a previously exported MAX! topology from a JSON file or a JSON string. It works carefully: existing devices are updated and missing virtual contacts can be created, but unknown physical devices are not created.",
       "fields": {
         "path": {
-          "name": "Dateipfad",
-          "description": "Optionaler JSON-Quellpfad. Relative Pfade werden relativ zum Home-Assistant-Konfigurationsverzeichnis aufgeloest."
+          "name": "File path",
+          "description": "Optional JSON source path. Relative paths are resolved against the Home Assistant configuration directory."
         },
         "topology_json": {
-          "name": "Topologie-JSON",
-          "description": "Alternativ das komplette Export-JSON direkt einfuegen"
+          "name": "Topology JSON",
+          "description": "Alternatively paste the complete export JSON"
         },
         "create_virtual_devices": {
-          "name": "Virtuelle Kontakte anlegen",
-          "description": "Erstellt fehlende virtuelle MAX!-Fensterkontakte aus dem Backup"
+          "name": "Create virtual contacts",
+          "description": "Creates missing virtual MAX! window contacts from the backup"
         },
         "update_names": {
-          "name": "Namen uebernehmen",
-          "description": "Uebernimmt gespeicherte Geraetenamen sowie Serien- und Firmwaredaten"
+          "name": "Apply names",
+          "description": "Applies stored device names as well as serial and firmware data"
         },
         "apply_group_ids": {
-          "name": "Gruppen-IDs anwenden",
-          "description": "Spielt gespeicherte MAX!-Gruppen-IDs wieder ein"
+          "name": "Apply group IDs",
+          "description": "Writes the stored MAX! group IDs back"
         },
         "apply_links": {
-          "name": "Link-Partner anwenden",
-          "description": "Spielt gespeicherte On-Device-Assoziationen wieder ein"
+          "name": "Apply link partners",
+          "description": "Writes the stored on-device associations back"
         },
         "apply_week_profiles": {
-          "name": "Wochenprofile anwenden",
-          "description": "Spielt gespeicherte Wochenprofile fuer Klima-Geraete wieder ein"
+          "name": "Apply week profiles",
+          "description": "Writes the stored week profiles of climate devices back"
         },
         "gateway": {
           "name": "Gateway",
-          "description": "Nur bei mehreren CULs nötig – welches Gateway gemeint ist"
+          "description": "Only needed with several CULs – which gateway is meant"
         }
       }
     },
     "cleanup_superseded_devices": {
-      "name": "Ersetzte Geraete aufraeumen",
-      "description": "Entfernt zuvor als ersetzt markierte Altgeraete aus dem internen cul_max-Bestand. Optional koennen auch die zugehoerigen Entity- und Device-Registry-Eintraege aus Home Assistant mit entfernt werden. Standardmaessig laeuft der Service zuerst als Dry-Run und loggt nur, was aufgeraeumt wuerde.",
+      "name": "Clean up replaced devices",
+      "description": "Removes old devices marked as replaced from the cul_max store. Optionally also removes their entity and device registry entries. By default it runs as a dry run and only logs what would be removed.",
       "fields": {
         "dry_run": {
-          "name": "Nur pruefen",
-          "description": "Wenn aktiv, werden nur die Kandidaten geloggt und nichts geloescht"
+          "name": "Check only",
+          "description": "When on, only the candidates are logged and nothing is deleted"
         },
         "remove_registry_entries": {
-          "name": "Registry-Eintraege entfernen",
-          "description": "Entfernt zugehoerige Entity- und Device-Registry-Eintraege aus HA"
+          "name": "Remove registry entries",
+          "description": "Removes the related entity and device registry entries from Home Assistant"
         },
         "remove_discovered_devices": {
-          "name": "Entdeckte Geraete entfernen",
-          "description": "Entfernt auch als entdeckt markierte, nicht gekoppelte Altgeraete"
+          "name": "Remove discovered devices",
+          "description": "Also removes old devices that were only discovered and never paired"
         },
         "gateway": {
           "name": "Gateway",
-          "description": "Nur bei mehreren CULs nötig – welches Gateway gemeint ist"
+          "description": "Only needed with several CULs – which gateway is meant"
         }
       }
     },
     "start_vacation": {
-      "name": "Urlaubsmodus starten",
-      "description": "Setzt die Thermostate in den MAX!-Urlaubsmodus. Sie halten die Urlaubstemperatur und kehren zum Rückkehrzeitpunkt (abzüglich Vorheizen) selbstständig zu ihrem Wochenprogramm zurück – auch ohne Home Assistant. Vorher manuell eingestellte Thermostate werden danach wiederhergestellt. Ohne Felder gelten die Einstellungen am CUL-Gerät für alle Thermostate.",
+      "name": "Start vacation mode",
+      "description": "Puts the thermostats into MAX! vacation mode. They hold the vacation temperature and return to their week program at the return time (minus preheating) by themselves – even without Home Assistant. Thermostats set to manual before are restored afterwards. Without fields the settings on the CUL device apply to all thermostats.",
       "fields": {
         "temperature": {
-          "name": "Urlaubstemperatur",
-          "description": "Temperatur während der Abwesenheit"
+          "name": "Vacation temperature",
+          "description": "Temperature while away"
         },
         "end": {
-          "name": "Rückkehr",
-          "description": "Datum und Uhrzeit der Rückkehr (Auflösung 30 Minuten)"
+          "name": "Return",
+          "description": "Date and time of the return (30-minute resolution)"
         },
         "preheat_hours": {
-          "name": "Vorheizen",
-          "description": "So viele Stunden vor der Rückkehr gehen die Thermostate zurück ins Programm"
+          "name": "Preheating",
+          "description": "This many hours before the return the thermostats go back to their program"
         },
         "entity_ids": {
-          "name": "Thermostate",
-          "description": "Nur diese Thermostate (leer = alle)"
+          "name": "Thermostats",
+          "description": "Only these thermostats (empty = all)"
         },
         "areas": {
-          "name": "Bereiche",
-          "description": "Nur Thermostate in diesen Bereichen (leer = alle)"
+          "name": "Areas",
+          "description": "Only thermostats in these areas (empty = all)"
         },
         "gateway": {
           "name": "Gateway",
-          "description": "Nur bei mehreren CULs nötig – welches Gateway gemeint ist"
+          "description": "Only needed with several CULs – which gateway is meant"
         }
       }
     },
     "end_vacation": {
-      "name": "Urlaubsmodus beenden",
-      "description": "Beendet den Urlaub vorzeitig: Thermostate gehen sofort zurück in ihr Wochenprogramm bzw. in ihren vorherigen manuellen Zustand.",
+      "name": "End vacation mode",
+      "description": "Ends the vacation early: thermostats go back to their week program or their previous manual state right away.",
       "fields": {
         "gateway": {
           "name": "Gateway",
-          "description": "Nur bei mehreren CULs nötig – welches Gateway gemeint ist"
+          "description": "Only needed with several CULs – which gateway is meant"
         }
       }
     },
     "start_summer": {
-      "name": "Sommermodus starten",
-      "description": "Heizsaison vorbei: alle MAX!-Thermostate gehen dauerhaft auf Aus (Ventil zu) oder Ein (Ventil ganz offen), bis der Sommermodus beendet wird.",
+      "name": "Start summer mode",
+      "description": "Heating season over: all MAX! thermostats go to off (valve closed) or on (valve fully open) until summer mode is ended.",
       "fields": {
         "valve": {
-          "name": "Ventil",
-          "description": "Aus (Ventil zu) oder Ein (Ventil ganz offen)"
+          "name": "Valve",
+          "description": "Off (valve closed) or on (valve fully open)"
         },
         "gateway": {
           "name": "Gateway",
-          "description": "Nur bei mehreren CULs nötig – welches Gateway gemeint ist"
+          "description": "Only needed with several CULs – which gateway is meant"
         }
       }
     },
     "end_summer": {
-      "name": "Sommermodus beenden",
-      "description": "Heizsaison beginnt: jedes Thermostat kehrt in seinen Zustand von vorher zurück.",
+      "name": "End summer mode",
+      "description": "Heating season starts: every thermostat returns to its previous state.",
       "fields": {
         "gateway": {
           "name": "Gateway",
-          "description": "Nur bei mehreren CULs nötig – welches Gateway gemeint ist"
+          "description": "Only needed with several CULs – which gateway is meant"
+        }
+      }
+    },
+    "remove_link_partner": {
+      "name": "Remove link partner",
+      "description": "Removes a direct MAX! association between two devices.",
+      "fields": {
+        "address": {
+          "name": "Source address",
+          "description": "6-digit hex address of the source device"
+        },
+        "entity_id": {
+          "name": "Source device",
+          "description": "Alternatively pick a MAX! entity"
+        },
+        "device_name": {
+          "name": "Source device name",
+          "description": "Alternatively the stored name of the source device"
+        },
+        "partner_address": {
+          "name": "Partner address",
+          "description": "6-digit hex address of the partner device"
+        },
+        "partner_entity_id": {
+          "name": "Partner device",
+          "description": "Alternatively pick a MAX! entity"
+        },
+        "partner_name": {
+          "name": "Partner device name",
+          "description": "Alternatively the stored name of the partner device"
+        },
+        "partner_type": {
+          "name": "Partner type (unknown partners only)",
+          "description": "Only needed to remove a stale link to a device the integration does not know (e.g. a replaced thermostat). 1 = radiator thermostat, 2 = radiator thermostat+, 3 = wall thermostat, 4 = window contact, 5 = push button."
+        }
+      }
+    },
+    "set_external_temperature_sensor": {
+      "name": "Use an external room sensor",
+      "description": "Lets a radiator thermostat regulate on a temperature sensor in Home Assistant instead of its own sensor at the radiator (virtual wall thermostat). Without a sensor it uses its own sensor again.",
+      "fields": {
+        "entity_id": {
+          "name": "Thermostat",
+          "description": "MAX! climate entity of the radiator thermostat"
+        },
+        "address": {
+          "name": "Address",
+          "description": "Alternatively the 6-digit hex address of the thermostat"
+        },
+        "sensor_entity_id": {
+          "name": "Temperature sensor",
+          "description": "Leave empty to use the thermostat's own sensor again"
         }
       }
     }
   },
   "issues": {
     "paired_elsewhere": {
-      "title": "{name} ist noch an einer anderen Zentrale angemeldet",
-      "description": "Das Gerät {name} ({address}) meldet sich bei der Adresse {central} statt bei dieser Zentrale ({own_address}). Meist ist das ein alter MAX! Cube, an dem das Gerät noch angemeldet ist.\n\nSolange das so bleibt, nimmt das Gerät keine Konfiguration von Home Assistant an und wiederholt jede Meldung, weil die alte Zentrale nicht antwortet (mehr Funkverkehr, kürzere Batterielaufzeit). Verknüpfte Thermostate reagieren meist trotzdem.\n\nAbhilfe: das Gerät auf Werkseinstellungen zurücksetzen und mit `cul_max.start_pairing` neu anlernen. Name und gespeicherte Daten bleiben in Home Assistant erhalten. Der Hinweis verschwindet automatisch, sobald sich das Gerät bei dieser Zentrale meldet."
+      "title": "{name} is still paired with another controller",
+      "description": "The device {name} ({address}) reports to address {central} instead of this controller ({own_address}). Usually this is an old MAX! Cube the device is still paired with.\n\nAs long as this persists, the device ignores configuration from Home Assistant and repeats every message because the old controller does not answer (more radio traffic, shorter battery life). Linked thermostats usually still react.\n\nFix: factory reset the device and pair it again with `cul_max.start_pairing`. Its name and stored data are kept in Home Assistant. This notice disappears automatically once the device reports to this controller."
     }
   },
   "entity": {
     "binary_sensor": {
       "pairing_mode": {
-        "name": "Anlernmodus"
+        "name": "Pairing mode"
       },
       "battery": {
-        "name": "Batterie"
+        "name": "Battery"
       },
       "stale": {
-        "name": "Keine Meldung"
+        "name": "Stale"
       },
       "config_pending": {
-        "name": "Konfiguration ausstehend"
+        "name": "Config pending"
       }
     },
     "sensor": {
       "send_budget": {
-        "name": "Sendebudget"
+        "name": "Send budget"
       },
       "last_seen": {
-        "name": "Zuletzt gesehen"
+        "name": "Last seen"
       },
       "identity": {
-        "name": "Kennung"
+        "name": "Identity"
       },
       "pairing_state": {
-        "name": "Anmeldestatus",
+        "name": "Pairing state",
         "state": {
-          "paired": "Angemeldet",
-          "paired_elsewhere": "An anderer Zentrale",
-          "virtual": "Virtuell",
-          "discovered": "Erkannt, nicht angemeldet",
-          "unknown": "Unbekannt"
+          "paired": "Paired",
+          "paired_elsewhere": "Paired with another controller",
+          "virtual": "Virtual",
+          "discovered": "Discovered, not paired",
+          "unknown": "Unknown"
         }
       },
       "last_ack": {
-        "name": "Letzte Bestätigung"
+        "name": "Last ACK"
       },
       "last_command_success": {
-        "name": "Letzter erfolgreicher Befehl"
+        "name": "Last command success"
       },
       "last_time_sync": {
-        "name": "Letzte Zeitsynchronisation"
+        "name": "Last time sync"
       },
       "retry_count": {
-        "name": "Wiederholungen"
+        "name": "Retry count"
       },
       "communication": {
-        "name": "Kommunikation"
+        "name": "Communication"
       },
       "peers": {
-        "name": "Verknüpfte Geräte"
+        "name": "Peers"
       },
       "expected_week_profile_temperature": {
-        "name": "Solltemperatur laut Wochenprofil"
+        "name": "Expected week profile temperature"
       },
       "week_profile_validation": {
-        "name": "Wochenprofil-Prüfung"
+        "name": "Week profile validation"
       },
       "valve_position": {
-        "name": "Ventilöffnung"
+        "name": "Valve opening"
       },
       "measured_temperature": {
-        "name": "Isttemperatur"
+        "name": "Measured temperature"
       }
     },
     "number": {
       "comfort_temperature": {
-        "name": "Komforttemperatur"
+        "name": "Comfort temperature"
       },
       "eco_temperature": {
-        "name": "Absenktemperatur"
+        "name": "Eco temperature"
       },
       "window_open_temperature": {
-        "name": "Fenster-offen-Temperatur"
+        "name": "Window open temperature"
       },
       "window_open_duration": {
-        "name": "Fenster-offen-Dauer"
+        "name": "Window open duration"
       },
       "vacation_temperature": {
-        "name": "Urlaub: Temperatur"
+        "name": "Vacation: temperature"
       },
       "vacation_preheat": {
-        "name": "Urlaub: Vorheizen"
+        "name": "Vacation: preheat"
       }
     },
     "button": {
       "save_configuration": {
-        "name": "Konfiguration übertragen"
+        "name": "Save configuration"
       },
       "discard_draft": {
-        "name": "Entwurf verwerfen"
+        "name": "Discard draft"
       }
     },
     "image": {
       "topology": {
-        "name": "Topologie"
+        "name": "Topology"
       }
     },
     "switch": {
       "vacation": {
-        "name": "Urlaubsmodus"
+        "name": "Vacation mode"
       },
       "pairing": {
-        "name": "Anlernen"
+        "name": "Pairing"
       },
       "summer": {
-        "name": "Sommermodus"
+        "name": "Summer mode"
       }
     },
     "date": {
       "vacation_end_date": {
-        "name": "Urlaub: Rückkehr (Datum)"
+        "name": "Vacation: return date"
       }
     },
     "time": {
       "vacation_end_time": {
-        "name": "Urlaub: Rückkehr (Uhrzeit)"
+        "name": "Vacation: return time"
       }
     },
     "event": {
       "push_button": {
-        "name": "Taste",
+        "name": "Button",
         "state_attributes": {
           "event_type": {
             "state": {
@@ -1005,10 +1035,10 @@
     },
     "select": {
       "summer_valve": {
-        "name": "Sommermodus Ventil",
+        "name": "Summer mode valve",
         "state": {
-          "closed": "Aus – Ventil zu",
-          "open": "Ein – Ventil ganz offen"
+          "closed": "Off – valve closed",
+          "open": "On – valve fully open"
         }
       }
     }
