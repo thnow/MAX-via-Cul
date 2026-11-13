@@ -15,6 +15,110 @@ const VAC_TEMP_MAX = 30.5;
 const PREHEAT_OPTIONS = [0, 0.5, 1, 1.5, 2, 3, 4, 6, 8, 12];
 const WEEKDAYS = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 
+// UI language: German for "de*", English for everything else.
+let vLang = "de";
+let vLocale = "de-DE";
+const vSetLang = (hass) => {
+  const language = String(hass?.locale?.language || hass?.language || "en");
+  vLang = language.toLowerCase().startsWith("de") ? "de" : "en";
+  vLocale = vLang === "de" ? "de-DE" : language.includes("-") ? language : "en-GB";
+};
+const V_TEXT = {
+  de: {
+    title: "Urlaub",
+    enterDateTime: "Bitte Datum und Uhrzeit (hh:mm) angeben.",
+    returnInFuture: "Die Rückkehr (abzüglich Vorheizen) muss in der Zukunft liegen.",
+    noSwitch: "Kein MAX!-Urlaubsschalter gefunden. Ist die Integration „MAX! via CUL“ ab Version 0.5 eingerichtet?",
+    vacationActive: "Urlaub aktiv – ganze Wohnung",
+    normal: "Heizung normal im Wochenprogramm",
+    change: "Ändern",
+    endVacation: "Urlaub beenden",
+    notReached: (c, t, names) => `${c} von ${t} Thermostaten bestätigt – noch nicht erreicht: ${names} (wird automatisch wiederholt)`,
+    sendingProgress: (c, t) => `Wird übertragen … ${c} von ${t} Thermostaten bestätigt`,
+    allSummer: (t) => `Alle ${t} Thermostate sind im Sommermodus`,
+    allVacation: (t) => `Alle ${t} Thermostate haben den Urlaub bestätigt`,
+    thermostats: "Thermostate",
+    since: "seit",
+    summerStays: "Die Thermostate bleiben so, bis du den Sommermodus beendest. Die wöchentliche Entkalkungsfahrt läuft weiter, Raumthermometer senden nichts, ein Urlaub ist gesperrt.",
+    sending: "Wird gesendet …",
+    endSummer: "Sommermodus beenden",
+    summer: "Sommermodus",
+    summerPause: "Heizpause",
+    summerRestoring: (n) => `Sommermodus beendet – ${n} Thermostat(e) werden zurückgesetzt …`,
+    summerLink: "Sommermodus …",
+    summerExplain: "Heizsaison vorbei? Alle Thermostate gehen dauerhaft auf <b>Aus</b> (Ventil zu) oder <b>Ein</b> (Ventil ganz offen, entlastet das Ventil – nur bei abgeschalteter Heizung sinnvoll), bis du den Sommermodus beendest. Danach geht jedes Thermostat zurück in seinen Zustand von vorher.",
+    cancel: "Abbrechen",
+    startSummer: "Sommermodus starten",
+    returnAt: "Rückkehr",
+    temperature: "Temperatur",
+    backAt: (when, preheat) => `Thermostate gehen ${when} zurück ins Wochenprogramm${preheat ? ` (${preheat} h Vorheizen)` : ""} – auch ohne Home Assistant.`,
+    vacationRestoring: (n) => `Urlaub beendet – ${n} Thermostat(e) werden zurückgesetzt …`,
+    restoreFailed: (n) => `${n} Thermostat(e) konnten noch nicht zurückgesetzt werden (wird wiederholt).`,
+    formHint: (when, rounded) => `Thermostate gehen ${when} zurück ins Wochenprogramm${rounded ? " (MAX! kennt nur volle und halbe Stunden)" : ""}.`,
+    preheatBefore: (h) => `${h} h vorher`,
+    noPreheat: "kein Vorheizen",
+    returnOn: "Rückkehr am",
+    at: "um",
+    colder: "kälter",
+    warmer: "wärmer",
+    preheat: "Vorheizen",
+    applyChange: "Änderung übernehmen",
+    startVacation: "Urlaub starten",
+    valves: {
+      closed: { label: "Aus – Ventil zu", short: "Heizung aus, Ventile zu" },
+      open: { label: "Ein – Ventil ganz offen", short: "Ventile ganz offen" },
+    },
+    editorTitle: "Titel",
+  },
+  en: {
+    title: "Vacation",
+    enterDateTime: "Please enter date and time (hh:mm).",
+    returnInFuture: "The return (minus preheating) must be in the future.",
+    noSwitch: "No MAX! vacation switch found. Is the integration \"MAX! via CUL\" 0.5 or newer set up?",
+    vacationActive: "Vacation active – whole home",
+    normal: "Heating normal on the week program",
+    change: "Change",
+    endVacation: "End vacation",
+    notReached: (c, t, names) => `${c} of ${t} thermostats confirmed – not reached yet: ${names} (retried automatically)`,
+    sendingProgress: (c, t) => `Sending … ${c} of ${t} thermostats confirmed`,
+    allSummer: (t) => `All ${t} thermostats are in summer mode`,
+    allVacation: (t) => `All ${t} thermostats confirmed the vacation`,
+    thermostats: "Thermostats",
+    since: "since",
+    summerStays: "The thermostats stay like this until you end summer mode. Their weekly decalcification keeps running, room thermometers send nothing, a vacation is blocked.",
+    sending: "Sending …",
+    endSummer: "End summer mode",
+    summer: "Summer mode",
+    summerPause: "Heating paused",
+    summerRestoring: (n) => `Summer mode ended – restoring ${n} thermostat(s) …`,
+    summerLink: "Summer mode …",
+    summerExplain: "Heating season over? All thermostats go to <b>Off</b> (valve closed) or <b>On</b> (valve fully open, relieves the valve – only sensible with the boiler switched off) until you end summer mode. Afterwards every thermostat returns to its previous state.",
+    cancel: "Cancel",
+    startSummer: "Start summer mode",
+    returnAt: "Return",
+    temperature: "Temperature",
+    backAt: (when, preheat) => `Thermostats return to their week program ${when}${preheat ? ` (${preheat} h preheating)` : ""} – even without Home Assistant.`,
+    vacationRestoring: (n) => `Vacation ended – restoring ${n} thermostat(s) …`,
+    restoreFailed: (n) => `${n} thermostat(s) could not be restored yet (retrying).`,
+    formHint: (when, rounded) => `Thermostats return to their week program ${when}${rounded ? " (MAX! only knows full and half hours)" : ""}.`,
+    preheatBefore: (h) => `${h} h before`,
+    noPreheat: "no preheating",
+    returnOn: "Return on",
+    at: "at",
+    colder: "colder",
+    warmer: "warmer",
+    preheat: "Preheating",
+    applyChange: "Apply change",
+    startVacation: "Start vacation",
+    valves: {
+      closed: { label: "Off – valve closed", short: "heating off, valves closed" },
+      open: { label: "On – valve fully open", short: "valves fully open" },
+    },
+    editorTitle: "Title",
+  },
+};
+const VT = () => V_TEXT[vLang];
+
 const vEsc = (value) =>
   String(value ?? "").replace(/[&<>"']/g, (ch) => ({
     "&": "&amp;",
@@ -26,11 +130,13 @@ const vEsc = (value) =>
 
 const pad2 = (n) => String(n).padStart(2, "0");
 const fmtNum = (value) =>
-  Number(value).toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+  Number(value).toLocaleString(vLocale, { minimumFractionDigits: 0, maximumFractionDigits: 1 });
 const fmtWhen = (date) =>
-  `${WEEKDAYS[date.getDay()]}, ${pad2(date.getDate())}.${pad2(date.getMonth() + 1)}. ${pad2(date.getHours())}:${pad2(
-    date.getMinutes()
-  )}`;
+  vLang === "de"
+    ? `${WEEKDAYS[date.getDay()]}, ${pad2(date.getDate())}.${pad2(date.getMonth() + 1)}. ${pad2(date.getHours())}:${pad2(
+        date.getMinutes()
+      )}`
+    : date.toLocaleString(vLocale, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const toDateInput = (date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
 const toTimeInput = (date) => `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 const floorHalfHour = (date) => {
@@ -48,10 +154,7 @@ const parseLocal = (day, time) => {
   return new Date(Number(dm[1]), Number(dm[2]) - 1, Number(dm[3]), h, m, 0, 0);
 };
 
-const SUMMER_VALVES = {
-  closed: { label: "Aus – Ventil zu", short: "Heizung aus, Ventile zu" },
-  open: { label: "Ein – Ventil ganz offen", short: "Ventile ganz offen" },
-};
+const SUMMER_VALVE_KEYS = ["closed", "open"];
 
 class CulMaxVacationCard extends HTMLElement {
   static _isVacationSwitch(entityId, stateObj) {
@@ -65,7 +168,7 @@ class CulMaxVacationCard extends HTMLElement {
   static getStubConfig(hass) {
     const entity =
       Object.keys(hass?.states || {}).find((id) => CulMaxVacationCard._isVacationSwitch(id, hass.states[id])) || "";
-    return { entity, title: "Urlaub" };
+    return { entity };
   }
 
   constructor() {
@@ -81,16 +184,17 @@ class CulMaxVacationCard extends HTMLElement {
   }
 
   setConfig(config) {
-    this._config = { title: "Urlaub", ...(config || {}) };
+    this._config = { ...(config || {}) };
     this._signature = "";
     if (this._hass) this._render();
   }
 
   set hass(hass) {
     this._hass = hass;
+    vSetLang(hass);
     const st = this._stateObj();
     const su = this._summerObj();
-    const signature = JSON.stringify([st ? [st.state, st.attributes] : null, su ? [su.state, su.attributes] : null]);
+    const signature = JSON.stringify([vLang, st ? [st.state, st.attributes] : null, su ? [su.state, su.attributes] : null]);
     if (signature !== this._signature) {
       this._signature = signature;
       this._render();
@@ -145,21 +249,21 @@ class CulMaxVacationCard extends HTMLElement {
 
   _validate() {
     const end = this._formEnd();
-    if (!end) return { error: "Bitte Datum und Uhrzeit (hh:mm) angeben." };
+    if (!end) return { error: VT().enterDateTime };
     const deviceEnd = floorHalfHour(new Date(end.getTime() - this._form.preheat * 3600 * 1000));
     if (deviceEnd.getTime() <= Date.now() + 5 * 60 * 1000) {
-      return { error: "Die Rückkehr (abzüglich Vorheizen) muss in der Zukunft liegen." };
+      return { error: VT().returnInFuture };
     }
     return { end, deviceEnd };
   }
 
   _render() {
     if (!this._config || !this._hass) return;
+    vSetLang(this._hass);
+    const T = VT();
     const st = this._stateObj();
     if (!st) {
-      this.shadowRoot.innerHTML = `${this._style()}<ha-card><div class="msg">
-        Kein MAX!-Urlaubsschalter gefunden. Ist die Integration „MAX! via CUL“ ab Version 0.5 eingerichtet?
-      </div></ha-card>`;
+      this.shadowRoot.innerHTML = `${this._style()}<ha-card><div class="msg">${vEsc(T.noSwitch)}</div></ha-card>`;
       return;
     }
     const attrs = st.attributes;
@@ -176,8 +280,11 @@ class CulMaxVacationCard extends HTMLElement {
       <div class="header">
         <ha-icon class="hicon ${active ? "on" : ""}" icon="${active ? "mdi:airplane" : "mdi:airplane-off"}"></ha-icon>
         <div>
-          <div class="title">${vEsc(this._config.title)}</div>
-          <div class="subtitle">${active ? "Urlaub aktiv – ganze Wohnung" : "Heizung normal im Wochenprogramm"}</div>
+          <div class="title">${vEsc(
+            // the old default title was stored in the card config: translate it too
+            !this._config.title || this._config.title === V_TEXT.de.title ? T.title : this._config.title
+          )}</div>
+          <div class="subtitle">${active ? T.vacationActive : T.normal}</div>
         </div>
       </div>`;
 
@@ -187,8 +294,8 @@ class CulMaxVacationCard extends HTMLElement {
     if (showForm) body += this._formHtml(active);
     else
       body += `<div class="actions">
-          <button class="ghost" data-action="edit" ${this._busy ? "disabled" : ""}>Ändern</button>
-          <button class="primary danger" data-action="end" ${this._busy ? "disabled" : ""}>Urlaub beenden</button>
+          <button class="ghost" data-action="edit" ${this._busy ? "disabled" : ""}>${T.change}</button>
+          <button class="primary danger" data-action="end" ${this._busy ? "disabled" : ""}>${T.endVacation}</button>
         </div>`;
     if (summer && !active) body += this._summerSection(summer.attributes);
     if (this._error) body += `<div class="status error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><span>${vEsc(this._error)}</span></div>`;
@@ -198,7 +305,8 @@ class CulMaxVacationCard extends HTMLElement {
   }
 
   _renderSummer(attrs) {
-    const valve = SUMMER_VALVES[attrs.summer_valve] ? attrs.summer_valve : "closed";
+    const T = VT();
+    const valve = SUMMER_VALVE_KEYS.includes(attrs.summer_valve) ? attrs.summer_valve : "closed";
     const total = Object.keys(attrs.devices || {}).length;
     const confirmed = attrs.confirmed || 0;
     const failedNames = Object.entries(attrs.devices || {})
@@ -206,33 +314,35 @@ class CulMaxVacationCard extends HTMLElement {
       .map(([name]) => name);
     let delivery;
     if (failedNames.length) {
-      delivery = `<div class="status warn"><ha-icon icon="mdi:alert-outline"></ha-icon><span>${confirmed} von ${total} Thermostaten bestätigt – noch nicht erreicht: ${vEsc(
-        failedNames.join(", ")
-      )} (wird automatisch wiederholt)</span></div>`;
+      delivery = `<div class="status warn"><ha-icon icon="mdi:alert-outline"></ha-icon><span>${VT().notReached(
+        confirmed,
+        total,
+        vEsc(failedNames.join(", "))
+      )}</span></div>`;
     } else if (attrs.pending) {
-      delivery = `<div class="status info"><ha-icon icon="mdi:upload-network-outline"></ha-icon><span>Wird übertragen … ${confirmed} von ${total} Thermostaten bestätigt</span></div>`;
+      delivery = `<div class="status info"><ha-icon icon="mdi:upload-network-outline"></ha-icon><span>${VT().sendingProgress(confirmed, total)}</span></div>`;
     } else {
-      delivery = `<div class="status ok"><ha-icon icon="mdi:check-circle-outline"></ha-icon><span>Alle ${total} Thermostate sind im Sommermodus</span></div>`;
+      delivery = `<div class="status ok"><ha-icon icon="mdi:check-circle-outline"></ha-icon><span>${VT().allSummer(total)}</span></div>`;
     }
     const since = attrs.started_at ? new Date(attrs.started_at) : null;
     const body = `
       <div class="big">
-        <div class="tile"><span class="lbl">Thermostate</span><span class="val">${vEsc(SUMMER_VALVES[valve].label)}</span></div>
-        <div class="tile"><span class="lbl">seit</span><span class="val">${since ? vEsc(fmtWhen(since)) : "–"}</span></div>
+        <div class="tile"><span class="lbl">${T.thermostats}</span><span class="val">${vEsc(T.valves[valve].label)}</span></div>
+        <div class="tile"><span class="lbl">${T.since}</span><span class="val">${since ? vEsc(fmtWhen(since)) : "–"}</span></div>
       </div>
-      <div class="hint"><ha-icon icon="mdi:information-outline"></ha-icon><span>Die Thermostate bleiben so, bis du den Sommermodus beendest. Die wöchentliche Entkalkungsfahrt läuft weiter, Raumthermometer senden nichts, ein Urlaub ist gesperrt.</span></div>
+      <div class="hint"><ha-icon icon="mdi:information-outline"></ha-icon><span>${T.summerStays}</span></div>
       ${delivery}
       <div class="actions">
         <button class="primary" data-action="summer-end" ${this._busy ? "disabled" : ""}>${
-          this._busy ? "Wird gesendet …" : "Sommermodus beenden"
+          this._busy ? T.sending : T.endSummer
         }</button>
       </div>`;
     const header = `
       <div class="header">
         <ha-icon class="hicon on" icon="mdi:white-balance-sunny"></ha-icon>
         <div>
-          <div class="title">Sommermodus</div>
-          <div class="subtitle">Heizpause – ${vEsc(SUMMER_VALVES[valve].short)}</div>
+          <div class="title">${T.summer}</div>
+          <div class="subtitle">${T.summerPause} – ${vEsc(T.valves[valve].short)}</div>
         </div>
       </div>`;
     const error = this._error
@@ -245,32 +355,31 @@ class CulMaxVacationCard extends HTMLElement {
   _summerRestoreNote(attrs) {
     const restoring = attrs.restoring || 0;
     if (!restoring) return "";
-    return `<div class="status info"><ha-icon icon="mdi:upload-network-outline"></ha-icon><span>Sommermodus beendet – ${restoring} Thermostat(e) werden zurückgesetzt …</span></div>`;
+    return `<div class="status info"><ha-icon icon="mdi:upload-network-outline"></ha-icon><span>${VT().summerRestoring(restoring)}</span></div>`;
   }
 
   _summerSection(attrs) {
+    const T = VT();
     if (!this._summerOpen) {
       return `<div class="summer-toggle"><button class="link" data-action="summer-open">
-        <ha-icon icon="mdi:white-balance-sunny"></ha-icon><span>Sommermodus …</span></button></div>`;
+        <ha-icon icon="mdi:white-balance-sunny"></ha-icon><span>${T.summerLink}</span></button></div>`;
     }
-    const valve = this._summerValve || (SUMMER_VALVES[attrs.summer_valve] ? attrs.summer_valve : "closed");
-    const choice = Object.entries(SUMMER_VALVES)
-      .map(
-        ([key, info]) =>
-          `<button class="seg ${key === valve ? "sel" : ""}" data-valve="${key}" ${this._busy ? "disabled" : ""}>${vEsc(info.label)}</button>`
-      )
-      .join("");
+    const valve = this._summerValve || (SUMMER_VALVE_KEYS.includes(attrs.summer_valve) ? attrs.summer_valve : "closed");
+    const choice = SUMMER_VALVE_KEYS.map(
+      (key) =>
+        `<button class="seg ${key === valve ? "sel" : ""}" data-valve="${key}" ${this._busy ? "disabled" : ""}>${vEsc(
+          T.valves[key].label
+        )}</button>`
+    ).join("");
     return `
       <div class="summer">
-        <div class="summer-title"><ha-icon icon="mdi:white-balance-sunny"></ha-icon><span>Sommermodus</span></div>
-        <div class="hint"><ha-icon icon="mdi:information-outline"></ha-icon><span>Heizsaison vorbei? Alle Thermostate gehen dauerhaft auf
-          <b>Aus</b> (Ventil zu) oder <b>Ein</b> (Ventil ganz offen, entlastet das Ventil – nur bei abgeschalteter Heizung sinnvoll),
-          bis du den Sommermodus beendest. Danach geht jedes Thermostat zurück in seinen Zustand von vorher.</span></div>
+        <div class="summer-title"><ha-icon icon="mdi:white-balance-sunny"></ha-icon><span>${T.summer}</span></div>
+        <div class="hint"><ha-icon icon="mdi:information-outline"></ha-icon><span>${T.summerExplain}</span></div>
         <div class="segs">${choice}</div>
         <div class="actions">
-          <button class="ghost" data-action="summer-close" ${this._busy ? "disabled" : ""}>Abbrechen</button>
+          <button class="ghost" data-action="summer-close" ${this._busy ? "disabled" : ""}>${T.cancel}</button>
           <button class="primary" data-action="summer-start" ${this._busy ? "disabled" : ""}>${
-            this._busy ? "Wird gesendet …" : "Sommermodus starten"
+            this._busy ? T.sending : T.startSummer
           }</button>
         </div>
       </div>`;
@@ -288,25 +397,28 @@ class CulMaxVacationCard extends HTMLElement {
       .map(([name]) => name);
     let delivery;
     if (failed) {
-      delivery = `<div class="status warn"><ha-icon icon="mdi:alert-outline"></ha-icon><span>${confirmed} von ${total} Thermostaten bestätigt – noch nicht erreicht: ${vEsc(
-        failedNames.join(", ")
-      )} (wird automatisch wiederholt)</span></div>`;
+      delivery = `<div class="status warn"><ha-icon icon="mdi:alert-outline"></ha-icon><span>${VT().notReached(
+        confirmed,
+        total,
+        vEsc(failedNames.join(", "))
+      )}</span></div>`;
     } else if (pending) {
-      delivery = `<div class="status info"><ha-icon icon="mdi:upload-network-outline"></ha-icon><span>Wird übertragen … ${confirmed} von ${total} Thermostaten bestätigt</span></div>`;
+      delivery = `<div class="status info"><ha-icon icon="mdi:upload-network-outline"></ha-icon><span>${VT().sendingProgress(confirmed, total)}</span></div>`;
     } else {
-      delivery = `<div class="status ok"><ha-icon icon="mdi:check-circle-outline"></ha-icon><span>Alle ${total} Thermostate haben den Urlaub bestätigt</span></div>`;
+      delivery = `<div class="status ok"><ha-icon icon="mdi:check-circle-outline"></ha-icon><span>${VT().allVacation(total)}</span></div>`;
     }
     const preheat = Number(attrs.preheat_hours || 0);
     return `
       <div class="big">
-        <div class="tile"><span class="lbl">Rückkehr</span><span class="val">${ret ? vEsc(fmtWhen(ret)) : "–"}</span></div>
-        <div class="tile"><span class="lbl">Temperatur</span><span class="val">${fmtNum(attrs.temperature ?? 16)} °C</span></div>
+        <div class="tile"><span class="lbl">${VT().returnAt}</span><span class="val">${ret ? vEsc(fmtWhen(ret)) : "–"}</span></div>
+        <div class="tile"><span class="lbl">${VT().temperature}</span><span class="val">${fmtNum(attrs.temperature ?? 16)} °C</span></div>
       </div>
       ${
         back
-          ? `<div class="hint"><ha-icon icon="mdi:radiator"></ha-icon><span>Thermostate gehen ${vEsc(fmtWhen(back))} zurück ins Wochenprogramm${
-              preheat ? ` (${fmtNum(preheat)} h Vorheizen)` : ""
-            } – auch ohne Home Assistant.</span></div>`
+          ? `<div class="hint"><ha-icon icon="mdi:radiator"></ha-icon><span>${VT().backAt(
+              vEsc(fmtWhen(back)),
+              preheat ? fmtNum(preheat) : ""
+            )}</span></div>`
           : ""
       }
       ${delivery}`;
@@ -317,9 +429,9 @@ class CulMaxVacationCard extends HTMLElement {
     const restoring = statuses.filter((s) => s === "restoring").length;
     const failed = statuses.filter((s) => s === "restore_failed").length;
     if (restoring)
-      return `<div class="status info"><ha-icon icon="mdi:upload-network-outline"></ha-icon><span>Urlaub beendet – ${restoring} Thermostat(e) werden zurückgesetzt …</span></div>`;
+      return `<div class="status info"><ha-icon icon="mdi:upload-network-outline"></ha-icon><span>${VT().vacationRestoring(restoring)}</span></div>`;
     if (failed)
-      return `<div class="status warn"><ha-icon icon="mdi:alert-outline"></ha-icon><span>${failed} Thermostat(e) konnten noch nicht zurückgesetzt werden (wird wiederholt).</span></div>`;
+      return `<div class="status warn"><ha-icon icon="mdi:alert-outline"></ha-icon><span>${VT().restoreFailed(failed)}</span></div>`;
     return "";
   }
 
@@ -327,42 +439,41 @@ class CulMaxVacationCard extends HTMLElement {
     if (check.error) return check.error;
     const wanted = new Date(check.end.getTime() - this._form.preheat * 3600 * 1000);
     const rounded = wanted.getTime() !== check.deviceEnd.getTime();
-    return `Thermostate gehen ${fmtWhen(check.deviceEnd)} zurück ins Wochenprogramm${
-      rounded ? " (MAX! kennt nur volle und halbe Stunden)" : ""
-    }.`;
+    return VT().formHint(fmtWhen(check.deviceEnd), rounded);
   }
 
   _formHtml(active) {
+    const T = VT();
     const f = this._form;
     const check = this._validate();
     const preheatOptions = PREHEAT_OPTIONS.map(
-      (h) => `<option value="${h}" ${h === f.preheat ? "selected" : ""}>${h ? `${fmtNum(h)} h vorher` : "kein Vorheizen"}</option>`
+      (h) => `<option value="${h}" ${h === f.preheat ? "selected" : ""}>${h ? T.preheatBefore(fmtNum(h)) : T.noPreheat}</option>`
     ).join("");
     const info = `<div class="hint ${check.error ? "warn" : ""}"><ha-icon icon="mdi:information-outline"></ha-icon><span>${vEsc(
       this._formHintText(check)
     )}</span></div>`;
     return `
       <div class="form">
-        <label class="field"><span>Rückkehr am</span>
+        <label class="field"><span>${T.returnOn}</span>
           <input type="date" data-field="day" value="${vEsc(f.day)}" ${this._busy ? "disabled" : ""}></label>
-        <label class="field"><span>um</span>
+        <label class="field"><span>${T.at}</span>
           <input type="text" inputmode="numeric" placeholder="hh:mm" maxlength="5" data-field="time" value="${vEsc(f.time)}" ${
             this._busy ? "disabled" : ""
           }></label>
-        <div class="field"><span>Temperatur</span>
+        <div class="field"><span>${T.temperature}</span>
           <div class="stepper">
-            <button data-step="-0.5" aria-label="kälter" ${this._busy ? "disabled" : ""}><ha-icon icon="mdi:minus"></ha-icon></button>
+            <button data-step="-0.5" aria-label="${T.colder}" ${this._busy ? "disabled" : ""}><ha-icon icon="mdi:minus"></ha-icon></button>
             <span class="tval">${fmtNum(f.temperature)} °C</span>
-            <button data-step="0.5" aria-label="wärmer" ${this._busy ? "disabled" : ""}><ha-icon icon="mdi:plus"></ha-icon></button>
+            <button data-step="0.5" aria-label="${T.warmer}" ${this._busy ? "disabled" : ""}><ha-icon icon="mdi:plus"></ha-icon></button>
           </div></div>
-        <label class="field"><span>Vorheizen</span>
+        <label class="field"><span>${T.preheat}</span>
           <select data-field="preheat" ${this._busy ? "disabled" : ""}>${preheatOptions}</select></label>
       </div>
       ${info}
       <div class="actions">
-        ${active ? `<button class="ghost" data-action="cancel" ${this._busy ? "disabled" : ""}>Abbrechen</button>` : ""}
+        ${active ? `<button class="ghost" data-action="cancel" ${this._busy ? "disabled" : ""}>${T.cancel}</button>` : ""}
         <button class="primary" data-action="start" ${this._busy || check.error ? "disabled" : ""}>
-          ${this._busy ? "Wird gesendet …" : active ? "Änderung übernehmen" : "Urlaub starten"}</button>
+          ${this._busy ? T.sending : active ? T.applyChange : T.startVacation}</button>
       </div>`;
   }
 
@@ -586,8 +697,8 @@ class CulMaxVacationCardEditor extends HTMLElement {
     );
     this.innerHTML = `
       <div style="display:grid;gap:12px;padding:8px 0">
-        <label style="display:grid;gap:6px"><span>Titel</span>
-          <input data-field="title" value="${vEsc(this._config.title ?? "Urlaub")}"
+        <label style="display:grid;gap:6px"><span>${V_TEXT[vLang].editorTitle}</span>
+          <input data-field="title" value="${vEsc(this._config.title ?? "")}"
             style="padding:8px 10px;border-radius:8px;border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color)"></label>
         ${
           switches.length > 1
@@ -619,8 +730,8 @@ window.customCards = window.customCards || [];
 if (!window.customCards.some((card) => card.type === "cul-max-vacation-card")) {
   window.customCards.push({
     type: "cul-max-vacation-card",
-    name: "CUL MAX Urlaub",
-    description: "Urlaubsmodus für alle MAX!-Thermostate: Rückkehr, Temperatur, Vorheizen, Status",
+    name: "CUL MAX vacation",
+    description: "Vacation and summer mode for all MAX! thermostats: return, temperature, preheating, status",
     preview: true,
     documentationURL: "https://github.com/thnow/MAX-via-Cul/blob/main/README.md",
   });
