@@ -1190,7 +1190,11 @@
         "name": "Retry count"
       },
       "communication": {
-        "name": "Communication"
+        "name": "Communication",
+        "state": {
+          "ok": "OK",
+          "error": "Error"
+        }
       },
       "peers": {
         "name": "Peers"
@@ -1199,7 +1203,17 @@
         "name": "Expected week profile temperature"
       },
       "week_profile_validation": {
-        "name": "Week profile validation"
+        "name": "Week profile validation",
+        "state": {
+          "likely_applied": "Following the schedule",
+          "pending": "Upload pending",
+          "mismatch": "Differs from the schedule",
+          "temporary_change": "Temporarily changed",
+          "temporary_override": "Temporarily overridden",
+          "manual_override": "Manual",
+          "boost": "Boost",
+          "window_open": "Window open"
+        }
       },
       "valve_position": {
         "name": "Valve opening"

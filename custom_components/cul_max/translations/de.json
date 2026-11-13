@@ -1190,7 +1190,11 @@
         "name": "Wiederholungen"
       },
       "communication": {
-        "name": "Kommunikation"
+        "name": "Kommunikation",
+        "state": {
+          "ok": "OK",
+          "error": "Fehler"
+        }
       },
       "peers": {
         "name": "Verknüpfte Geräte"
@@ -1199,7 +1203,17 @@
         "name": "Solltemperatur laut Wochenprofil"
       },
       "week_profile_validation": {
-        "name": "Wochenprofil-Prüfung"
+        "name": "Wochenprofil-Prüfung",
+        "state": {
+          "likely_applied": "Läuft nach Plan",
+          "pending": "Übertragung ausstehend",
+          "mismatch": "Weicht vom Plan ab",
+          "temporary_change": "Vorübergehend geändert",
+          "temporary_override": "Vorübergehend übersteuert",
+          "manual_override": "Manuell",
+          "boost": "Boost",
+          "window_open": "Fenster offen"
+        }
       },
       "valve_position": {
         "name": "Ventilöffnung"
