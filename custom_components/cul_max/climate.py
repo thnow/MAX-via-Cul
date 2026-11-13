@@ -31,7 +31,13 @@ from .const import (
     TEMP_OFF,
     CLIMATE_DEVICE_TYPES,
 )
-from .coordinator import CommandSupersededError, CulMaxCoordinator, KnownDevice
+from .coordinator import (
+    CommandSupersededError,
+    CulCreditError,
+    CulMaxCoordinator,
+    DeviceNackError,
+    KnownDevice,
+)
 from .protocol import (
     MaxMessage,
     ThermostatState,
@@ -256,7 +262,20 @@ class CulMaxClimate(ClimateEntity):
             self._command_error = str(err)
             self._restore_confirmed_state()
             self.async_write_ha_state()
-            raise ha_error(CulMaxError("command_not_confirmed", device=self._device.name, command=description, error=err)) from err
+            raise ha_error(self._command_failure(description, err)) from err
+
+    def _command_failure(self, description: str, err: Exception) -> CulMaxError:
+        """Readable error for a change the thermostat did not confirm."""
+        entry = self.device_entry
+        device = (entry.name_by_user or entry.name) if entry is not None else None
+        device = device or self._device.name
+        if isinstance(err, CulCreditError):
+            return CulMaxError("command_no_credit")
+        if isinstance(err, DeviceNackError):
+            return CulMaxError("command_rejected", device=device)
+        if isinstance(err, ConnectionError) and "No ACK" in str(err):
+            return CulMaxError("command_no_answer", device=device)
+        return CulMaxError("command_not_confirmed", device=device, command=description, error=err)
         self._command_status = "confirmed"
         self.async_write_ha_state()
 

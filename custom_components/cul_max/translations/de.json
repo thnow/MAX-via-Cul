@@ -1063,6 +1063,15 @@
     "command_not_confirmed": {
       "message": "{device}: {command} wurde nicht bestätigt ({error})"
     },
+    "command_no_answer": {
+      "message": "{device} hat per Funk nicht geantwortet – die Änderung wurde nicht übernommen. Bitte Batterien und Funkreichweite des Thermostats prüfen."
+    },
+    "command_rejected": {
+      "message": "{device} hat die Änderung abgelehnt."
+    },
+    "command_no_credit": {
+      "message": "Der CUL hat gerade keine Sendezeit mehr (1-%-Regel). Bitte in ein paar Minuten noch einmal versuchen."
+    },
     "profile_line_invalid": {
       "message": "Ungültige Zeile \"{line}\". Erwartet: Tag und Profil."
     },
