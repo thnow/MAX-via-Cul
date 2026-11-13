@@ -147,6 +147,9 @@
       },
       "pairing": {
         "name": "Pairing"
+      },
+      "summer": {
+        "name": "Summer mode"
       }
     },
     "date": {
@@ -169,6 +172,15 @@
               "eco": "Eco"
             }
           }
+        }
+      }
+    },
+    "select": {
+      "summer_valve": {
+        "name": "Summer mode valve",
+        "state": {
+          "closed": "Off – valve closed",
+          "open": "On – valve fully open"
         }
       }
     }

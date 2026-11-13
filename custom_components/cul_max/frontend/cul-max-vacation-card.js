@@ -5,6 +5,9 @@
  * the vacation for the whole flat (cul_max.start_vacation). While a vacation
  * is running it shows until when, which thermostats confirmed and lets you
  * change or end it (cul_max.end_vacation).
+ *
+ * Summer mode (cul_max.start_summer / end_summer) lives in the same card:
+ * a collapsed section starts it; while it runs the card shows only summer.
  */
 
 const VAC_TEMP_MIN = 4.5;
@@ -45,9 +48,18 @@ const parseLocal = (day, time) => {
   return new Date(Number(dm[1]), Number(dm[2]) - 1, Number(dm[3]), h, m, 0, 0);
 };
 
+const SUMMER_VALVES = {
+  closed: { label: "Aus – Ventil zu", short: "Heizung aus, Ventile zu" },
+  open: { label: "Ein – Ventil ganz offen", short: "Ventile ganz offen" },
+};
+
 class CulMaxVacationCard extends HTMLElement {
   static _isVacationSwitch(entityId, stateObj) {
     return entityId?.startsWith("switch.") && stateObj?.attributes && "thermostats_until" in stateObj.attributes;
+  }
+
+  static _isSummerSwitch(entityId, stateObj) {
+    return entityId?.startsWith("switch.") && stateObj?.attributes && "summer_valve" in stateObj.attributes;
   }
 
   static getStubConfig(hass) {
@@ -64,6 +76,8 @@ class CulMaxVacationCard extends HTMLElement {
     this._busy = false;
     this._error = "";
     this._signature = "";
+    this._summerOpen = false;
+    this._summerValve = null;
   }
 
   setConfig(config) {
@@ -75,7 +89,8 @@ class CulMaxVacationCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     const st = this._stateObj();
-    const signature = JSON.stringify(st ? [st.state, st.attributes] : null);
+    const su = this._summerObj();
+    const signature = JSON.stringify([st ? [st.state, st.attributes] : null, su ? [su.state, su.attributes] : null]);
     if (signature !== this._signature) {
       this._signature = signature;
       this._render();
@@ -99,6 +114,15 @@ class CulMaxVacationCard extends HTMLElement {
   _stateObj() {
     const id = this._entityId();
     return id ? this._hass?.states?.[id] : undefined;
+  }
+
+  _summerObj() {
+    const states = this._hass?.states || {};
+    const id =
+      this._config?.summer_entity ||
+      Object.keys(states).find((sid) => CulMaxVacationCard._isSummerSwitch(sid, states[sid])) ||
+      "";
+    return id ? states[id] : undefined;
   }
 
   _initForm(attrs) {
@@ -140,6 +164,11 @@ class CulMaxVacationCard extends HTMLElement {
     }
     const attrs = st.attributes;
     const active = st.state === "on";
+    const summer = this._summerObj();
+    if (summer?.state === "on") {
+      this._renderSummer(summer.attributes);
+      return;
+    }
     if (!this._form) this._initForm(attrs);
     const showForm = !active || this._editing;
 
@@ -154,17 +183,97 @@ class CulMaxVacationCard extends HTMLElement {
 
     let body = "";
     if (active) body += this._activeSummary(attrs);
-    else body += this._restoreNote(attrs);
+    else body += this._restoreNote(attrs) + (summer ? this._summerRestoreNote(summer.attributes) : "");
     if (showForm) body += this._formHtml(active);
     else
       body += `<div class="actions">
           <button class="ghost" data-action="edit" ${this._busy ? "disabled" : ""}>Ändern</button>
           <button class="primary danger" data-action="end" ${this._busy ? "disabled" : ""}>Urlaub beenden</button>
         </div>`;
+    if (summer && !active) body += this._summerSection(summer.attributes);
     if (this._error) body += `<div class="status error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><span>${vEsc(this._error)}</span></div>`;
 
     this.shadowRoot.innerHTML = `${this._style()}<ha-card><div class="wrapper">${header}${body}</div></ha-card>`;
     this._bind();
+  }
+
+  _renderSummer(attrs) {
+    const valve = SUMMER_VALVES[attrs.summer_valve] ? attrs.summer_valve : "closed";
+    const total = Object.keys(attrs.devices || {}).length;
+    const confirmed = attrs.confirmed || 0;
+    const failedNames = Object.entries(attrs.devices || {})
+      .filter(([, status]) => status === "failed")
+      .map(([name]) => name);
+    let delivery;
+    if (failedNames.length) {
+      delivery = `<div class="status warn"><ha-icon icon="mdi:alert-outline"></ha-icon><span>${confirmed} von ${total} Thermostaten bestätigt – noch nicht erreicht: ${vEsc(
+        failedNames.join(", ")
+      )} (wird automatisch wiederholt)</span></div>`;
+    } else if (attrs.pending) {
+      delivery = `<div class="status info"><ha-icon icon="mdi:upload-network-outline"></ha-icon><span>Wird übertragen … ${confirmed} von ${total} Thermostaten bestätigt</span></div>`;
+    } else {
+      delivery = `<div class="status ok"><ha-icon icon="mdi:check-circle-outline"></ha-icon><span>Alle ${total} Thermostate sind im Sommermodus</span></div>`;
+    }
+    const since = attrs.started_at ? new Date(attrs.started_at) : null;
+    const body = `
+      <div class="big">
+        <div class="tile"><span class="lbl">Thermostate</span><span class="val">${vEsc(SUMMER_VALVES[valve].label)}</span></div>
+        <div class="tile"><span class="lbl">seit</span><span class="val">${since ? vEsc(fmtWhen(since)) : "–"}</span></div>
+      </div>
+      <div class="hint"><ha-icon icon="mdi:information-outline"></ha-icon><span>Die Thermostate bleiben so, bis du den Sommermodus beendest. Die wöchentliche Entkalkungsfahrt läuft weiter, Raumthermometer senden nichts, ein Urlaub ist gesperrt.</span></div>
+      ${delivery}
+      <div class="actions">
+        <button class="primary" data-action="summer-end" ${this._busy ? "disabled" : ""}>${
+          this._busy ? "Wird gesendet …" : "Sommermodus beenden"
+        }</button>
+      </div>`;
+    const header = `
+      <div class="header">
+        <ha-icon class="hicon on" icon="mdi:white-balance-sunny"></ha-icon>
+        <div>
+          <div class="title">Sommermodus</div>
+          <div class="subtitle">Heizpause – ${vEsc(SUMMER_VALVES[valve].short)}</div>
+        </div>
+      </div>`;
+    const error = this._error
+      ? `<div class="status error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><span>${vEsc(this._error)}</span></div>`
+      : "";
+    this.shadowRoot.innerHTML = `${this._style()}<ha-card><div class="wrapper">${header}${body}${error}</div></ha-card>`;
+    this._bind();
+  }
+
+  _summerRestoreNote(attrs) {
+    const restoring = attrs.restoring || 0;
+    if (!restoring) return "";
+    return `<div class="status info"><ha-icon icon="mdi:upload-network-outline"></ha-icon><span>Sommermodus beendet – ${restoring} Thermostat(e) werden zurückgesetzt …</span></div>`;
+  }
+
+  _summerSection(attrs) {
+    if (!this._summerOpen) {
+      return `<div class="summer-toggle"><button class="link" data-action="summer-open">
+        <ha-icon icon="mdi:white-balance-sunny"></ha-icon><span>Sommermodus …</span></button></div>`;
+    }
+    const valve = this._summerValve || (SUMMER_VALVES[attrs.summer_valve] ? attrs.summer_valve : "closed");
+    const choice = Object.entries(SUMMER_VALVES)
+      .map(
+        ([key, info]) =>
+          `<button class="seg ${key === valve ? "sel" : ""}" data-valve="${key}" ${this._busy ? "disabled" : ""}>${vEsc(info.label)}</button>`
+      )
+      .join("");
+    return `
+      <div class="summer">
+        <div class="summer-title"><ha-icon icon="mdi:white-balance-sunny"></ha-icon><span>Sommermodus</span></div>
+        <div class="hint"><ha-icon icon="mdi:information-outline"></ha-icon><span>Heizsaison vorbei? Alle Thermostate gehen dauerhaft auf
+          <b>Aus</b> (Ventil zu) oder <b>Ein</b> (Ventil ganz offen, entlastet das Ventil – nur bei abgeschalteter Heizung sinnvoll),
+          bis du den Sommermodus beendest. Danach geht jedes Thermostat zurück in seinen Zustand von vorher.</span></div>
+        <div class="segs">${choice}</div>
+        <div class="actions">
+          <button class="ghost" data-action="summer-close" ${this._busy ? "disabled" : ""}>Abbrechen</button>
+          <button class="primary" data-action="summer-start" ${this._busy ? "disabled" : ""}>${
+            this._busy ? "Wird gesendet …" : "Sommermodus starten"
+          }</button>
+        </div>
+      </div>`;
   }
 
   _activeSummary(attrs) {
@@ -278,6 +387,25 @@ class CulMaxVacationCard extends HTMLElement {
       })
     );
     root.querySelector('[data-action="start"]')?.addEventListener("click", () => this._start());
+    root.querySelector('[data-action="summer-open"]')?.addEventListener("click", () => {
+      this._summerOpen = true;
+      this._render();
+    });
+    root.querySelector('[data-action="summer-close"]')?.addEventListener("click", () => {
+      this._summerOpen = false;
+      this._summerValve = null;
+      this._render();
+    });
+    root.querySelectorAll("[data-valve]").forEach((el) =>
+      el.addEventListener("click", () => {
+        this._summerValve = el.dataset.valve;
+        this._render();
+      })
+    );
+    root.querySelector('[data-action="summer-start"]')?.addEventListener("click", () =>
+      this._summerCall("start_summer", { valve: this._summerValve || this._summerObj()?.attributes?.summer_valve || "closed" })
+    );
+    root.querySelector('[data-action="summer-end"]')?.addEventListener("click", () => this._summerCall("end_summer", {}));
     root.querySelector('[data-action="end"]')?.addEventListener("click", () => this._end());
     root.querySelector('[data-action="edit"]')?.addEventListener("click", () => {
       this._editing = true;
@@ -318,6 +446,22 @@ class CulMaxVacationCard extends HTMLElement {
         preheat_hours: this._form.preheat,
       });
       this._editing = false;
+    } catch (err) {
+      this._error = err?.message || String(err);
+    } finally {
+      this._busy = false;
+      this._render();
+    }
+  }
+
+  async _summerCall(service, data) {
+    this._busy = true;
+    this._error = "";
+    this._render();
+    try {
+      await this._hass.callService("cul_max", service, data);
+      this._summerOpen = false;
+      this._summerValve = null;
     } catch (err) {
       this._error = err?.message || String(err);
     } finally {
@@ -402,7 +546,23 @@ class CulMaxVacationCard extends HTMLElement {
         background: transparent; color: var(--primary-color);
       }
       .ghost:hover { background: rgba(var(--rgb-primary-color, 3, 169, 244), 0.1); }
-      @media (max-width: 420px) { .form { grid-template-columns: 1fr; } }
+      .summer-toggle { display: flex; justify-content: flex-start; margin-top: 12px; }
+      .link {
+        display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px; border: none; border-radius: 8px;
+        background: transparent; color: var(--secondary-text-color); cursor: pointer; font: inherit; font-size: 0.88rem;
+      }
+      .link:hover { color: var(--primary-color); }
+      .link ha-icon { --mdc-icon-size: 18px; }
+      .summer { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--divider-color); }
+      .summer-title { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+      .summer-title ha-icon { --mdc-icon-size: 20px; color: var(--warning-color, #ffa600); }
+      .segs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+      .seg {
+        min-height: 40px; padding: 6px 10px; border-radius: 10px; cursor: pointer; font: inherit; font-size: 0.88rem;
+        border: 1px solid var(--divider-color); background: transparent; color: var(--primary-text-color);
+      }
+      .seg.sel { border-color: var(--primary-color); background: rgba(var(--rgb-primary-color, 3, 169, 244), 0.12); font-weight: 600; }
+      @media (max-width: 420px) { .form, .segs { grid-template-columns: 1fr; } }
     </style>`;
   }
 }

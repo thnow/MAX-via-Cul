@@ -62,6 +62,10 @@ itself, fully local.
 |---|---|
 | ![Vacation card: return, temperature, preheating](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/vacation-card.png) | ![Vacation card while away](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/vacation-card-active.png) |
 
+| Summer mode: off or valve fully open | Summer mode running |
+|---|---|
+| ![Summer mode section in the vacation card](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/summer-card.png) | ![Vacation card while summer mode is on](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/summer-card-active.png) |
+
 | Pairing with name and area | What waits for radio time |
 |---|---|
 | ![Pairing card with a found thermostat](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/pairing-card.png) | ![Transmission queue card](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/queue-card.png) |
@@ -239,6 +243,27 @@ confirms the command and returns to its week program at the return time by
 itself; switching it off ends the vacation early. For automations use
 `cul_max.start_vacation` / `cul_max.end_vacation`.
 
+### Switch the heating off for the summer
+
+When the heating season is over, open *Sommermodus …* at the bottom of the
+vacation card (or switch on `switch.…_sommermodus` on the `MAX! CUL` device).
+All thermostats go to **Off** (valve closed) or **On** (valve fully open – it
+relieves the valve pin, only sensible with the boiler switched off) and stay
+there until you end summer mode. Choose the variant in the card or with the
+select `Sommermodus Ventil`.
+
+- Ending it puts every thermostat back into its state from before (usually
+  its week program); a thermostat you changed by hand during the summer stays
+  as it is.
+- The thermostats keep their weekly decalcification run.
+- Room thermometers send nothing to the thermostats meanwhile, and a vacation
+  cannot be started (nothing to lower anyway).
+- Thermostats that are out of reach get the command again, also after a
+  restart.
+
+For automations: `cul_max.start_summer` (optional `valve: closed|open`) and
+`cul_max.end_summer`.
+
 ### Use the Eco push button in automations
 
 Each paired MAX! push button (Eco Taster) gets an event entity, e.g.
@@ -323,7 +348,7 @@ Most people only need the cards; the services are for automations and repairs.
 | Rooms and links | `create_room_association`, `delete_room_association`, `rebuild_room_association`, `associate_devices`, `deassociate_devices`, `set_group_id`, `remove_group_id`, `add_link_partner`, `remove_link_partner` |
 | Room sensor | `set_external_temperature_sensor` |
 | Virtual window contacts | `create_virtual_shutter_contact`, `send_virtual_shutter_contact_state`, `delete_virtual_device` |
-| Vacation | `start_vacation`, `end_vacation` |
+| Vacation and summer | `start_vacation`, `end_vacation`, `start_summer`, `end_summer` |
 | Maintenance | `sync_time`, `wake_thermostats`, `export_topology`, `import_topology` |
 
 All services live in the `cul_max` domain (e.g. `cul_max.start_vacation`).
@@ -436,6 +461,10 @@ Repository layout:
 
 ### Unreleased
 
+- Summer mode: all thermostats off (valve closed) or fully open until it is
+  ended by hand, previous states restored afterwards; in the vacation card,
+  as a switch with a valve select, and as `start_summer` / `end_summer`
+  (suggested by [@adampr1](https://github.com/adampr1), #3).
 - MAX! push button (Eco Taster): presses of Auto and Eco are available as an
   event entity and as the HA event `cul_max_push_button`; repeated telegrams
   of one press count once (thanks [@Buelo77](https://github.com/Buelo77) for

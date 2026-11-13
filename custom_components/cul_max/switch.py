@@ -1,4 +1,4 @@
-"""Vacation mode switch on the CUL controller device."""
+"""Vacation, summer and pairing switches on the CUL controller device."""
 from __future__ import annotations
 
 from typing import Any
@@ -20,7 +20,11 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     async_add_entities(
-        [CulMaxVacationSwitch(entry.runtime_data), CulMaxPairingSwitch(entry.runtime_data)]
+        [
+            CulMaxVacationSwitch(entry.runtime_data),
+            CulMaxSummerSwitch(entry.runtime_data),
+            CulMaxPairingSwitch(entry.runtime_data),
+        ]
     )
 
 
@@ -81,6 +85,60 @@ class CulMaxVacationSwitch(SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self._coordinator.async_end_vacation(reason="manual")
+
+
+class CulMaxSummerSwitch(SwitchEntity):
+    """On = all thermostats parked for the summer (off or valve fully open)."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "summer"
+
+    def __init__(self, coordinator: CulMaxCoordinator) -> None:
+        self._coordinator = coordinator
+        self._attr_unique_id = controller_unique_id(coordinator, "summer")
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.controller_identifier)},
+        )
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(self._coordinator.add_vacation_listener(self._on_update))
+
+    @callback
+    def _on_update(self) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def is_on(self) -> bool:
+        return self._coordinator.get_summer_status()["active"]
+
+    @property
+    def icon(self) -> str:
+        return "mdi:white-balance-sunny" if self.is_on else "mdi:radiator"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        status = self._coordinator.get_summer_status()
+        counts = status["counts"]
+        return {
+            "summer_valve": status["valve"],
+            "temperature": status["temperature"],
+            "started_at": status["started_at"],
+            "confirmed": counts.get("confirmed", 0),
+            "pending": counts.get("pending", 0),
+            "failed": counts.get("failed", 0) + counts.get("restore_failed", 0),
+            "restoring": counts.get("restoring", 0),
+            "restored": counts.get("restored", 0),
+            "devices": status["devices"],
+        }
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        try:
+            await self._coordinator.async_start_summer()
+        except ValueError as err:
+            raise HomeAssistantError(str(err)) from err
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._coordinator.async_end_summer()
 
 
 class CulMaxPairingSwitch(SwitchEntity):

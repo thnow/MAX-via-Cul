@@ -1252,3 +1252,41 @@ end_vacation:
         config_entry:
           integration: cul_max
 
+start_summer:
+  name: Sommermodus starten
+  description: >
+    Heizsaison vorbei: alle MAX!-Thermostate gehen dauerhaft auf Aus (Ventil
+    zu) oder Ein (Ventil ganz offen), bis der Sommermodus beendet wird. Die
+    wöchentliche Entkalkungsfahrt läuft weiter. Raumthermometer senden in
+    dieser Zeit nichts, ein Urlaub ist gesperrt.
+  fields:
+    valve:
+      name: Ventil
+      description: Aus (Ventil zu) oder Ein (Ventil ganz offen); ohne Angabe gilt die Einstellung am CUL-Gerät
+      selector:
+        select:
+          options:
+            - label: Aus – Ventil zu
+              value: closed
+            - label: Ein – Ventil ganz offen
+              value: open
+    gateway:
+      name: Gateway
+      description: Nur bei mehreren CULs nötig – welches Gateway gemeint ist
+      selector:
+        config_entry:
+          integration: cul_max
+
+end_summer:
+  name: Sommermodus beenden
+  description: >
+    Heizsaison beginnt: jedes Thermostat kehrt in seinen Zustand von vorher
+    zurück (meist das Wochenprogramm). Im Sommer von Hand verstellte
+    Thermostate bleiben, wie sie sind.
+  fields:
+    gateway:
+      name: Gateway
+      description: Nur bei mehreren CULs nötig – welches Gateway gemeint ist
+      selector:
+        config_entry:
+          integration: cul_max

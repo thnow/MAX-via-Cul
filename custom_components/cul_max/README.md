@@ -382,6 +382,36 @@ data:
 Mit dem Standard-Sendebudget dauert das Setzen einer ganzen Wohnung ein bis
 zwei Minuten, die Warteschlange verteilt die Befehle automatisch.
 
+## Sommermodus
+
+| Sommermodus starten | Sommermodus aktiv |
+|---|---|
+| ![Sommermodus in der Urlaubskarte](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/summer-card.png) | ![Urlaubskarte bei aktivem Sommermodus](https://raw.githubusercontent.com/thnow/MAX-via-Cul/main/docs/images/summer-card-active.png) |
+
+Ist die Heizsaison vorbei, schaltet der Sommermodus alle Thermostate dauerhaft
+um – unten in der Urlaubskarte ueber *Sommermodus …* oder mit dem Schalter
+`Sommermodus` am Geraet `MAX! CUL`:
+
+- **Aus – Ventil zu** (4,5 °C): nichts heizt, auch wenn die Therme noch laeuft.
+- **Ein – Ventil ganz offen** (30,5 °C): entlastet den Ventilstoessel; nur
+  sinnvoll, wenn die Heizung selbst abgeschaltet ist.
+
+Die Wahl gilt ueber die Auswahl `Sommermodus Ventil` am CUL-Geraet; im laufenden
+Sommermodus wird eine Aenderung sofort an alle Thermostate geschickt.
+
+- Beim Beenden geht jedes Thermostat in seinen Zustand von vorher zurueck
+  (meist das Wochenprogramm). Wer im Sommer ein Thermostat von Hand verstellt
+  hat, behaelt diese Einstellung.
+- Die woechentliche Entkalkungsfahrt der Thermostate laeuft weiter.
+- Raumthermometer senden in dieser Zeit nichts an die Thermostate; ein Urlaub
+  ist gesperrt.
+- Nicht erreichbare Thermostate bekommen den Befehl erneut, auch nach einem
+  Neustart.
+
+Fuer Automationen: `cul_max.start_summer` (optional `valve: closed` oder `open`)
+und `cul_max.end_summer`. Der Sommermodus endet nur, wenn man ihn beendet –
+bewusst ohne Enddatum.
+
 ## Entitaeten
 
 Je nach Geraetetyp stellt die Integration mehrere Entitaeten bereit.

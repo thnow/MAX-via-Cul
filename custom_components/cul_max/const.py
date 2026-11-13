@@ -168,6 +168,7 @@ PLATFORMS: list[Platform] = [
     Platform.IMAGE,
     Platform.BINARY_SENSOR,
     Platform.NUMBER,
+    Platform.SELECT,
     Platform.SENSOR,
     Platform.SWITCH,
     Platform.TEXT,
