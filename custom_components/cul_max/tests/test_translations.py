@@ -81,6 +81,7 @@ def test_every_error_key_in_the_code_is_translated() -> None:
 CARD_TABLES = {
     "cul-max-queue-card.js": ["Q_TEXT"],
     "cul-max-pairing-card.js": ["P_TEXT"],
+    "cul-max-topology-card.js": ["T_TEXT"],
     "cul-max-vacation-card.js": ["V_TEXT"],
     "cul-max-week-profile-card.js": ["W_TEXT", "DAY_NAMES", "MODE_NAMES"],
 }
