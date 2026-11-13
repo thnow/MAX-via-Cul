@@ -467,13 +467,15 @@ Repository layout:
 
 ## Changelog
 
-### Unreleased
+### 0.6.8
 
 - A thermostat that does not answer now ends in a readable message with the
   room name instead of the internal radio log line. If the thermostat shows
   the change anyway, the message suggests a short restart (one battery out and
   back in): a thermostat that still receives but no longer transmits recovers
   that way.
+- Push button: quick presses fire their events in the right order (the event
+  used to wait for the state to be saved, so Auto/Eco could arrive swapped).
 
 ### 0.6.7
 
