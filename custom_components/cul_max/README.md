@@ -73,6 +73,7 @@ cards:
       - climate.thermostat_kuche_links
       - climate.thermostat_kuche_rechts
   - type: custom:cul-max-queue-card
+  - type: custom:cul-max-topology-card
   - type: custom:cul-max-pairing-card
 ```
 
