@@ -36,6 +36,14 @@
       "already_configured": "Dieses Gerät ist bereits konfiguriert."
     }
   },
+  "selector": {
+    "summer_valve": {
+      "options": {
+        "closed": "Aus – Ventil zu",
+        "open": "Ein – Ventil ganz offen"
+      }
+    }
+  },
   "services": {
     "start_pairing": {
       "name": "Pairing starten",
@@ -354,6 +362,10 @@
         "partner_name": {
           "name": "Partner Geraetename",
           "description": "Alternativ den gespeicherten Namen des Partnergeräts angeben"
+        },
+        "partner_type": {
+          "name": "Partner-Typ (nur für unbekannte Partner)",
+          "description": "Nur nötig, um eine veraltete Verknüpfung zu einem Gerät zu entfernen, das die Integration nicht kennt (z. B. ein ersetztes Thermostat). 1 = Heizkörperthermostat, 2 = Heizkörperthermostat+, 3 = Wandthermostat, 4 = Fensterkontakt, 5 = Taster."
         }
       }
     },
@@ -860,6 +872,24 @@
         "gateway": {
           "name": "Gateway",
           "description": "Nur bei mehreren CULs nötig – welches Gateway gemeint ist"
+        }
+      }
+    },
+    "set_external_temperature_sensor": {
+      "name": "Externen Raumfühler verwenden",
+      "description": "Lässt ein Heizkörperthermostat nach einem Temperatursensor in Home Assistant regeln statt nach seinem eigenen Fühler am Heizkörper (virtuelles Wandthermostat). Ohne Sensor wird wieder der eigene Fühler verwendet.",
+      "fields": {
+        "entity_id": {
+          "name": "Thermostat",
+          "description": "MAX!-Climate-Entity des Heizkörperthermostats"
+        },
+        "address": {
+          "name": "Adresse",
+          "description": "Alternativ die 6-stellige Hex-Adresse des Thermostats"
+        },
+        "sensor_entity_id": {
+          "name": "Temperatursensor",
+          "description": "Leer lassen, um wieder den eigenen Fühler zu verwenden"
         }
       }
     }
