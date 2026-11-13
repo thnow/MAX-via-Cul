@@ -17,7 +17,8 @@ const qEsc = (value) =>
     "'": "&#39;",
   })[ch]);
 
-// UI language: German for "de*", English for everything else.
+// UI language: the profile language if this card has texts for it, else
+// English (see TRANSLATING.md).
 const Q_TEXT = {
   de: {
     days: ["Sa", "So", "Mo", "Di", "Mi", "Do", "Fr"],
@@ -101,16 +102,22 @@ const Q_TEXT = {
   },
 };
 
-const qLang = (hass) =>
-  String(hass?.locale?.language || hass?.language || "en").toLowerCase().startsWith("de") ? "de" : "en";
+/** Language of the user profile if this card has texts for it, else English. */
+const qLang = (hass) => {
+  const language = String(hass?.locale?.language || hass?.language || "en").toLowerCase();
+  const base = language.split("-")[0];
+  return Q_TEXT[language] ? language : Q_TEXT[base] ? base : "en";
+};
+/** Texts of one language; missing entries fall back to English. */
+const qText = (lang) => ({ ...Q_TEXT.en, ...(Q_TEXT[lang] || {}) });
 
 const qTemp = (value, locale = "de-DE") =>
   `${Number(value).toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} °C`;
 
 /** Technical command description → short text in the UI language. */
 function describe(text, lang = "de", locale = undefined) {
-  const L = Q_TEXT[lang] || Q_TEXT.en;
-  const loc = locale || (lang === "de" ? "de-DE" : "en-GB");
+  const L = qText(lang);
+  const loc = locale || (lang === "en" ? "en-GB" : lang);
   const temp = (v) => qTemp(v, loc);
   const t = String(text || "");
   let m;
@@ -180,11 +187,12 @@ class CulMaxQueueCard extends HTMLElement {
   }
 
   get _t() {
-    return Q_TEXT[qLang(this._hass)];
+    return qText(qLang(this._hass));
   }
 
   get _locale() {
-    return this._hass?.locale?.language || (qLang(this._hass) === "de" ? "de-DE" : "en-GB");
+    const language = this._hass?.locale?.language || this._hass?.language || "en";
+    return language === "en" ? "en-GB" : language;
   }
 
   _describe(text) {

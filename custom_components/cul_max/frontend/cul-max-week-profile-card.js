@@ -28,7 +28,8 @@ const MODE_LABELS = {
   boost: "Boost",
 };
 
-// UI language: German for "de*", English for everything else. DAYS and
+// UI language: the profile language if this card has texts for it, else
+// English (see TRANSLATING.md). DAYS and
 // MODE_LABELS are switched in place so all code using them follows.
 const DAY_NAMES = {
   de: { monday: ["Mo", "Montag"], tuesday: ["Di", "Dienstag"], wednesday: ["Mi", "Mittwoch"], thursday: ["Do", "Donnerstag"],
@@ -44,14 +45,18 @@ let wLang = "de";
 let wLocale = "de-DE";
 const wSetLang = (hass) => {
   const language = String(hass?.locale?.language || hass?.language || "en");
-  const lang = language.toLowerCase().startsWith("de") ? "de" : "en";
-  wLocale = lang === "de" ? "de-DE" : language.includes("-") ? language : "en-GB";
+  const lower = language.toLowerCase();
+  const base = lower.split("-")[0];
+  // the profile language if W_TEXT has it, else English
+  const lang = W_TEXT[lower] ? lower : W_TEXT[base] ? base : "en";
+  wLocale = language === "en" ? "en-GB" : language;
   if (lang === wLang) return;
   wLang = lang;
+  const days = DAY_NAMES[lang] || DAY_NAMES.en;
   DAYS.forEach((day) => {
-    [day[1], day[2]] = DAY_NAMES[lang][day[0]];
+    [day[1], day[2]] = days[day[0]];
   });
-  Object.assign(MODE_LABELS, MODE_NAMES[lang]);
+  Object.assign(MODE_LABELS, MODE_NAMES.en, MODE_NAMES[lang] || {});
 };
 const W_TEXT = {
   de: {
@@ -231,7 +236,14 @@ const W_TEXT = {
     allowEdit: "Allow editing in the card",
   },
 };
-const WT = () => W_TEXT[wLang];
+/** Texts of the current language; missing entries fall back to English. */
+let wCache = null;
+const WT = () => {
+  if (!wCache || wCache.lang !== wLang) {
+    wCache = { lang: wLang, texts: { ...W_TEXT.en, ...(W_TEXT[wLang] || {}) } };
+  }
+  return wCache.texts;
+};
 
 const esc = (value) =>
   String(value ?? "").replace(/[&<>"']/g, (ch) => ({

@@ -434,6 +434,9 @@ diagnostics are available in
 
 ## Development
 
+Want to add a language? See [TRANSLATING.md](TRANSLATING.md) – one JSON file
+plus a text block per card, no programming needed.
+
 Run the tests from the repository root (Python 3.14):
 
 ```sh
@@ -467,7 +470,7 @@ Repository layout:
 - English and German throughout: dashboard cards and error messages follow
   the language of the user profile, entity and service names the server
   language of Home Assistant (German for German, English for every other
-  language). More languages can be added as `translations/<lang>.json`.
+  language). Further languages: see [TRANSLATING.md](TRANSLATING.md).
 - Errors of services and entity actions always reach the UI as a readable,
   translated message (some services used to end in "unknown error").
 - Diagnostic sensors "Kommunikation" and "Wochenprofil-Prüfung" show

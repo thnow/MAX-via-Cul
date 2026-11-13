@@ -15,13 +15,15 @@ const VAC_TEMP_MAX = 30.5;
 const PREHEAT_OPTIONS = [0, 0.5, 1, 1.5, 2, 3, 4, 6, 8, 12];
 const WEEKDAYS = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 
-// UI language: German for "de*", English for everything else.
+// UI language: the profile language if V_TEXT has it, else English.
 let vLang = "de";
 let vLocale = "de-DE";
 const vSetLang = (hass) => {
   const language = String(hass?.locale?.language || hass?.language || "en");
-  vLang = language.toLowerCase().startsWith("de") ? "de" : "en";
-  vLocale = vLang === "de" ? "de-DE" : language.includes("-") ? language : "en-GB";
+  const lower = language.toLowerCase();
+  const base = lower.split("-")[0];
+  vLang = V_TEXT[lower] ? lower : V_TEXT[base] ? base : "en";
+  vLocale = language === "en" ? "en-GB" : language;
 };
 const V_TEXT = {
   de: {
@@ -117,7 +119,8 @@ const V_TEXT = {
     editorTitle: "Title",
   },
 };
-const VT = () => V_TEXT[vLang];
+/** Texts of the current language; missing entries fall back to English. */
+const VT = () => ({ ...V_TEXT.en, ...(V_TEXT[vLang] || {}) });
 
 const vEsc = (value) =>
   String(value ?? "").replace(/[&<>"']/g, (ch) => ({
@@ -697,7 +700,7 @@ class CulMaxVacationCardEditor extends HTMLElement {
     );
     this.innerHTML = `
       <div style="display:grid;gap:12px;padding:8px 0">
-        <label style="display:grid;gap:6px"><span>${V_TEXT[vLang].editorTitle}</span>
+        <label style="display:grid;gap:6px"><span>${VT().editorTitle}</span>
           <input data-field="title" value="${vEsc(this._config.title ?? "")}"
             style="padding:8px 10px;border-radius:8px;border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color)"></label>
         ${
