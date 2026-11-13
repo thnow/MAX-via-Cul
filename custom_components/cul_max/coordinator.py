@@ -1951,6 +1951,26 @@ class CulMaxCoordinator:
         key = msg.src_hex
         last = self._push_button_last.get(key)
         self._push_button_last[key] = (msg.counter, now)
+        repeated = (
+            last is not None and last[0] == msg.counter and now - last[1] < PUSH_BUTTON_REPEAT_WINDOW
+        )
+        if repeated:
+            _LOGGER.debug("Repeated push button telegram from %s ignored", msg.src_hex)
+        else:
+            # fire before anything awaits, so quick presses keep their order
+            device = self.get_device(msg.src_hex)
+            _LOGGER.info(
+                "Push button %s pressed: %s", self._format_device_identity(msg.src_hex), decoded.button
+            )
+            self.hass.bus.async_fire(
+                EVENT_PUSH_BUTTON,
+                {
+                    "address": msg.src_hex,
+                    "name": device.name if device else msg.src_hex,
+                    "button": decoded.button,
+                    "battery_low": decoded.battery_low,
+                },
+            )
         await self._update_device_state(
             msg.src_hex,
             {
@@ -1959,22 +1979,8 @@ class CulMaxCoordinator:
                 "last_button": decoded.button,
             },
         )
-        if last is not None and last[0] == msg.counter and now - last[1] < PUSH_BUTTON_REPEAT_WINDOW:
-            _LOGGER.debug("Repeated push button telegram from %s ignored", msg.src_hex)
+        if repeated:
             return None
-        device = self.get_device(msg.src_hex)
-        _LOGGER.info(
-            "Push button %s pressed: %s", self._format_device_identity(msg.src_hex), decoded.button
-        )
-        self.hass.bus.async_fire(
-            EVENT_PUSH_BUTTON,
-            {
-                "address": msg.src_hex,
-                "name": device.name if device else msg.src_hex,
-                "button": decoded.button,
-                "battery_low": decoded.battery_low,
-            },
-        )
         return decoded
 
     async def _handle_time_information(self, msg: MaxMessage) -> None:
