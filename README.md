@@ -331,6 +331,7 @@ cards:
       - climate.thermostat_kitchen_left
       - climate.thermostat_kitchen_right
   - type: custom:cul-max-queue-card
+  - type: custom:cul-max-topology-card
   - type: custom:cul-max-pairing-card
 ```
 
@@ -466,7 +467,7 @@ Repository layout:
 
 ## Changelog
 
-### Unreleased
+### 0.6.7
 
 - Topology picture: every device also shows its MAX! address and serial
   number (suggested by [@adampr1](https://github.com/adampr1), #3).
