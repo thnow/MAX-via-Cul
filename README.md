@@ -465,7 +465,7 @@ Repository layout:
 
 ## Changelog
 
-### Unreleased
+### 0.6.6
 
 - English and German throughout: dashboard cards and error messages follow
   the language of the user profile, entity and service names the server
