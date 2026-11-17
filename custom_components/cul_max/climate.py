@@ -92,6 +92,9 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
+MAX_DAY_NAMES = ("saturday", "sunday", "monday", "tuesday", "wednesday", "thursday", "friday")
+
+
 class CulMaxClimate(ClimateEntity):
     """Climate entity for a MAX! HeatingThermostat or WallMountedThermostat."""
 
@@ -316,6 +319,23 @@ class CulMaxClimate(ClimateEntity):
             "window_open_temperature": self._device.window_open_temperature,
             "window_open_duration_min": self._device.window_open_duration,
             "measurement_offset": self._device.measurement_offset,
+            **(
+                {
+                    # None = never written here; the device keeps its own value
+                    "boost_duration_min": self._device.boost_duration,
+                    "boost_valve_position": self._device.boost_valve_position,
+                    "decalcification_day": (
+                        MAX_DAY_NAMES[self._device.decalcification_day]
+                        if self._device.decalcification_day is not None
+                        else None
+                    ),
+                    "decalcification_hour": self._device.decalcification_hour,
+                    "max_valve_setting": self._device.max_valve_setting,
+                    "valve_offset": self._device.valve_offset,
+                }
+                if self._device.device_type in (DEVICE_HEATING_THERMOSTAT, DEVICE_HEATING_THERMOSTAT_PLUS)
+                else {}
+            ),
             "peer_names": self._coordinator.get_peer_names(self._address),
             "peer_labels": self._coordinator.get_peer_labels(self._address),
             "supported_partner_types": self._coordinator.get_supported_partner_type_names(self._device.device_type),

@@ -454,7 +454,7 @@ association, time synchronisation and cleanup dry runs.
 | Purpose | Services in the `cul_max` domain |
 | --- | --- |
 | Pairing and naming | `start_pairing`, `set_device_name` |
-| Temperature and schedules | `set_temperature_config`, `set_desired_temperature`, `set_week_profile`, `set_week_profile_days` |
+| Temperature and schedules | `set_temperature_config`, `set_valve_config`, `set_desired_temperature`, `set_week_profile`, `set_week_profile_days` |
 | Vacation | `start_vacation`, `end_vacation` |
 | Time and wake-up | `sync_time`, `wake_thermostats` |
 | Device associations | `set_group_id`, `remove_group_id`, `add_link_partner`, `remove_link_partner`, `associate_devices`, `deassociate_devices` |
@@ -535,6 +535,47 @@ data:
   window_open_temperature: 12.0
   window_open_duration: 15
 ```
+
+### Boost duration and valve settings
+
+As in the original MAX! software, each radiator thermostat can be told what
+its boost button does, plus decalcification and valve limits (FHEM:
+`boostDuration`, `boostValveposition`, `decalcification`, `maxValveSetting`,
+`valveOffset`). The thermostat gets:
+
+- `select` **Boost duration**: 0 (off), 5, 10, 15, 20, 25, 30 or 60 minutes.
+  The MAX! protocol has no other values (e.g. 3 minutes).
+- `number` **Boost valve position**: 0–100 % in steps of 5.
+
+Decalcification, maximum valve opening and valve offset are set by the
+service:
+
+```yaml
+action: cul_max.set_valve_config
+data:
+  entity_id: climate.living_room_thermostat
+  boost_duration: 15
+  boost_valve_position: 80
+  decalcification_day: saturday
+  decalcification_hour: 12
+  max_valve_setting: 100
+  valve_offset: 0
+```
+
+Good to know:
+
+- All six values travel in *one* telegram (ConfigValve) and are always
+  written together. The thermostat cannot report them. Values never set here
+  show as *unknown*; the first write sends the factory settings for them
+  (boost 5 min / 80 %, decalcification Saturday 12:00, maximum 100 %, offset
+  0 %). If you had set something else in the Cube software, give those values
+  the first time.
+- Only radiator thermostats have these settings. A wall thermostat starts the
+  boost; each linked radiator thermostat then uses its own boost duration.
+- Several changes in a row (e.g. duration and valve position) go out after
+  5 s as one telegram. They are stored only after the thermostat confirmed.
+- The values are also attributes of the climate entity
+  (`boost_duration_min`, `boost_valve_position`, `decalcification_day`, …).
 
 ### Set a weekly schedule
 

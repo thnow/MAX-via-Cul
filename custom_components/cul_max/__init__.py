@@ -69,6 +69,7 @@ SERVICE_NAMES: tuple[str, ...] = (
     "set_week_profile_days",
     "set_group_id",
     "set_temperature_config",
+    "set_valve_config",
     "set_desired_temperature",
     "remove_group_id",
     "add_link_partner",
@@ -93,6 +94,17 @@ SERVICE_NAMES: tuple[str, ...] = (
 
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+# MAX! counts days from Saturday (0) to Friday (6).
+MAX_DAY_INDEX = {
+    "saturday": 0,
+    "sunday": 1,
+    "monday": 2,
+    "tuesday": 3,
+    "wednesday": 4,
+    "thursday": 5,
+    "friday": 6,
+}
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -723,6 +735,27 @@ def _register_services(
             "device": _device_payload(address),
             "name": name,
         }
+
+    async def handle_set_valve_config(call: ServiceCall) -> dict[str, object]:
+        address = _resolve_device_address(hass, call)
+        if address is None and call.data.get("device_name"):
+            address = _resolve_device_address_from_name(coordinator, str(call.data["device_name"]))
+        if address is None:
+            raise ha_error(CulMaxError("thermostat_not_found"))
+        fields: dict[str, int] = {}
+        for key in (
+            "boost_duration",
+            "boost_valve_position",
+            "decalcification_hour",
+            "max_valve_setting",
+            "valve_offset",
+        ):
+            if call.data.get(key) is not None:
+                fields[key] = int(call.data[key])
+        if call.data.get("decalcification_day"):
+            fields["decalcification_day"] = MAX_DAY_INDEX[str(call.data["decalcification_day"])]
+        values = await coordinator.async_set_valve_config(address, **fields)
+        return {"device": _device_payload(address), **values}
 
     async def handle_set_external_temperature_sensor(call: ServiceCall) -> dict[str, object] | None:
         address = _resolve_device_address(hass, call)
@@ -1528,6 +1561,22 @@ def _register_services(
             vol.Optional("entity_id"): cv.entity_id,
             vol.Optional("device_name"): cv.string,
             vol.Required("name"): cv.string,
+        }),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    _register(
+        "set_valve_config",
+        handle_set_valve_config,
+        schema=vol.Schema({
+            vol.Optional("address"): cv.string,
+            vol.Optional("entity_id"): cv.entity_id,
+            vol.Optional("device_name"): cv.string,
+            vol.Optional("boost_duration"): vol.All(vol.Coerce(int), vol.In([0, 5, 10, 15, 20, 25, 30, 60])),
+            vol.Optional("boost_valve_position"): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
+            vol.Optional("decalcification_day"): vol.In(list(MAX_DAY_INDEX)),
+            vol.Optional("decalcification_hour"): vol.All(vol.Coerce(int), vol.Range(min=0, max=23)),
+            vol.Optional("max_valve_setting"): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
+            vol.Optional("valve_offset"): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
         }),
         supports_response=SupportsResponse.OPTIONAL,
     )

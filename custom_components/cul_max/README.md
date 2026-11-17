@@ -763,6 +763,7 @@ Hinweise:
 - `cul_max.set_device_name`
 - `cul_max.wake_thermostats`
 - `cul_max.set_temperature_config`
+- `cul_max.set_valve_config`
 - `cul_max.set_week_profile`
 - `cul_max.set_week_profile_days`
 
@@ -893,6 +894,49 @@ Die `text`- und `number`-Entitaeten senden Aenderungen nicht mehr sofort. Sie
 landen zuerst als Entwurf im UI und werden erst ueber den Button
 `Save Configuration` wirklich aufs Geraet geschrieben. Mit `Discard Draft`
 laesst sich ein angefangener Entwurf wieder verwerfen.
+
+### Boost-Dauer und Ventileinstellungen
+
+Wie in der Original-MAX!-Software laesst sich pro Heizkoerperthermostat
+einstellen, was die Boost-Taste macht, und dazu Entkalkung und Ventilgrenzen
+(FHEM: `boostDuration`, `boostValveposition`, `decalcification`,
+`maxValveSetting`, `valveOffset`). Am Thermostat gibt es dafuer:
+
+- `select` **Boost-Dauer**: 0 (aus), 5, 10, 15, 20, 25, 30 oder 60 Minuten.
+  Andere Werte (z. B. 3 Minuten) kennt das MAX!-Protokoll nicht.
+- `number` **Boost-Ventiloeffnung**: 0–100 % in 5er-Schritten.
+
+Entkalkung, maximale Ventiloeffnung und Ventil-Offset setzt der Dienst:
+
+```yaml
+action: cul_max.set_valve_config
+data:
+  entity_id: climate.thermostat_wohnzimmer
+  boost_duration: 15
+  boost_valve_position: 80
+  decalcification_day: saturday
+  decalcification_hour: 12
+  max_valve_setting: 100
+  valve_offset: 0
+```
+
+Wichtig:
+
+- Alle sechs Werte stehen in *einem* Telegramm (ConfigValve) und werden immer
+  zusammen geschrieben. Das Thermostat kann sie nicht zurueckmelden. Werte,
+  die nie hier gesetzt wurden, zeigt HA als *unbekannt*; beim ersten Schreiben
+  werden fuer sie die Werkseinstellungen gesendet (Boost 5 min / 80 %,
+  Entkalkung Samstag 12 Uhr, maximal 100 %, Offset 0 %). Wer in der
+  Cube-Software etwas anderes eingestellt hatte, gibt diese Werte beim ersten
+  Mal mit an.
+- Nur Heizkoerperthermostate haben diese Einstellungen. Ein Wandthermostat
+  startet den Boost, jedes verknuepfte Heizkoerperthermostat nutzt dann seine
+  eigene Boost-Dauer.
+- Mehrere Aenderungen kurz hintereinander (z. B. Dauer und Ventiloeffnung)
+  gehen nach 5 s als ein Telegramm raus. Gespeichert wird erst nach der
+  Bestaetigung des Thermostats.
+- Die Werte stehen auch als Attribute am Climate-Entity (`boost_duration_min`,
+  `boost_valve_position`, `decalcification_day`, …).
 
 Wichtiger Praxis-Hinweis zu Wochenprofilen:
 
