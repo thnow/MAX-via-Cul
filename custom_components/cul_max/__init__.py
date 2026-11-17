@@ -713,6 +713,12 @@ def _register_services(
         device.name = name
         await coordinator._save_devices()
         _LOGGER.info("Renamed device %s to '%s'", address, name)
+        # Peer names of the link partners contain this name: refresh them too.
+        renamed = address.upper()
+        coordinator._notify_diagnostics_updated(renamed)
+        for other in coordinator.get_all_devices():
+            if renamed in (p.upper() for p in other.linked_partners):
+                coordinator._notify_diagnostics_updated(other.address)
         return {
             "device": _device_payload(address),
             "name": name,
