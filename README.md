@@ -470,7 +470,9 @@ uvx ruff check custom_components
   thermostat per room, relinking (remove first), rejected links and the
   separation of shared setups from 0.6.2
 - `test_virtual_contact_source.py`: virtual window contacts following a
-  sensor, quick open/close, unavailable sensors and catching up missed changes
+  sensor, quick open/close, unavailable sensors, catching up missed changes,
+  few background re-sends to a silent thermostat and real changes overtaking
+  them
 
 Repository layout:
 
@@ -480,6 +482,23 @@ Repository layout:
 - no generated Python caches committed
 
 ## Changelog
+
+### 0.6.10
+
+- Virtual window contacts can no longer empty the send budget: the
+  re-sends every 50 minutes and the retries of unconfirmed states are now
+  background traffic (they keep the reserve for interactive commands) with at
+  most 2 repeats instead of up to 7 transmissions at top priority. A
+  thermostat that stopped answering its virtual contact for three days had
+  kept the CUL's budget near zero, so commands to all other devices waited or
+  failed. A real open/close still goes first and replaces a waiting re-send.
+- A thermostat that ACKs any command (e.g. its virtual contact's state) is no
+  longer shown with a communication error from an older failed command; one
+  lost time sync kept the status "error" for 31 hours.
+- Send budget sensor in whole seconds and without the `credit_10ms`
+  attribute: it wrote a new state to the database with every transmission
+  (about 7000 rows a day). The queue card still shows the exact value.
+- Renaming a device also refreshes the peer names shown on its link partners.
 
 ### 0.6.9
 
