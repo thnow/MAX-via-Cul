@@ -179,6 +179,13 @@ AUTO_MODE_TIME_SYNC_MAX_OFFSET = 120
 VIRTUAL_CONTACT_REFRESH_INTERVAL = 50 * 60.0
 VIRTUAL_CONTACT_RETRY_DELAY = 60.0
 VIRTUAL_CONTACT_STARTUP_DELAY = 120.0
+# Heartbeat and retries only confirm a state the thermostat should already
+# have: they go out as background traffic (they must not use the reserve kept
+# for interactive commands) with few repeats. A thermostat that stops
+# answering otherwise burned up to 7 transmissions per attempt at top priority
+# and emptied the send budget for every other device for days.
+VIRTUAL_CONTACT_BACKGROUND_REASONS = ("refresh", "retry")
+VIRTUAL_CONTACT_BACKGROUND_RETRIES = 2
 # A virtual contact can follow a Home Assistant entity (e.g. a Zigbee window
 # sensor). States that count as open / closed; anything else (unavailable,
 # unknown) keeps the last state.
@@ -689,6 +696,8 @@ class CulMaxCoordinator:
         self._virtual_contact_sent_at: dict[str, float] = {}
         self._virtual_contact_confirmed: dict[str, bool] = {}
         self._virtual_contact_failures: dict[str, int] = {}
+        # Contacts with a background heartbeat/retry on its way.
+        self._virtual_contact_inflight: set[str] = set()
         # External temperature: per thermostat last delivery and listeners
         self._ext_last: dict[str, dict[str, Any]] = {}
         self._ext_intended: dict[str, float] = {}
@@ -1746,12 +1755,19 @@ class CulMaxCoordinator:
                 self._notify_queue()
                 ack = await asyncio.wait_for(future, timeout=request.timeout)
                 self._pending_ack = None
+                ack_at = datetime.now(UTC).isoformat()
                 if request.device_address:
                     await self._mark_command_success(
                         request.device_address,
                         retries=attempt - 1,
-                        ack_at=datetime.now(UTC).isoformat(),
+                        ack_at=ack_at,
                     )
+                if request.expected_src and (
+                    request.expected_src.upper() != (request.device_address or "").upper()
+                ):
+                    # e.g. a virtual contact's state ACKed by its thermostat:
+                    # the thermostat answered, so its own error is over too.
+                    await self._mark_device_answered(request.expected_src, ack_at)
                 _LOGGER.info("ACK ok for %s on attempt %d", request.description, attempt)
                 return ack
             except TimeoutError as err:
@@ -4529,6 +4545,11 @@ class CulMaxCoordinator:
         The ACK carries the thermostat's new state, so the result is visible
         at once. Without linked thermostats the old broadcast to the central
         is used. Returns True when every target confirmed.
+
+        Heartbeats and retries ("refresh"/"retry") are background traffic:
+        they do not take the contact's lock, so a real change never waits
+        behind one that waits for send credit, and a real change replaces a
+        heartbeat still in the queue (same supersede key).
         """
         normalized = address.upper()
         device = self.get_device(normalized)
@@ -4536,6 +4557,19 @@ class CulMaxCoordinator:
             raise CulMaxError("unknown_device", address=address)
         if not device.is_virtual or device.device_type != DEVICE_SHUTTER_CONTACT:
             raise CulMaxError("not_virtual_contact", address=address)
+
+        if reason in VIRTUAL_CONTACT_BACKGROUND_REASONS:
+            if normalized in self._virtual_contact_inflight:
+                return False
+            self._virtual_contact_inflight.add(normalized)
+            try:
+                # Keeps last_seen fresh (stale check) like a real contact.
+                await self._touch_device(normalized)
+                return await self._deliver_virtual_contact_state(
+                    device, is_open, reason=reason, background=True
+                )
+            finally:
+                self._virtual_contact_inflight.discard(normalized)
 
         lock = self._virtual_contact_locks.setdefault(normalized, asyncio.Lock())
         async with lock:
@@ -4548,53 +4582,74 @@ class CulMaxCoordinator:
             state_text = "open" if is_open else "closed"
             await self._set_last_command(normalized, f"VirtualShutterContactState {state_text}")
             self._dispatch_virtual_contact_state(device, is_open)
+            return await self._deliver_virtual_contact_state(
+                device, is_open, reason=reason, background=False
+            )
 
-            targets = self._virtual_contact_targets(device)
-            if not targets:
-                return await self._broadcast_virtual_contact_state(device, is_open)
+    async def _deliver_virtual_contact_state(
+        self, device: KnownDevice, is_open: bool, *, reason: str, background: bool
+    ) -> bool:
+        """Send a virtual contact's state to its linked thermostats."""
+        normalized = device.address.upper()
+        targets = self._virtual_contact_targets(device)
+        if not targets:
+            return await self._broadcast_virtual_contact_state(device, is_open)
 
-            confirmed = True
-            for target in targets:
-                counter = self._next_counter()
-                cmd = build_shutter_contact_state(
-                    counter,
-                    int(normalized, 16),
-                    int(target.address, 16),
-                    is_open,
-                    target.group_id,
+        state_text = "open" if is_open else "closed"
+        priority = COMMAND_PRIORITY_LOW if background else COMMAND_PRIORITY_HIGH
+        retries = self._send_profile.set_temperature_retries
+        if background:
+            retries = min(retries, VIRTUAL_CONTACT_BACKGROUND_RETRIES)
+        confirmed = True
+        superseded = False
+        for target in targets:
+            counter = self._next_counter()
+            cmd = build_shutter_contact_state(
+                counter,
+                int(normalized, 16),
+                int(target.address, 16),
+                is_open,
+                target.group_id,
+            )
+            description = (
+                f"VirtualShutterContactState {state_text} "
+                f"{self.format_device_label(normalized)} -> {self.format_device_label(target.address)}"
+            )
+            _LOGGER.info("%s (%s)", description, reason)
+            try:
+                await self._send_command(
+                    cmd,
+                    expected_src=target.address,
+                    device_address=normalized,
+                    counter=counter,
+                    description=description,
+                    retries=retries,
+                    timeout=self._send_profile.set_temperature_timeout,
+                    priority=priority,
+                    supersede_key=f"virtual_contact:{normalized}:{target.address.upper()}",
                 )
-                description = (
-                    f"VirtualShutterContactState {state_text} "
-                    f"{self.format_device_label(normalized)} -> {self.format_device_label(target.address)}"
+            except CommandSupersededError:
+                # A newer state for this thermostat took over; it does the
+                # bookkeeping.
+                superseded = True
+            except Exception as err:  # noqa: BLE001 - retried in background
+                confirmed = False
+                _LOGGER.warning(
+                    "%s not confirmed (%s); will retry in the background",
+                    description,
+                    err,
                 )
-                _LOGGER.info("%s (%s)", description, reason)
-                try:
-                    await self._send_command(
-                        cmd,
-                        expected_src=target.address,
-                        device_address=normalized,
-                        counter=counter,
-                        description=description,
-                        retries=self._send_profile.set_temperature_retries,
-                        timeout=self._send_profile.set_temperature_timeout,
-                        priority=COMMAND_PRIORITY_HIGH,
-                    )
-                except Exception as err:  # noqa: BLE001 - retried in background
-                    confirmed = False
-                    _LOGGER.warning(
-                        "%s not confirmed (%s); will retry in the background",
-                        description,
-                        err,
-                    )
-            self._virtual_contact_sent_at[normalized] = self.hass.loop.time()
-            self._virtual_contact_confirmed[normalized] = confirmed
-            if confirmed:
-                self._virtual_contact_failures.pop(normalized, None)
-            else:
-                self._virtual_contact_failures[normalized] = (
-                    self._virtual_contact_failures.get(normalized, 0) + 1
-                )
-            return confirmed
+        if superseded and confirmed:
+            return True
+        self._virtual_contact_sent_at[normalized] = self.hass.loop.time()
+        self._virtual_contact_confirmed[normalized] = confirmed
+        if confirmed:
+            self._virtual_contact_failures.pop(normalized, None)
+        else:
+            self._virtual_contact_failures[normalized] = (
+                self._virtual_contact_failures.get(normalized, 0) + 1
+            )
+        return confirmed
 
     async def _broadcast_virtual_contact_state(self, device: KnownDevice, is_open: bool) -> bool:
         """Legacy path for virtual contacts without linked thermostats."""
@@ -4683,16 +4738,27 @@ class CulMaxCoordinator:
             lock = self._virtual_contact_locks.get(device.address)
             if lock is not None and lock.locked():
                 continue
+            if device.address in self._virtual_contact_inflight:
+                continue
             reason = "retry" if sent_at is not None and not confirmed else "refresh"
-            try:
-                await self.async_send_virtual_shutter_contact_state(
-                    device.address, bool(is_open), reason=reason
-                )
-            except Exception:
-                _LOGGER.exception(
-                    "Virtual contact refresh for %s failed",
-                    self._format_device_identity(device.address),
-                )
+            # Background priority may wait for send credit: do not hold up the
+            # maintenance loop (pending queue, room sensors) meanwhile. The
+            # per-contact lock keeps the next round from sending it twice.
+            self._background(
+                self._refresh_virtual_contact(device.address, bool(is_open), reason),
+                f"virtual contact {reason} {device.address}",
+            )
+
+    async def _refresh_virtual_contact(self, address: str, is_open: bool, reason: str) -> None:
+        """Heartbeat / retry of one virtual contact (background task)."""
+        try:
+            await self.async_send_virtual_shutter_contact_state(address, is_open, reason=reason)
+        except Exception:
+            _LOGGER.exception(
+                "Virtual contact %s for %s failed",
+                reason,
+                self._format_device_identity(address),
+            )
 
     async def async_set_group_id(self, address: str, group_id: int) -> None:
         """Assign a MAX! group ID to one device."""
@@ -6846,6 +6912,21 @@ class CulMaxCoordinator:
         device.last_send_error_at = ""
         if ack_at is not None:
             device.last_ack_at = ack_at
+        await self._save_devices()
+        self._notify_diagnostics_updated(address)
+
+    async def _mark_device_answered(self, address: str, ack_at: str) -> None:
+        """A device ACKed a command filed under another device: clear its error."""
+        device = self._devices.get(address.upper())
+        if device is None:
+            return
+        device.last_ack_at = ack_at
+        if not device.last_send_error:
+            self._notify_diagnostics_updated(address)
+            return
+        device.last_send_error = ""
+        device.last_send_error_at = ""
+        device.last_command_success_at = ack_at
         await self._save_devices()
         self._notify_diagnostics_updated(address)
 

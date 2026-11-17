@@ -786,6 +786,13 @@ A virtual contact behaves like a real MAX! window contact:
   and once about 2 minutes after startup, so a lost telegram cannot keep a
   thermostat at its window-open temperature. Unconfirmed deliveries are
   retried with growing intervals (60 s up to 50 min).
+- These re-sends are background traffic: they leave the reserve for
+  interactive commands untouched and use at most 2 repeats. A thermostat that
+  stops answering therefore cannot use up the send budget of all other
+  devices. A real open/close always goes first and replaces a re-send that is
+  still waiting.
+- An ACK of the thermostat also ends a communication error shown on the
+  thermostat itself.
 - The service returns `confirmed: true` when all linked thermostats
   acknowledged.
 - Without a linked thermostat the state is broadcast once to the central, as
@@ -921,8 +928,10 @@ The budget is queried with `X` on connect, when needed and every 5 minutes
 (this does not use the radio). From consecutive values the integration
 measures how fast the CUL regains budget. The diagnostic sensor `Send Budget`
 on the `MAX! CUL` device shows the remaining send time in seconds (credit
-divided by 100) and, as attributes, the raw `credit_10ms`, maximum, recovery
-rate, active profile and queue length.
+divided by 100, whole seconds) and, as attributes, the maximum, recovery
+rate, active profile and queue length. The raw value with 10 ms resolution is
+shown by the queue card; as an attribute it wrote a new state to the database
+with every transmission.
 
 The extended profile mainly speeds up recovery from lost packets. Each packet
 to a sleeping thermostat still needs its 1 s wake-up preamble, so weekly

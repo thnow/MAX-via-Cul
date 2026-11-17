@@ -97,14 +97,15 @@ class CulMaxSendBudgetSensor(SensorEntity):
     @property
     def native_value(self) -> float | None:
         status = self._coordinator.get_cul_credit_status()
-        return round(status["credit_10ms"] / 100, 1) if status["credit_known"] else None
+        # Whole seconds: with tenths every transmission wrote a new state
+        # (about 7000 database rows a day).
+        return round(status["credit_10ms"] / 100) if status["credit_known"] else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         status = self._coordinator.get_cul_credit_status()
         profile = self._coordinator.send_profile
         return {
-            "credit_10ms": status["credit_10ms"],
             "credit_max": status["credit_max"],
             "budget_seconds": round(status["credit_max"] / 100, 1),
             "recovery_per_second": status["recovery_per_second"],
