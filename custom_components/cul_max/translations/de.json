@@ -460,6 +460,10 @@
         "group_id": {
           "name": "Gruppen-ID",
           "description": "Optionale MAX!-Gruppen-ID zwischen 0 und 255"
+        },
+        "source_entity_id": {
+          "name": "Sensor folgen",
+          "description": "Optionaler Fenstersensor in Home Assistant (binary_sensor oder input_boolean), dessen Auf/Zu der Kontakt selbstständig übernimmt"
         }
       }
     },
@@ -892,6 +896,28 @@
           "description": "Leer lassen, um wieder den eigenen Fühler zu verwenden"
         }
       }
+    },
+    "set_virtual_contact_source": {
+      "name": "Virtueller Fensterkontakt folgt Sensor",
+      "description": "Lässt einen virtuellen MAX!-Fensterkontakt einem Fenstersensor in Home Assistant folgen (z. B. Zigbee): jedes Auf/Zu geht an die verknüpften Thermostate, verpasste Änderungen werden nachgeholt. Ohne Sensor wird der Kontakt wieder per Dienstaufruf gesteuert.",
+      "fields": {
+        "entity_id": {
+          "name": "Virtueller Fensterkontakt",
+          "description": "Entity des virtuellen MAX!-Fensterkontakts"
+        },
+        "address": {
+          "name": "Adresse",
+          "description": "Alternativ die 6-stellige Hex-Adresse des virtuellen Kontakts"
+        },
+        "device_name": {
+          "name": "Gerätename",
+          "description": "Alternativ der gespeicherte Name des virtuellen Kontakts"
+        },
+        "source_entity_id": {
+          "name": "Fenstersensor",
+          "description": "Leer lassen, um nicht mehr zu folgen"
+        }
+      }
     }
   },
   "exceptions": {
@@ -1143,6 +1169,12 @@
     },
     "until_time_half_hour": {
       "message": "Die Until-Zeit muss auf :00 oder :30 liegen."
+    },
+    "source_not_found": {
+      "message": "Entity {entity} nicht gefunden."
+    },
+    "source_not_contact": {
+      "message": "{entity} kann nicht gefolgt werden: bitte einen binary_sensor oder input_boolean wählen."
     }
   },
   "issues": {

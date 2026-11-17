@@ -426,6 +426,10 @@
         "group_id": {
           "name": "Group ID",
           "description": "Optional MAX! group ID between 0 and 255"
+        },
+        "source_entity_id": {
+          "name": "Follow sensor",
+          "description": "Optional window sensor in Home Assistant (binary_sensor or input_boolean) whose open/closed state the contact follows on its own"
         }
       }
     },
@@ -892,6 +896,28 @@
           "description": "Leave empty to use the thermostat's own sensor again"
         }
       }
+    },
+    "set_virtual_contact_source": {
+      "name": "Virtual window contact follows sensor",
+      "description": "Lets a virtual MAX! window contact follow a window sensor in Home Assistant (e.g. Zigbee): every open/close is sent to the linked thermostats, missed changes are caught up. Without a sensor the contact is driven by service calls again.",
+      "fields": {
+        "entity_id": {
+          "name": "Virtual window contact",
+          "description": "Virtual MAX! window contact entity"
+        },
+        "address": {
+          "name": "Address",
+          "description": "Alternatively the 6-digit hex address of the virtual contact"
+        },
+        "device_name": {
+          "name": "Device name",
+          "description": "Alternatively the stored name of the virtual contact"
+        },
+        "source_entity_id": {
+          "name": "Window sensor",
+          "description": "Leave empty to stop following"
+        }
+      }
     }
   },
   "exceptions": {
@@ -1143,6 +1169,12 @@
     },
     "until_time_half_hour": {
       "message": "The until time must be at :00 or :30."
+    },
+    "source_not_found": {
+      "message": "Entity {entity} not found."
+    },
+    "source_not_contact": {
+      "message": "{entity} cannot be followed: please choose a binary_sensor or input_boolean."
     }
   },
   "issues": {

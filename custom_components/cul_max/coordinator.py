@@ -179,6 +179,12 @@ AUTO_MODE_TIME_SYNC_MAX_OFFSET = 120
 VIRTUAL_CONTACT_REFRESH_INTERVAL = 50 * 60.0
 VIRTUAL_CONTACT_RETRY_DELAY = 60.0
 VIRTUAL_CONTACT_STARTUP_DELAY = 120.0
+# A virtual contact can follow a Home Assistant entity (e.g. a Zigbee window
+# sensor). States that count as open / closed; anything else (unavailable,
+# unknown) keeps the last state.
+VIRTUAL_CONTACT_SOURCE_DOMAINS = ("binary_sensor", "input_boolean")
+VIRTUAL_CONTACT_SOURCE_OPEN = ("on", "open")
+VIRTUAL_CONTACT_SOURCE_CLOSED = ("off", "closed")
 # External room temperature ("virtual wall thermostat"): a thermostat linked
 # to the virtual wall thermostat regulates on the value sent in
 # WallThermostatControl (0x42) instead of its own sensor at the radiator.
@@ -294,6 +300,9 @@ class KnownDevice:
     # addressed to, so each room (= each external sensor) needs its own.
     # Empty = the first one (own address + 1, from before this field).
     wall_thermostat_address: str = ""
+    # Virtual window contacts only: HA entity whose open/closed state the
+    # contact follows; empty = driven by send_virtual_shutter_contact_state.
+    source_entity: str = ""
     last_target_change_at: str = ""
     # MAX! days (0=Sat … 6=Fri) of week_profile that were really written to
     # the device. Empty = all seven (profiles from before this field or
@@ -684,6 +693,10 @@ class CulMaxCoordinator:
         self._ext_last: dict[str, dict[str, Any]] = {}
         self._ext_intended: dict[str, float] = {}
         self._ext_unsubs: dict[str, Callable[[], None]] = {}
+        # Virtual contacts following an HA entity: state listener and a lock
+        # so "read source, compare, send" runs one at a time per contact.
+        self._source_unsubs: dict[str, Callable[[], None]] = {}
+        self._source_sync_locks: dict[str, asyncio.Lock] = {}
         self._ext_locks: dict[str, asyncio.Lock] = {}
         self._temp_apply_tasks: dict[str, asyncio.Task] = {}
         self._virtual_contact_refresh_after: float = 0.0
@@ -1314,6 +1327,8 @@ class CulMaxCoordinator:
                 self._sync_foreign_central_issue(device)
             if device.external_sensor:
                 self._subscribe_external_sensor(device.address)
+            if device.source_entity:
+                self._subscribe_contact_source(device.address)
         await self._ensure_time_slots_assigned()
         connected = await self._connect()
         self._resume_vacation()
@@ -1395,6 +1410,9 @@ class CulMaxCoordinator:
         for unsub in self._ext_unsubs.values():
             unsub()
         self._ext_unsubs.clear()
+        for unsub in self._source_unsubs.values():
+            unsub()
+        self._source_unsubs.clear()
         if self._vacation_timer_unsub is not None:
             self._vacation_timer_unsub()
             self._vacation_timer_unsub = None
@@ -4376,9 +4394,117 @@ class CulMaxCoordinator:
             raise CulMaxError("unknown_device", address=address)
         if not device.is_virtual:
             raise CulMaxError("not_virtual", address=address)
+        unsub = self._source_unsubs.pop(address.upper(), None)
+        if unsub is not None:
+            unsub()
         del self._devices[address.upper()]
         await self._save_devices()
         _LOGGER.info("Deleted virtual device %s", self._format_device_identity(address))
+
+    # ------------------------------------------------------------------
+    # Virtual contact following a Home Assistant entity
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _source_is_open(state: Any) -> bool | None:
+        """Open/closed of a source entity state; None for unavailable/unknown."""
+        if state is None:
+            return None
+        value = str(state.state).lower()
+        if value in VIRTUAL_CONTACT_SOURCE_OPEN:
+            return True
+        if value in VIRTUAL_CONTACT_SOURCE_CLOSED:
+            return False
+        return None
+
+    @callback
+    def _subscribe_contact_source(self, address: str) -> None:
+        """(Re)subscribe a virtual contact to its source entity."""
+        normalized = address.upper()
+        unsub = self._source_unsubs.pop(normalized, None)
+        if unsub is not None:
+            unsub()
+        device = self.get_device(normalized)
+        if device is None or not device.source_entity:
+            return
+
+        @callback
+        def _changed(event: Event) -> None:
+            self._background(
+                self._sync_contact_from_source(normalized, reason="source change"),
+                f"virtual contact source {normalized}",
+            )
+
+        self._source_unsubs[normalized] = async_track_state_change_event(
+            self.hass, [device.source_entity], _changed
+        )
+
+    async def _sync_contact_from_source(
+        self, address: str, *, reason: str, force: bool = False
+    ) -> bool | None:
+        """Send the source entity's current state if the contact differs.
+
+        Reads the source only when it is this call's turn, so a quick
+        open/close always ends with the state the sensor has now – no change
+        can get lost behind a running transmission. Returns None when nothing
+        was sent, otherwise whether all linked thermostats confirmed.
+        """
+        normalized = address.upper()
+        lock = self._source_sync_locks.setdefault(normalized, asyncio.Lock())
+        async with lock:
+            device = self.get_device(normalized)
+            if device is None or not device.source_entity or self._writer is None:
+                return None
+            is_open = self._source_is_open(self.hass.states.get(device.source_entity))
+            if is_open is None:
+                return None
+            current = (device.last_state or {}).get("is_open")
+            if not force and current is not None and bool(current) == is_open:
+                return None
+            return await self.async_send_virtual_shutter_contact_state(
+                normalized, is_open, reason=reason
+            )
+
+    async def async_set_virtual_contact_source(
+        self, address: str, source_entity_id: str | None
+    ) -> dict[str, Any]:
+        """Let a virtual contact follow an HA entity, or stop following.
+
+        Without an entity the contact is driven by
+        send_virtual_shutter_contact_state again.
+        """
+        normalized = address.upper()
+        device = self.get_device(normalized)
+        if device is None:
+            raise CulMaxError("unknown_device", address=address)
+        if not device.is_virtual or device.device_type != DEVICE_SHUTTER_CONTACT:
+            raise CulMaxError("not_virtual_contact", address=address)
+        source = (source_entity_id or "").strip()
+        if source:
+            if source.split(".", 1)[0] not in VIRTUAL_CONTACT_SOURCE_DOMAINS:
+                raise CulMaxError("source_not_contact", entity=source)
+            if self.hass.states.get(source) is None:
+                raise CulMaxError("source_not_found", entity=source)
+        device.source_entity = source
+        await self._save_devices()
+        self._subscribe_contact_source(normalized)
+        _LOGGER.info(
+            "%s follows %s",
+            self._format_device_identity(normalized),
+            source or "service calls only",
+        )
+        confirmed = None
+        if source:
+            confirmed = await self._sync_contact_from_source(normalized, reason="source set", force=True)
+        is_open = bool((device.last_state or {}).get("is_open"))
+        if not source:
+            # Refresh the entity attributes (source_entity) without sending.
+            self._dispatch_virtual_contact_state(device, is_open)
+        return {
+            "source_entity": source or None,
+            "is_open": is_open,
+            "confirmed": confirmed,
+        }
 
     def _virtual_contact_targets(self, device: KnownDevice) -> list[KnownDevice]:
         """Return the linked thermostats a virtual contact reports to."""
@@ -4528,6 +4654,16 @@ class CulMaxCoordinator:
                 continue
             if not self._virtual_contact_targets(device):
                 continue
+            if device.source_entity:
+                # Catch up on changes missed while HA or the CUL was away.
+                try:
+                    if await self._sync_contact_from_source(device.address, reason="source check") is not None:
+                        continue
+                except Exception:
+                    _LOGGER.exception(
+                        "Virtual contact source check for %s failed",
+                        self._format_device_identity(device.address),
+                    )
             is_open = (device.last_state or {}).get("is_open")
             if is_open is None:
                 continue
@@ -6290,9 +6426,10 @@ class CulMaxCoordinator:
                 del self._devices[address]
                 self._pending_climate_config.pop(address, None)
                 self._pending_shutter_config.pop(address, None)
-                unsub = self._ext_unsubs.pop(address, None)
-                if unsub is not None:
-                    unsub()
+                for unsubs in (self._ext_unsubs, self._source_unsubs):
+                    unsub = unsubs.pop(address, None)
+                    if unsub is not None:
+                        unsub()
                 removed.append(address)
         if removed:
             await self._save_devices()
@@ -6402,6 +6539,7 @@ class CulMaxCoordinator:
                     "firmware_version": device.firmware_version,
                     "paired": device.paired,
                     "is_virtual": device.is_virtual,
+                    "source_entity": device.source_entity,
                     "group_id": device.group_id,
                     "linked_partners": sorted(dict.fromkeys(device.linked_partners)),
                     "comfort_temperature": device.comfort_temperature,
@@ -6538,6 +6676,9 @@ class CulMaxCoordinator:
                 str(entry.get("name") or f"Virtuelles Geraet {address}"),
                 int(entry.get("group_id", 0) or 0),
             )
+            source = str(entry.get("source_entity") or "").strip()
+            if source and self.hass.states.get(source) is not None:
+                await self.async_set_virtual_contact_source(address, source)
             created_virtual_addresses.append(address)
 
         metadata_changed = False
@@ -6929,6 +7070,7 @@ class CulMaxCoordinator:
                 last_central_contact_at=str(d.get("last_central_contact_at", "") or ""),
                 external_sensor=str(d.get("external_sensor", "") or ""),
                 wall_thermostat_address=str(d.get("wall_thermostat_address", "") or "").upper(),
+                source_entity=str(d.get("source_entity", "") or ""),
                 last_target_change_at=str(d.get("last_target_change_at", "") or ""),
                 week_profile_days=[
                     int(x) for x in (d.get("week_profile_days") or []) if str(x).isdigit() and 0 <= int(x) <= 6
@@ -7036,6 +7178,7 @@ class CulMaxCoordinator:
                     "last_central_contact_at": d.last_central_contact_at,
                     "external_sensor": d.external_sensor,
                     "wall_thermostat_address": d.wall_thermostat_address,
+                    "source_entity": d.source_entity,
                     "last_target_change_at": d.last_target_change_at,
                     "week_profile_days": d.week_profile_days,
                 }

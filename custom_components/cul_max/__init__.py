@@ -78,6 +78,7 @@ SERVICE_NAMES: tuple[str, ...] = (
     "create_virtual_shutter_contact",
     "delete_virtual_device",
     "send_virtual_shutter_contact_state",
+    "set_virtual_contact_source",
     "create_room_association",
     "delete_room_association",
     "rebuild_room_association",
@@ -1083,7 +1084,26 @@ def _register_services(
         name = str(call.data["name"])
         group_id = int(call.data.get("group_id", 0))
         await coordinator.async_create_virtual_shutter_contact(address, name, group_id)
-        return {"device": _device_payload(address), "name": name, "group_id": group_id}
+        source = call.data.get("source_entity_id") or None
+        if source:
+            await coordinator.async_set_virtual_contact_source(address, source)
+        return {
+            "device": _device_payload(address),
+            "name": name,
+            "group_id": group_id,
+            "source_entity": source,
+        }
+
+    async def handle_set_virtual_contact_source(call: ServiceCall) -> dict[str, object]:
+        address = _resolve_device_address(hass, call)
+        if address is None and call.data.get("device_name"):
+            address = _resolve_device_address_from_name(coordinator, str(call.data["device_name"]))
+        if address is None:
+            raise ha_error(CulMaxError("unknown_device", address=call.data.get("address", "?")))
+        status = await coordinator.async_set_virtual_contact_source(
+            address, call.data.get("source_entity_id") or None
+        )
+        return {"device": _device_payload(address), **status}
 
     async def handle_delete_virtual_device(call: ServiceCall) -> dict[str, object] | None:
         address = _resolve_device_address(hass, call)
@@ -1702,6 +1722,18 @@ def _register_services(
             vol.Required("address"): cv.string,
             vol.Required("name"): cv.string,
             vol.Optional("group_id", default=0): vol.All(vol.Coerce(int), vol.Range(min=0, max=255)),
+            vol.Optional("source_entity_id"): vol.Any(None, "", cv.entity_id),
+        }),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    _register(
+        "set_virtual_contact_source",
+        handle_set_virtual_contact_source,
+        schema=vol.Schema({
+            vol.Optional("address"): cv.string,
+            vol.Optional("entity_id"): cv.entity_id,
+            vol.Optional("device_name"): cv.string,
+            vol.Optional("source_entity_id"): vol.Any(None, "", cv.entity_id),
         }),
         supports_response=SupportsResponse.OPTIONAL,
     )

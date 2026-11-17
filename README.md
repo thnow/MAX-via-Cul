@@ -209,8 +209,20 @@ the devices keep cooperating even when Home Assistant is temporarily down.
    `cul_max.create_virtual_shutter_contact`.
 2. Associate it with the room using `cul_max.create_room_association` or
    `cul_max.associate_devices`.
-3. Call `cul_max.send_virtual_shutter_contact_state` from an automation when
-   the external sensor opens or closes.
+3. Let the contact follow the external sensor:
+
+   ```yaml
+   action: cul_max.set_virtual_contact_source
+   data:
+     address: A00000
+     source_entity_id: binary_sensor.office_window
+   ```
+
+   Every open/close then goes to the linked thermostats on its own – no
+   automation needed. Quick open/close sequences always end in the state the
+   sensor has now, and changes missed while Home Assistant or the CUL was away
+   are caught up. `cul_max.send_virtual_shutter_contact_state` still works for
+   contacts without a sensor (e.g. driven by a template or several sensors).
 
 ### Regulate on a room thermometer
 
@@ -352,7 +364,7 @@ Most people only need the cards; the services are for automations and repairs.
 | Week program | `set_week_profile`, `set_week_profile_days` |
 | Rooms and links | `create_room_association`, `delete_room_association`, `rebuild_room_association`, `associate_devices`, `deassociate_devices`, `set_group_id`, `remove_group_id`, `add_link_partner`, `remove_link_partner` |
 | Room sensor | `set_external_temperature_sensor` |
-| Virtual window contacts | `create_virtual_shutter_contact`, `send_virtual_shutter_contact_state`, `delete_virtual_device` |
+| Virtual window contacts | `create_virtual_shutter_contact`, `set_virtual_contact_source`, `send_virtual_shutter_contact_state`, `delete_virtual_device` |
 | Vacation and summer | `start_vacation`, `end_vacation`, `start_summer`, `end_summer` |
 | Maintenance | `sync_time`, `wake_thermostats`, `export_topology`, `import_topology` |
 
@@ -457,6 +469,8 @@ uvx ruff check custom_components
 - `test_coordinator_wall_thermostat.py`: room sensors, one virtual wall
   thermostat per room, relinking (remove first), rejected links and the
   separation of shared setups from 0.6.2
+- `test_virtual_contact_source.py`: virtual window contacts following a
+  sensor, quick open/close, unavailable sensors and catching up missed changes
 
 Repository layout:
 
@@ -466,6 +480,18 @@ Repository layout:
 - no generated Python caches committed
 
 ## Changelog
+
+### Unreleased
+
+- Virtual window contacts can follow a window sensor in Home Assistant
+  (`cul_max.set_virtual_contact_source`, or `source_entity_id` when creating
+  the contact). The forwarding automation is no longer needed. With such an
+  automation in `mode: single` a quick open/close could swallow the "closed"
+  while "open" was still being sent, and the thermostat stayed at its
+  window-open temperature for days. The built-in following always sends the
+  sensor's current state and catches up changes missed during a restart.
+- The virtual contact shows the followed sensor as attribute `source_entity`;
+  the topology export/import keeps it.
 
 ### 0.6.8
 
