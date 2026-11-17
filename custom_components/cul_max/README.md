@@ -801,6 +801,13 @@ Ein virtueller Kontakt verhaelt sich wie ein echter MAX!-Fensterkontakt:
   verlorenes Telegramm kann ein Thermostat so nicht dauerhaft in der
   Fenster-offen-Temperatur festhalten. Unbestaetigte Zustellungen werden mit
   wachsendem Abstand (60 s bis 50 min) wiederholt.
+- Diese Wiederholungen laufen als Hintergrundverkehr: Sie lassen die Reserve
+  fuer Bedienbefehle unangetastet und wiederholen hoechstens 2 Mal. Ein
+  Thermostat, das nicht mehr antwortet, kann so nicht das Sendebudget aller
+  anderen Geraete aufbrauchen. Ein echtes Auf/Zu geht immer vor und ersetzt
+  eine noch wartende Wiederholung.
+- Ein ACK des Thermostats beendet auch einen Kommunikationsfehler, der am
+  Thermostat selbst angezeigt wird.
 - Der Dienst liefert `confirmed: true`, wenn alle verknuepften Thermostate
   bestaetigt haben.
 - Ohne verknuepftes Thermostat wird wie bisher einmalig an die Zentrale
@@ -1333,8 +1340,10 @@ Das Budget wird beim Verbinden, bei Bedarf und alle 5 Minuten per `X`
 abgefragt (das benutzt keinen Funk). Aus aufeinanderfolgenden Werten misst die
 Integration, wie schnell der CUL Budget zurueckgewinnt. Der Diagnose-Sensor
 `Sendebudget` am Geraet `MAX! CUL` zeigt die verbleibende Sendezeit in Sekunden
-(Kredit geteilt durch 100) sowie als Attribute den Rohwert `credit_10ms`,
-Maximum, Erholungsrate, aktives Profil und Warteschlangenlaenge.
+(Kredit geteilt durch 100, ganze Sekunden) sowie als Attribute Maximum,
+Erholungsrate, aktives Profil und Warteschlangenlaenge. Den Rohwert mit 10 ms
+Aufloesung zeigt die Warteschlangen-Karte; als Attribut hat er bei jeder
+Sendung einen neuen Zustand in die Datenbank geschrieben.
 
 Das erweiterte Profil beschleunigt vor allem die Fehlerbehandlung bei
 verlorenen Paketen. Die 1-s-Weckpraeambel pro Paket an ein schlafendes
