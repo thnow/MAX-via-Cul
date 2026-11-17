@@ -481,7 +481,7 @@ Repository layout:
 
 ## Changelog
 
-### Unreleased
+### 0.6.9
 
 - Virtual window contacts can follow a window sensor in Home Assistant
   (`cul_max.set_virtual_contact_source`, or `source_entity_id` when creating
