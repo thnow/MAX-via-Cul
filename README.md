@@ -497,7 +497,7 @@ Repository layout:
 
 ## Changelog
 
-### Unreleased
+### 0.6.11
 
 - Boost duration and boost valve position per radiator thermostat, as in the
   original MAX! software (suggested by [@adampr1](https://github.com/adampr1),
