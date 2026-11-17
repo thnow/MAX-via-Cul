@@ -36,6 +36,8 @@ MESSAGES: dict[str, str] = {
     'address_exists': 'Device address {address} already exists.',
     'not_virtual': 'Device {address} is not a virtual device.',
     'not_virtual_contact': 'Device {address} is not a virtual window contact.',
+    'source_not_found': 'Entity {entity} not found.',
+    'source_not_contact': '{entity} cannot be followed: please choose a binary_sensor or input_boolean.',
     'virtual_no_links': 'Virtual devices have no links stored on the device.',
     'partner_type_invalid': 'Unknown partner_type {type}.',
     'associate_two_devices': 'At least two devices are needed for an association.',

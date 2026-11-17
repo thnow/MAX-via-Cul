@@ -199,6 +199,7 @@ class CulMaxShutterContact(BinarySensorEntity):
                 else self._address
             ),
             "is_virtual": self._device.is_virtual,
+            "source_entity": self._device.source_entity or None,
             "superseded_by": self._device.superseded_by or None,
             "duplicate_reason": self._device.duplicate_reason or None,
             "pending_config": self._device.pending_config,

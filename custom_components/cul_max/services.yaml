@@ -625,6 +625,48 @@ create_virtual_shutter_contact:
           max: 255
           step: 1
           mode: box
+    source_entity_id:
+      name: Follow sensor
+      description: Optional window sensor in Home Assistant (binary_sensor or input_boolean) whose open/closed
+        state the contact follows on its own
+      selector:
+        entity:
+          filter:
+            - domain: binary_sensor
+            - domain: input_boolean
+set_virtual_contact_source:
+  name: Virtual window contact follows sensor
+  description: Lets a virtual MAX! window contact follow a window sensor in Home Assistant (e.g. Zigbee) –
+    every open/close is sent to the linked thermostats, missed changes are caught up. Without a sensor the
+    contact is driven by service calls again.
+  fields:
+    entity_id:
+      name: Virtual window contact
+      description: Virtual MAX! window contact entity
+      selector:
+        entity:
+          filter:
+            integration: cul_max
+            domain: binary_sensor
+            device_class: window
+    address:
+      name: Address
+      description: Alternatively the 6-digit hex address of the virtual contact
+      selector:
+        text:
+    device_name:
+      name: Device name
+      description: Alternatively the stored name of the virtual contact
+      selector:
+        text:
+    source_entity_id:
+      name: Window sensor
+      description: Leave empty to stop following
+      selector:
+        entity:
+          filter:
+            - domain: binary_sensor
+            - domain: input_boolean
 delete_virtual_device:
   name: Delete virtual device
   description: Deletes a previously created virtual MAX! device.

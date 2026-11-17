@@ -458,7 +458,7 @@ association, time synchronisation and cleanup dry runs.
 | Vacation | `start_vacation`, `end_vacation` |
 | Time and wake-up | `sync_time`, `wake_thermostats` |
 | Device associations | `set_group_id`, `remove_group_id`, `add_link_partner`, `remove_link_partner`, `associate_devices`, `deassociate_devices` |
-| Virtual contacts | `create_virtual_shutter_contact`, `delete_virtual_device`, `send_virtual_shutter_contact_state` |
+| Virtual contacts | `create_virtual_shutter_contact`, `set_virtual_contact_source`, `delete_virtual_device`, `send_virtual_shutter_contact_state` |
 | Rooms | `create_room_association`, `delete_room_association`, `rebuild_room_association` |
 | Backup and cleanup | `export_topology`, `import_topology`, `cleanup_superseded_devices` |
 
@@ -709,7 +709,7 @@ actual devices.
 
 1. Create a virtual contact or choose an existing one.
 2. Associate it with the target room.
-3. Use an automation to forward the external sensor's state.
+3. Let the contact follow the external sensor (`set_virtual_contact_source`).
 
 Associate an existing virtual contact at address `A00000`:
 
@@ -724,22 +724,49 @@ data:
   bidirectional: true
 ```
 
-Forward state changes:
+Let the contact follow the sensor:
+
+```yaml
+action: cul_max.set_virtual_contact_source
+data:
+  address: A00000
+  source_entity_id: binary_sensor.office_window
+```
+
+The contact now follows the sensor on its own; no automation is needed.
+`create_virtual_shutter_contact` also accepts `source_entity_id` directly.
+Leave `source_entity_id` empty to stop following.
+
+- Sources: `binary_sensor` and `input_boolean`. `on`/`open` counts as open,
+  `off`/`closed` as closed.
+- The sensor's state is read only when the previous transmission is done, so
+  a quick open/close always ends in the state the sensor has *now*.
+- `unavailable`/`unknown` (e.g. a Zigbee sensor during a restart) keep the
+  last state.
+- Every minute and about 2 minutes after startup the contact is compared
+  with the sensor; a change missed while Home Assistant or the CUL was away is
+  sent then.
+- The contact entity shows the followed sensor as attribute `source_entity`.
+
+If you still want an automation (e.g. one contact for several sensors), use
+`mode: queued` and send the sensor's current state, not the trigger's – with
+`mode: single` a "closed" arriving while "open" is still being sent (about
+1–2 s) is dropped, and the thermostat stays at its window-open temperature:
 
 ```yaml
 alias: Office external window contact to MAX
-mode: single
-trigger:
-  - platform: state
+mode: queued
+triggers:
+  - trigger: state
     entity_id: binary_sensor.office_window
-condition:
+conditions:
   - condition: template
-    value_template: "{{ trigger.to_state is not none and trigger.to_state.state in ['on', 'off'] }}"
-action:
+    value_template: "{{ states('binary_sensor.office_window') in ['on', 'off'] }}"
+actions:
   - action: cul_max.send_virtual_shutter_contact_state
     data:
       address: A00000
-      is_open: "{{ trigger.to_state.state == 'on' }}"
+      is_open: "{{ is_state('binary_sensor.office_window', 'on') }}"
 ```
 
 Check that the contact's pairing state is `virtual`, that the thermostat and
@@ -910,7 +937,8 @@ Hardware tests depend on the specific CULFW firmware and device behaviour.
 Protocol regression tests are in [tests/test_protocol.py](tests/test_protocol.py),
 coordinator tests against a simulated CUL ([tests/fake_cul.py](tests/fake_cul.py)) in
 `tests/test_coordinator_*.py` (queue and send budget, week profiles, virtual
-wall thermostats).
+wall thermostats) and `tests/test_virtual_contact_source.py` (virtual contacts
+following a sensor).
 Run them from the repository root:
 
 ```sh

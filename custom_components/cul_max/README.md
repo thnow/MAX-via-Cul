@@ -784,6 +784,7 @@ mehr aus.
 ### Virtuelle Fensterkontakte
 
 - `cul_max.create_virtual_shutter_contact`
+- `cul_max.set_virtual_contact_source`
 - `cul_max.delete_virtual_device`
 - `cul_max.send_virtual_shutter_contact_state`
 
@@ -837,6 +838,7 @@ Im Alltag reichen meist die Komfortdienste:
 - `create_room_association`
 - `delete_room_association`
 - `rebuild_room_association`
+- `set_virtual_contact_source`
 - `send_virtual_shutter_contact_state`
 
 Die Low-Level-Dienste bleiben bewusst erhalten, weil sie beim Reparieren,
@@ -1094,8 +1096,8 @@ Empfohlener Ablauf:
    virtuellen Kontakt verwenden.
 2. Den virtuellen Kontakt mit dem Zielraum verknuepfen, z. B. ueber
    `create_room_association`.
-3. Den externen Sensor per Automation auf
-   `cul_max.send_virtual_shutter_contact_state` abbilden.
+3. Den virtuellen Kontakt dem externen Sensor folgen lassen
+   (`cul_max.set_virtual_contact_source`).
 
 Beispiel fuer einen bestehenden virtuellen Kontakt `A00000` im Raum `Buero`:
 
@@ -1110,22 +1112,52 @@ data:
   bidirectional: true
 ```
 
-Danach die eigentliche Abbildung des externen Sensors:
+Danach den Kontakt dem externen Sensor folgen lassen:
+
+```yaml
+action: cul_max.set_virtual_contact_source
+data:
+  address: A00000
+  source_entity_id: binary_sensor.sensor_2_contact
+```
+
+Ab jetzt folgt der Kontakt dem Sensor selbststaendig, eine Automation ist
+nicht noetig. `create_virtual_shutter_contact` nimmt `source_entity_id` auch
+gleich beim Anlegen. Mit leerem `source_entity_id` endet das Folgen.
+
+- Quellen: `binary_sensor` und `input_boolean`. `on`/`open` gilt als offen,
+  `off`/`closed` als geschlossen.
+- Der Sensorzustand wird erst gelesen, wenn die vorige Uebertragung fertig
+  ist. Schnelles Auf/Zu endet deshalb immer im Zustand, den der Sensor
+  *jetzt* hat.
+- `unavailable`/`unknown` (z. B. Zigbee-Sensor waehrend eines Neustarts)
+  behalten den letzten Zustand.
+- Jede Minute und etwa 2 Minuten nach dem Start wird der Kontakt mit
+  dem Sensor verglichen; eine Aenderung, die waehrend eines Neustarts von
+  Home Assistant oder einer CUL-Unterbrechung verpasst wurde, wird dann
+  nachgeholt.
+- Die Kontakt-Entity zeigt den Sensor im Attribut `source_entity`.
+
+Wer trotzdem eine Automation nutzt (z. B. ein Kontakt fuer mehrere Sensoren):
+`mode: queued` verwenden und den *aktuellen* Sensorzustand senden, nicht den
+des Triggers. Mit `mode: single` geht ein „zu“, das waehrend des Sendens von
+„auf“ kommt (ca. 1–2 s), verloren – das Thermostat bleibt dann in der
+Fenster-offen-Temperatur:
 
 ```yaml
 alias: Externer Fensterkontakt Büro -> MAX virtuell
-mode: single
-trigger:
-  - platform: state
+mode: queued
+triggers:
+  - trigger: state
     entity_id: binary_sensor.sensor_2_contact
-condition:
+conditions:
   - condition: template
-    value_template: "{{ trigger.to_state is not none and trigger.to_state.state in ['on', 'off'] }}"
-action:
-  - service: cul_max.send_virtual_shutter_contact_state
+    value_template: "{{ states('binary_sensor.sensor_2_contact') in ['on', 'off'] }}"
+actions:
+  - action: cul_max.send_virtual_shutter_contact_state
     data:
       address: A00000
-      is_open: "{{ trigger.to_state.state == 'on' }}"
+      is_open: "{{ is_state('binary_sensor.sensor_2_contact', 'on') }}"
 ```
 
 Was du danach pruefen solltest:
