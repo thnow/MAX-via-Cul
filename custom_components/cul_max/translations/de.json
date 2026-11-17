@@ -42,6 +42,17 @@
         "closed": "Aus – Ventil zu",
         "open": "Ein – Ventil ganz offen"
       }
+    },
+    "weekday": {
+      "options": {
+        "monday": "Montag",
+        "tuesday": "Dienstag",
+        "wednesday": "Mittwoch",
+        "thursday": "Donnerstag",
+        "friday": "Freitag",
+        "saturday": "Samstag",
+        "sunday": "Sonntag"
+      }
     }
   },
   "services": {
@@ -918,6 +929,48 @@
           "description": "Leer lassen, um nicht mehr zu folgen"
         }
       }
+    },
+    "set_valve_config": {
+      "name": "Boost- und Ventileinstellungen",
+      "description": "Schreibt Boost-Dauer und -Ventilöffnung, Entkalkungszeitpunkt und Ventilgrenzen in ein Heizkörperthermostat. Nicht angegebene Werte behalten den zuletzt hier gesetzten Wert (sonst die Werkseinstellung).",
+      "fields": {
+        "entity_id": {
+          "name": "Thermostat",
+          "description": "MAX!-Climate-Entity des Heizkörperthermostats"
+        },
+        "address": {
+          "name": "Adresse",
+          "description": "Alternativ die 6-stellige Hex-Adresse des Thermostats"
+        },
+        "device_name": {
+          "name": "Gerätename",
+          "description": "Alternativ der gespeicherte Name des Thermostats"
+        },
+        "boost_duration": {
+          "name": "Boost-Dauer",
+          "description": "Minuten, die die Boost-Taste das Ventil öffnet"
+        },
+        "boost_valve_position": {
+          "name": "Boost-Ventilöffnung",
+          "description": "Ventilöffnung während des Boosts"
+        },
+        "decalcification_day": {
+          "name": "Entkalkungstag",
+          "description": "Wochentag der wöchentlichen Ventilfahrt gegen Verkalkung"
+        },
+        "decalcification_hour": {
+          "name": "Entkalkungsstunde",
+          "description": "Volle Stunde der Entkalkungsfahrt"
+        },
+        "max_valve_setting": {
+          "name": "Maximale Ventilöffnung",
+          "description": "Weiter öffnet das Ventil nie"
+        },
+        "valve_offset": {
+          "name": "Ventil-Offset",
+          "description": "Wird zur Ventilöffnung addiert"
+        }
+      }
     }
   },
   "exceptions": {
@@ -1175,6 +1228,18 @@
     },
     "source_not_contact": {
       "message": "{entity} kann nicht gefolgt werden: bitte einen binary_sensor oder input_boolean wählen."
+    },
+    "no_valve_config": {
+      "message": "Gerät {address} ist kein Heizkörperthermostat (Boost- und Ventileinstellungen gibt es nur dort)."
+    },
+    "boost_duration_invalid": {
+      "message": "Boost-Dauer {value} ist nicht möglich: 0, 5, 10, 15, 20, 25, 30 oder 60 Minuten."
+    },
+    "valve_percent_invalid": {
+      "message": "Ventilwert {value} % ist nicht möglich (0–100, Boost-Ventilöffnung in 5er-Schritten)."
+    },
+    "decalcification_invalid": {
+      "message": "Ungültiger Entkalkungszeitpunkt (Wochentag und volle Stunde 0–23)."
     }
   },
   "issues": {
@@ -1281,6 +1346,9 @@
       },
       "vacation_preheat": {
         "name": "Urlaub: Vorheizen"
+      },
+      "boost_valve_position": {
+        "name": "Boost-Ventilöffnung"
       }
     },
     "button": {
@@ -1336,6 +1404,19 @@
         "state": {
           "closed": "Aus – Ventil zu",
           "open": "Ein – Ventil ganz offen"
+        }
+      },
+      "boost_duration": {
+        "name": "Boost-Dauer",
+        "state": {
+          "0": "Aus",
+          "5": "5 min",
+          "10": "10 min",
+          "15": "15 min",
+          "20": "20 min",
+          "25": "25 min",
+          "30": "30 min",
+          "60": "60 min"
         }
       }
     }

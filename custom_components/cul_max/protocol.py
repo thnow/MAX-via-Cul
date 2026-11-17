@@ -704,7 +704,7 @@ def decode_thermostat_state(msg: MaxMessage) -> ThermostatState | None:
         if mode == 3 and len(payload) > (3 if is_wall else 4):
             # boost duration encoded in extra byte
             boost_raw = payload[3 if is_wall else 4]
-            boost_duration = (boost_raw >> 5) * 5  # in minutes
+            boost_duration = BOOST_DURATIONS[boost_raw >> 5]  # in minutes
 
         return ThermostatState(
             address=msg.src_hex,
@@ -1126,6 +1126,62 @@ def build_config_temperatures(
     length = len(bytes.fromhex(inner))
     packet = f"{length:02X}{inner}"
     return f"Zs{packet}\r\n"
+
+
+# ConfigValve (0x12), FHEM 10_MAX.pm: boost duration is a 3-bit index.
+BOOST_DURATIONS = (0, 5, 10, 15, 20, 25, 30, 60)
+# Factory settings of a radiator thermostat (and of the MAX! software).
+VALVE_CONFIG_DEFAULTS = {
+    "boost_duration": 5,
+    "boost_valve_position": 80,
+    "decalcification_day": 0,  # MAX! day: 0 = Saturday … 6 = Friday
+    "decalcification_hour": 12,
+    "max_valve_setting": 100,
+    "valve_offset": 0,
+}
+
+
+def build_config_valve(
+    counter: int,
+    own_address: int,
+    dst_address: int,
+    *,
+    boost_duration: int,
+    boost_valve_position: int,
+    decalcification_day: int,
+    decalcification_hour: int,
+    max_valve_setting: int,
+    valve_offset: int,
+) -> str:
+    """Build a ConfigValve (0x12) command for a radiator thermostat.
+
+    byte 0: boost duration index (bits 7-5) | boost valve position / 5
+    byte 1: decalcification day (bits 7-5, 0 = Sat) | hour
+    byte 2: maximum valve setting  (percent * 255 / 100)
+    byte 3: valve offset           (percent * 255 / 100)
+    """
+    if boost_duration not in BOOST_DURATIONS:
+        raise ValueError(f"boost_duration must be one of {BOOST_DURATIONS}")
+    if not 0 <= boost_valve_position <= 100 or boost_valve_position % 5:
+        raise ValueError("boost_valve_position must be 0-100 in steps of 5")
+    if not 0 <= decalcification_day <= 6 or not 0 <= decalcification_hour <= 23:
+        raise ValueError("decalcification day 0-6, hour 0-23")
+    if not 0 <= max_valve_setting <= 100 or not 0 <= valve_offset <= 100:
+        raise ValueError("max_valve_setting and valve_offset must be 0-100")
+    inner = (
+        f"{counter & 0xFF:02X}"
+        f"00"
+        f"12"
+        f"{own_address:06X}"
+        f"{dst_address:06X}"
+        f"00"
+        f"{(BOOST_DURATIONS.index(boost_duration) << 5) | (boost_valve_position // 5):02X}"
+        f"{(decalcification_day << 5) | decalcification_hour:02X}"
+        f"{int(max_valve_setting * 255 / 100):02X}"
+        f"{int(valve_offset * 255 / 100):02X}"
+    )
+    length = len(bytes.fromhex(inner))
+    return f"Zs{length:02X}{inner}\r\n"
 
 
 def build_add_link_partner(

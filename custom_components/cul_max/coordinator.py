@@ -77,7 +77,10 @@ from .protocol import (
     PushButtonState,
     ShutterContactState,
     build_add_link_partner,
+    BOOST_DURATIONS,
+    VALVE_CONFIG_DEFAULTS,
     build_config_temperatures,
+    build_config_valve,
     build_config_week_profile,
     build_pair_pong,
     build_time_information,
@@ -225,6 +228,14 @@ TEMPERATURE_CONFIG_KEYS = (
     "measurement_offset",
 )
 TEMPERATURE_CONFIG_APPLY_DELAY = 5.0
+VALVE_CONFIG_KEYS = (
+    "boost_duration",
+    "boost_valve_position",
+    "decalcification_day",
+    "decalcification_hour",
+    "max_valve_setting",
+    "valve_offset",
+)
 
 # Telegram types a device sends to its central (not to link partners).
 FOREIGN_CENTRAL_MSG_TYPES = {0x00, 0x02, 0x03, 0x30, 0x50, 0x60, 0x70}
@@ -310,6 +321,15 @@ class KnownDevice:
     # Virtual window contacts only: HA entity whose open/closed state the
     # contact follows; empty = driven by send_virtual_shutter_contact_state.
     source_entity: str = ""
+    # ConfigValve (radiator thermostats). Devices cannot report these, so
+    # None = never written by this integration (the device keeps whatever it
+    # had, e.g. from the MAX! Cube software).
+    boost_duration: int | None = None
+    boost_valve_position: int | None = None
+    decalcification_day: int | None = None
+    decalcification_hour: int | None = None
+    max_valve_setting: int | None = None
+    valve_offset: int | None = None
     last_target_change_at: str = ""
     # MAX! days (0=Sat … 6=Fri) of week_profile that were really written to
     # the device. Empty = all seven (profiles from before this field or
@@ -1212,7 +1232,7 @@ class CulMaxCoordinator:
             raise CulMaxError("unknown_device", address=address)
         self._config_drafts.setdefault(normalized, {})[key] = value
         self._notify_diagnostics_updated(normalized)
-        if key in TEMPERATURE_CONFIG_KEYS:
+        if key in TEMPERATURE_CONFIG_KEYS or key in VALVE_CONFIG_KEYS:
             self._schedule_temperature_config_apply(normalized)
 
     def _schedule_temperature_config_apply(self, address: str) -> None:
@@ -1235,19 +1255,25 @@ class CulMaxCoordinator:
             return
         draft = self._config_drafts.get(address) or {}
         fields = {key: draft.pop(key) for key in list(draft) if key in TEMPERATURE_CONFIG_KEYS}
+        valve_fields = {key: draft.pop(key) for key in list(draft) if key in VALVE_CONFIG_KEYS}
         if not draft:
             self._config_drafts.pop(address, None)
-        if not fields:
-            return
         try:
-            await self._async_send_temperature_config(address, **fields)
-        except Exception as err:  # noqa: BLE001 - reported via diagnostics
-            _LOGGER.warning(
-                "Applying %s to %s failed: %s",
-                ", ".join(sorted(fields)),
-                self._format_device_identity(address),
-                err,
-            )
+            for send, values in (
+                (self._async_send_temperature_config, fields),
+                (self.async_set_valve_config, valve_fields),
+            ):
+                if not values:
+                    continue
+                try:
+                    await send(address, **values)
+                except Exception as err:  # noqa: BLE001 - reported via diagnostics
+                    _LOGGER.warning(
+                        "Applying %s to %s failed: %s",
+                        ", ".join(sorted(values)),
+                        self._format_device_identity(address),
+                        err,
+                    )
         finally:
             self._temp_apply_tasks.pop(address, None)
             self._notify_diagnostics_updated(address)
@@ -3644,6 +3670,81 @@ class CulMaxCoordinator:
         device.measurement_offset = offset
         await self._save_devices()
         self._notify_diagnostics_updated(address)
+
+    async def async_set_valve_config(
+        self,
+        address: str,
+        *,
+        boost_duration: int | None = None,
+        boost_valve_position: int | None = None,
+        decalcification_day: int | None = None,
+        decalcification_hour: int | None = None,
+        max_valve_setting: int | None = None,
+        valve_offset: int | None = None,
+    ) -> dict[str, int]:
+        """Write boost, decalcification and valve limits (ConfigValve).
+
+        All six values travel in one telegram. Values not given keep what
+        this integration last wrote, otherwise the factory setting (the
+        device cannot report its current ones).
+        """
+        normalized = address.upper()
+        device = self.get_device(normalized)
+        if device is None:
+            raise CulMaxError("unknown_device", address=address)
+        if device.device_type not in (DEVICE_HEATING_THERMOSTAT, DEVICE_HEATING_THERMOSTAT_PLUS):
+            raise CulMaxError("no_valve_config", address=normalized)
+        self._require_paired_for_write(normalized)
+        given = {
+            "boost_duration": boost_duration,
+            "boost_valve_position": boost_valve_position,
+            "decalcification_day": decalcification_day,
+            "decalcification_hour": decalcification_hour,
+            "max_valve_setting": max_valve_setting,
+            "valve_offset": valve_offset,
+        }
+        values: dict[str, int] = {}
+        for key in VALVE_CONFIG_KEYS:
+            value = given[key]
+            if value is None:
+                value = getattr(device, key)
+            if value is None:
+                value = VALVE_CONFIG_DEFAULTS[key]
+            values[key] = int(value)
+        if values["boost_duration"] not in BOOST_DURATIONS:
+            raise CulMaxError("boost_duration_invalid", value=values["boost_duration"])
+        if not 0 <= values["boost_valve_position"] <= 100 or values["boost_valve_position"] % 5:
+            raise CulMaxError("valve_percent_invalid", value=values["boost_valve_position"])
+        for key in ("max_valve_setting", "valve_offset"):
+            if not 0 <= values[key] <= 100:
+                raise CulMaxError("valve_percent_invalid", value=values[key])
+        if not 0 <= values["decalcification_day"] <= 6 or not 0 <= values["decalcification_hour"] <= 23:
+            raise CulMaxError("decalcification_invalid")
+
+        counter = self._next_counter()
+        cmd = build_config_valve(counter, self.own_address, int(normalized, 16), **values)
+        label = self.format_device_label(normalized)
+        summary = (
+            f"boost={values['boost_duration']}min/{values['boost_valve_position']}%, "
+            f"decalc={values['decalcification_day']}@{values['decalcification_hour']:02d}h, "
+            f"max_valve={values['max_valve_setting']}%, offset={values['valve_offset']}%"
+        )
+        _LOGGER.info("ConfigValve → %s: %s", label, summary)
+        await self._set_last_command(normalized, f"ConfigValve {summary}")
+        await self._send_command(
+            cmd,
+            expected_src=normalized,
+            device_address=normalized,
+            counter=counter,
+            description=f"ConfigValve {label}",
+            retries=self._send_profile.config_retries,
+            timeout=CONFIG_ACK_TIMEOUT,
+        )
+        for key, value in values.items():
+            setattr(device, key, value)
+        await self._save_devices()
+        self._notify_diagnostics_updated(normalized)
+        return values
 
     async def async_set_comfort_temperature(self, address: str, temperature: float) -> None:
         """Write the comfort/day temperature into one thermostat."""
@@ -6615,6 +6716,7 @@ class CulMaxCoordinator:
                     "measurement_offset": device.measurement_offset,
                     "window_open_temperature": device.window_open_temperature,
                     "window_open_duration": device.window_open_duration,
+                    **{key: getattr(device, key) for key in VALVE_CONFIG_KEYS},
                     "week_profile": profile_hex,
                     "week_profile_lines": format_week_profile_lines(profile_hex) if profile_hex else [],
                     "last_state": device.last_state,
@@ -7152,6 +7254,10 @@ class CulMaxCoordinator:
                 external_sensor=str(d.get("external_sensor", "") or ""),
                 wall_thermostat_address=str(d.get("wall_thermostat_address", "") or "").upper(),
                 source_entity=str(d.get("source_entity", "") or ""),
+                **{
+                    key: (int(d[key]) if d.get(key) is not None else None)
+                    for key in VALVE_CONFIG_KEYS
+                },
                 last_target_change_at=str(d.get("last_target_change_at", "") or ""),
                 week_profile_days=[
                     int(x) for x in (d.get("week_profile_days") or []) if str(x).isdigit() and 0 <= int(x) <= 6
@@ -7260,6 +7366,7 @@ class CulMaxCoordinator:
                     "external_sensor": d.external_sensor,
                     "wall_thermostat_address": d.wall_thermostat_address,
                     "source_entity": d.source_entity,
+                    **{key: getattr(d, key) for key in VALVE_CONFIG_KEYS},
                     "last_target_change_at": d.last_target_change_at,
                     "week_profile_days": d.week_profile_days,
                 }

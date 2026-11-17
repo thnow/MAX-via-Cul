@@ -30,6 +30,8 @@ itself, fully local.
 - `climate` entities for heating and wall thermostats
 - Week profile editing with draft, save and discard workflow
 - Comfort, eco, window-open and measurement-offset configuration entities
+- Boost duration and boost valve position per radiator thermostat, plus
+  decalcification time and valve limits
 - Real MAX! group IDs and link partners written to the devices
 - Virtual MAX! shutter contacts for external sensors such as Zigbee, Matter or IKEA
 - Services for room association, topology export/import and repair workflows
@@ -233,6 +235,16 @@ the week program card tap *Regelung nach* → *ändern*, pick the sensor and pre
 integration then acts as a wall thermostat for that room. Details in the
 [extended guide](custom_components/cul_max/README.en.md#external-room-sensor-virtual-wall-thermostat).
 
+### Boost duration per thermostat
+
+Each radiator thermostat has a *Boost duration* (0, 5, 10, 15, 20, 25, 30 or
+60 minutes) and a *Boost valve position* (0–100 %) on its device page, e.g.
+15 minutes for a large living room and 5 for a small bedroom. Decalcification
+time and valve limits are set with `cul_max.set_valve_config`. The thermostat
+cannot report these values, so they show as unknown until set here; the first
+write sends the factory settings for the rest. Details in the
+[extended guide](custom_components/cul_max/README.en.md#boost-duration-and-valve-settings).
+
 ### A bit warmer for now
 
 In the week program card, `−`/`+` changes the temperature until the next
@@ -360,7 +372,7 @@ Most people only need the cards; the services are for automations and repairs.
 | Area | Services |
 | --- | --- |
 | Pairing and devices | `start_pairing`, `set_device_name`, `cleanup_superseded_devices` |
-| Temperature | `set_desired_temperature` (auto/manual/boost/until), `set_temperature_config` (comfort, eco, window open) |
+| Temperature | `set_desired_temperature` (auto/manual/boost/until), `set_temperature_config` (comfort, eco, window open), `set_valve_config` (boost duration and valve, decalcification, valve limits) |
 | Week program | `set_week_profile`, `set_week_profile_days` |
 | Rooms and links | `create_room_association`, `delete_room_association`, `rebuild_room_association`, `associate_devices`, `deassociate_devices`, `set_group_id`, `remove_group_id`, `add_link_partner`, `remove_link_partner` |
 | Room sensor | `set_external_temperature_sensor` |
@@ -469,6 +481,8 @@ uvx ruff check custom_components
 - `test_coordinator_wall_thermostat.py`: room sensors, one virtual wall
   thermostat per room, relinking (remove first), rejected links and the
   separation of shared setups from 0.6.2
+- `test_valve_config.py`: ConfigValve telegram, factory settings for values
+  never set, values kept between changes, stored only after the ACK
 - `test_virtual_contact_source.py`: virtual window contacts following a
   sensor, quick open/close, unavailable sensors, catching up missed changes,
   few background re-sends to a silent thermostat and real changes overtaking
@@ -482,6 +496,17 @@ Repository layout:
 - no generated Python caches committed
 
 ## Changelog
+
+### Unreleased
+
+- Boost duration and boost valve position per radiator thermostat, as in the
+  original MAX! software (suggested by [@adampr1](https://github.com/adampr1),
+  #3): a select (0, 5, 10, 15, 20, 25, 30 or 60 min) and a number (0–100 %)
+  on each radiator thermostat, plus the service `cul_max.set_valve_config`
+  for decalcification day/hour, maximum valve opening and valve offset
+  (ConfigValve). The values are also climate attributes and part of the
+  topology export.
+- A boost reported by a thermostat with 60 minutes is no longer shown as 35.
 
 ### 0.6.10
 

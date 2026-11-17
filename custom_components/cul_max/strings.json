@@ -42,6 +42,17 @@
         "closed": "Off – valve closed",
         "open": "On – valve fully open"
       }
+    },
+    "weekday": {
+      "options": {
+        "monday": "Monday",
+        "tuesday": "Tuesday",
+        "wednesday": "Wednesday",
+        "thursday": "Thursday",
+        "friday": "Friday",
+        "saturday": "Saturday",
+        "sunday": "Sunday"
+      }
     }
   },
   "services": {
@@ -918,6 +929,48 @@
           "description": "Leave empty to stop following"
         }
       }
+    },
+    "set_valve_config": {
+      "name": "Boost and valve settings",
+      "description": "Writes boost duration and valve position, decalcification time and valve limits into a radiator thermostat. Values left out keep what was last set here (otherwise the factory setting).",
+      "fields": {
+        "entity_id": {
+          "name": "Thermostat",
+          "description": "MAX! climate entity of the radiator thermostat"
+        },
+        "address": {
+          "name": "Address",
+          "description": "Alternatively the 6-digit hex address of the thermostat"
+        },
+        "device_name": {
+          "name": "Device name",
+          "description": "Alternatively the stored name of the thermostat"
+        },
+        "boost_duration": {
+          "name": "Boost duration",
+          "description": "Minutes the boost button opens the valve"
+        },
+        "boost_valve_position": {
+          "name": "Boost valve position",
+          "description": "Valve opening during boost"
+        },
+        "decalcification_day": {
+          "name": "Decalcification day",
+          "description": "Weekday of the weekly valve run against calcification"
+        },
+        "decalcification_hour": {
+          "name": "Decalcification hour",
+          "description": "Full hour of the decalcification run"
+        },
+        "max_valve_setting": {
+          "name": "Maximum valve opening",
+          "description": "The valve never opens further than this"
+        },
+        "valve_offset": {
+          "name": "Valve offset",
+          "description": "Added to the valve opening"
+        }
+      }
     }
   },
   "exceptions": {
@@ -1175,6 +1228,18 @@
     },
     "source_not_contact": {
       "message": "{entity} cannot be followed: please choose a binary_sensor or input_boolean."
+    },
+    "no_valve_config": {
+      "message": "Device {address} is not a radiator thermostat (boost and valve settings only exist there)."
+    },
+    "boost_duration_invalid": {
+      "message": "Boost duration {value} is not possible: 0, 5, 10, 15, 20, 25, 30 or 60 minutes."
+    },
+    "valve_percent_invalid": {
+      "message": "Valve value {value} % is not possible (0–100, boost valve position in steps of 5)."
+    },
+    "decalcification_invalid": {
+      "message": "Invalid decalcification time (weekday and full hour 0–23)."
     }
   },
   "issues": {
@@ -1281,6 +1346,9 @@
       },
       "vacation_preheat": {
         "name": "Vacation: preheat"
+      },
+      "boost_valve_position": {
+        "name": "Boost valve position"
       }
     },
     "button": {
@@ -1336,6 +1404,19 @@
         "state": {
           "closed": "Off – valve closed",
           "open": "On – valve fully open"
+        }
+      },
+      "boost_duration": {
+        "name": "Boost duration",
+        "state": {
+          "0": "Off",
+          "5": "5 min",
+          "10": "10 min",
+          "15": "15 min",
+          "20": "20 min",
+          "25": "25 min",
+          "30": "30 min",
+          "60": "60 min"
         }
       }
     }

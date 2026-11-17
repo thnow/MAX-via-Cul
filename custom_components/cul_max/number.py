@@ -10,24 +10,33 @@ from homeassistant.components.number import (
     NumberEntityDescription,
     NumberMode,
 )
-from homeassistant.const import EntityCategory, UnitOfTemperature
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .errors import ha_error
 from . import CulMaxConfigEntry
-from .const import CLIMATE_DEVICE_TYPES, DOMAIN
+from .const import (
+    CLIMATE_DEVICE_TYPES,
+    DEVICE_HEATING_THERMOSTAT,
+    DEVICE_HEATING_THERMOSTAT_PLUS,
+    DOMAIN,
+)
 from .coordinator import CulMaxCoordinator, KnownDevice
 from .protocol import MaxMessage
+
+HEATING_THERMOSTAT_TYPES = (DEVICE_HEATING_THERMOSTAT, DEVICE_HEATING_THERMOSTAT_PLUS)
 
 
 @dataclass(frozen=True, kw_only=True)
 class CulMaxNumberDescription(NumberEntityDescription):
     """Describes one MAX! config number entity."""
 
-    getter: Callable[[KnownDevice], float]
+    getter: Callable[[KnownDevice], float | None]
     setter: Callable[[CulMaxCoordinator, str, float], object]
+    # Only radiator thermostats (valve settings), not wall thermostats.
+    heating_only: bool = False
 
 
 NUMBER_TYPES: tuple[CulMaxNumberDescription, ...] = (
@@ -79,7 +88,29 @@ NUMBER_TYPES: tuple[CulMaxNumberDescription, ...] = (
         getter=lambda device: float(device.window_open_duration),
         setter=lambda coordinator, address, value: coordinator.async_set_window_open_duration(address, int(value)),
     ),
+    CulMaxNumberDescription(
+        key="boost_valve_position",
+        translation_key="boost_valve_position",
+        icon="mdi:valve-open",
+        native_min_value=0,
+        native_max_value=100,
+        native_step=5,
+        mode=NumberMode.BOX,
+        native_unit_of_measurement=PERCENTAGE,
+        device_class=None,
+        getter=lambda device: device.boost_valve_position,
+        setter=lambda coordinator, address, value: coordinator.async_set_valve_config(
+            address, boost_valve_position=int(value)
+        ),
+        heating_only=True,
+    ),
 )
+
+
+def _applies(description: CulMaxNumberDescription, device: KnownDevice) -> bool:
+    if description.heating_only:
+        return device.device_type in HEATING_THERMOSTAT_TYPES
+    return device.device_type in CLIMATE_DEVICE_TYPES
 
 
 async def async_setup_entry(
@@ -96,6 +127,8 @@ async def async_setup_entry(
         if device.device_type not in CLIMATE_DEVICE_TYPES:
             continue
         for description in NUMBER_TYPES:
+            if not _applies(description, device):
+                continue
             entity = CulMaxConfigNumber(coordinator, device, description)
             entities.append(entity)
             known_ids.add(entity.unique_id)
@@ -107,6 +140,8 @@ async def async_setup_entry(
             return
         new_entities: list[NumberEntity] = []
         for description in NUMBER_TYPES:
+            if not _applies(description, device):
+                continue
             entity = CulMaxConfigNumber(coordinator, device, description)
             if entity.unique_id in known_ids:
                 continue
