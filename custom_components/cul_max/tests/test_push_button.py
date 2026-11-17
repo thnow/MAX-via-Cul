@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import asyncio
 
+from homeassistant.core import callback
+
 from custom_components.cul_max.const import DEVICE_PUSH_BUTTON, EVENT_PUSH_BUTTON
 from custom_components.cul_max.coordinator import KnownDevice
 from custom_components.cul_max.protocol import (
@@ -53,7 +55,7 @@ async def test_press_fires_one_event_and_updates_battery(hass, coordinator, fake
         address=BUTTON, device_type=DEVICE_PUSH_BUTTON, name="Eco-Taster Flur", paired=True
     )
     events = []
-    hass.bus.async_listen(EVENT_PUSH_BUTTON, lambda e: events.append(e.data))
+    hass.bus.async_listen(EVENT_PUSH_BUTTON, callback(lambda e: events.append(e.data)))
     dispatched = []
     coordinator.add_listener(BUTTON, lambda msg, decoded: dispatched.append(decoded))
 
@@ -79,7 +81,7 @@ async def test_repeated_telegram_is_one_press(hass, coordinator, fake_cul) -> No
         address=BUTTON, device_type=DEVICE_PUSH_BUTTON, name="Taster", paired=True
     )
     events = []
-    hass.bus.async_listen(EVENT_PUSH_BUTTON, lambda e: events.append(e.data["button"]))
+    hass.bus.async_listen(EVENT_PUSH_BUTTON, callback(lambda e: events.append(e.data["button"])))
 
     fake_cul.send_line(AUTO)
     fake_cul.send_line(AUTO)  # repeat, same counter 0x65
