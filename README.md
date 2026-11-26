@@ -497,10 +497,12 @@ Repository layout:
 
 ## Changelog
 
-### Unreleased
+### 0.6.12
 
 - Week program card no longer keeps showing "Sende: …" after a confirmed
   change (since 0.6.8 the entity stayed in the sending state after the ACK).
+- CI: CodeQL 4.39.5, Scorecard 2.6.0 and a newer hassfest (actions stay
+  pinned to commit SHAs).
 
 ### 0.6.11
 
