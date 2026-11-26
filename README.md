@@ -497,6 +497,11 @@ Repository layout:
 
 ## Changelog
 
+### Unreleased
+
+- Week program card no longer keeps showing "Sende: …" after a confirmed
+  change (since 0.6.8 the entity stayed in the sending state after the ACK).
+
 ### 0.6.11
 
 - Boost duration and boost valve position per radiator thermostat, as in the

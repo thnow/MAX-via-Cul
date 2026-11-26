@@ -266,6 +266,8 @@ class CulMaxClimate(ClimateEntity):
             self._restore_confirmed_state()
             self.async_write_ha_state()
             raise ha_error(self._command_failure(description, err)) from err
+        self._command_status = "confirmed"
+        self.async_write_ha_state()
 
     def _command_failure(self, description: str, err: Exception) -> CulMaxError:
         """Readable error for a change the thermostat did not confirm."""
@@ -279,8 +281,6 @@ class CulMaxClimate(ClimateEntity):
         if isinstance(err, ConnectionError) and "No ACK" in str(err):
             return CulMaxError("command_no_answer", device=device)
         return CulMaxError("command_not_confirmed", device=device, command=description, error=err)
-        self._command_status = "confirmed"
-        self.async_write_ha_state()
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
